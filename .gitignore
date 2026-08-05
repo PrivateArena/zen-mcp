@@ -40,3 +40,4 @@ _scratch/
 telemetry.db
 tmp/
 src/resources/commands/
+telemetry/
