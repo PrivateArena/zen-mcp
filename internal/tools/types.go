@@ -28,7 +28,7 @@ type ToolDef struct {
 	Handler     toolregistry.Handler
 }
 
-// AllDefs returns the M4 + M5 tool subset in TS registration order.
+// AllDefs returns the M4 + M5 + M6 tool subset in TS registration order.
 func AllDefs(workspace string, deps Deps) []ToolDef {
 	return []ToolDef{
 		defWorkspace(workspace, deps),
@@ -44,6 +44,7 @@ func AllDefs(workspace string, deps Deps) []ToolDef {
 		defCapture(workspace, deps),
 		defUiVision(workspace, deps),
 		defSkills(workspace, deps),
+		defCodegraph(workspace, deps),
 	}
 }
 
