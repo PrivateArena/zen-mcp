@@ -36,6 +36,7 @@ func (s *Scanner) SetParser(p *Parser) {
 
 // FileRecord matches the TS FileRecord shape.
 type FileRecord struct {
+	ID       int64
 	Path     string
 	Hash     string
 	MTime    int64
@@ -118,6 +119,11 @@ func (s *Scanner) getDiskFiles() ([]string, error) {
 		return nil
 	})
 	return files, err
+}
+
+// GetDiskFiles returns all disk files under the scanner root.
+func (s *Scanner) GetDiskFiles() ([]string, error) {
+	return s.getDiskFiles()
 }
 
 func isSupported(relPath string) bool {

@@ -245,7 +245,7 @@ func (s *Storage) SearchFTS(query string) ([]NodeSearchResult, error) {
 
 // FindNodesByName finds nodes by name or qualified name.
 func (s *Storage) FindNodesByName(name string) ([]NodeRecord, error) {
-	rows, err := s.db.Query(`SELECT id, file_id, type, name, language, qualified_name, signature, docstring, start_line, end_line, content FROM nodes WHERE name = ? OR qualified_name = ?`, name, name)
+	rows, err := s.db.Query(`SELECT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content FROM nodes n JOIN files f ON n.file_id = f.id WHERE n.name = ? OR n.qualified_name = ?`, name, name)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +254,7 @@ func (s *Storage) FindNodesByName(name string) ([]NodeRecord, error) {
 	var nodes []NodeRecord
 	for rows.Next() {
 		var n NodeRecord
-		if err := rows.Scan(&n.ID, &n.FileID, &n.Type, &n.Name, &n.Language, &n.QualifiedName, &n.Signature, &n.Docstring, &n.StartLine, &n.EndLine, &n.Content); err != nil {
+		if err := rows.Scan(&n.ID, &n.FileID, &n.Type, &n.Name, &n.Language, &n.Path, &n.QualifiedName, &n.Signature, &n.Docstring, &n.StartLine, &n.EndLine, &n.Content); err != nil {
 			continue
 		}
 		nodes = append(nodes, n)
@@ -265,9 +265,10 @@ func (s *Storage) FindNodesByName(name string) ([]NodeRecord, error) {
 // GetNeighbors returns callers and callees for a node.
 func (s *Storage) GetNeighbors(nodeID int64, limit int) (callers []NodeRecord, callees []NodeRecord, err error) {
 	rows, err := s.db.Query(`
-		SELECT DISTINCT n.id, n.file_id, n.type, n.name, n.language, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
+		SELECT DISTINCT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
 		FROM edges e
 		JOIN nodes n ON e.source_id = n.id
+		JOIN files f ON n.file_id = f.id
 		WHERE e.target_id = ?
 		ORDER BY n.start_line
 		LIMIT ?
@@ -283,9 +284,10 @@ func (s *Storage) GetNeighbors(nodeID int64, limit int) (callers []NodeRecord, c
 	}
 
 	rows, err = s.db.Query(`
-		SELECT DISTINCT n.id, n.file_id, n.type, n.name, n.language, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
+		SELECT DISTINCT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
 		FROM edges e
 		JOIN nodes n ON e.target_id = n.id
+		JOIN files f ON n.file_id = f.id
 		WHERE e.source_id = ?
 		ORDER BY n.start_line
 		LIMIT ?
@@ -309,15 +311,15 @@ func (s *Storage) ListFiles(filter string, limit int) ([]FileRecord, error) {
 	var err error
 	if filter != "" {
 		if limit > 0 {
-			rows, err = s.db.Query(`SELECT path, hash, mtime, language, is_test FROM files WHERE language = ? ORDER BY path LIMIT ?`, filter, limit)
+			rows, err = s.db.Query(`SELECT id, path, hash, mtime, language, is_test FROM files WHERE language = ? ORDER BY path LIMIT ?`, filter, limit)
 		} else {
-			rows, err = s.db.Query(`SELECT path, hash, mtime, language, is_test FROM files WHERE language = ? ORDER BY path`, filter)
+			rows, err = s.db.Query(`SELECT id, path, hash, mtime, language, is_test FROM files WHERE language = ? ORDER BY path`, filter)
 		}
 	} else {
 		if limit > 0 {
-			rows, err = s.db.Query(`SELECT path, hash, mtime, language, is_test FROM files ORDER BY path LIMIT ?`, limit)
+			rows, err = s.db.Query(`SELECT id, path, hash, mtime, language, is_test FROM files ORDER BY path LIMIT ?`, limit)
 		} else {
-			rows, err = s.db.Query(`SELECT path, hash, mtime, language, is_test FROM files ORDER BY path`)
+			rows, err = s.db.Query(`SELECT id, path, hash, mtime, language, is_test FROM files ORDER BY path`)
 		}
 	}
 	if err != nil {
@@ -328,7 +330,7 @@ func (s *Storage) ListFiles(filter string, limit int) ([]FileRecord, error) {
 	var files []FileRecord
 	for rows.Next() {
 		var fr FileRecord
-		if err := rows.Scan(&fr.Path, &fr.Hash, &fr.MTime, &fr.Language, &fr.IsTest); err != nil {
+		if err := rows.Scan(&fr.ID, &fr.Path, &fr.Hash, &fr.MTime, &fr.Language, &fr.IsTest); err != nil {
 			continue
 		}
 		files = append(files, fr)
@@ -343,6 +345,7 @@ type NodeRecord struct {
 	Type          string
 	Name          string
 	Language      string
+	Path          string
 	QualifiedName string
 	Signature     string
 	Docstring     string
@@ -365,7 +368,7 @@ func scanNodes(rows *sql.Rows) ([]NodeRecord, error) {
 	var nodes []NodeRecord
 	for rows.Next() {
 		var n NodeRecord
-		if err := rows.Scan(&n.ID, &n.FileID, &n.Type, &n.Name, &n.Language, &n.QualifiedName, &n.Signature, &n.Docstring, &n.StartLine, &n.EndLine, &n.Content); err != nil {
+		if err := rows.Scan(&n.ID, &n.FileID, &n.Type, &n.Name, &n.Language, &n.Path, &n.QualifiedName, &n.Signature, &n.Docstring, &n.StartLine, &n.EndLine, &n.Content); err != nil {
 			continue
 		}
 		nodes = append(nodes, n)
@@ -427,7 +430,7 @@ func (s *Storage) GetMetadata(key string) string {
 func (s *Storage) GetAllFiles() []FileRecord {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	rows, err := s.db.Query(`SELECT path, hash, mtime, language, is_test FROM files`)
+	rows, err := s.db.Query(`SELECT id, path, hash, mtime, language, is_test FROM files`)
 	if err != nil {
 		return nil
 	}
@@ -436,10 +439,228 @@ func (s *Storage) GetAllFiles() []FileRecord {
 	var files []FileRecord
 	for rows.Next() {
 		var fr FileRecord
-		if err := rows.Scan(&fr.Path, &fr.Hash, &fr.MTime, &fr.Language, &fr.IsTest); err != nil {
+		if err := rows.Scan(&fr.ID, &fr.Path, &fr.Hash, &fr.MTime, &fr.Language, &fr.IsTest); err != nil {
 			continue
 		}
 		files = append(files, fr)
 	}
 	return files
+}
+
+// GetRelatedForFile returns related file edges for a given file path.
+func (s *Storage) GetRelatedForFile(filePath string, limit int) ([]RelatedRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	fileID := int64(0)
+	err := s.db.QueryRow(`SELECT id FROM files WHERE path = ?`, filePath).Scan(&fileID)
+	if err != nil {
+		return nil, nil
+	}
+
+	rows, err := s.db.Query(`
+		SELECT f.path, n.name, n.type, e.relation, 'outgoing'
+		FROM edges e
+		JOIN nodes n ON e.target_id = n.id
+		JOIN files f ON n.file_id = f.id
+		WHERE e.source_id IN (SELECT id FROM nodes WHERE file_id = ?)
+		LIMIT ?
+	`, fileID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []RelatedRecord
+	for rows.Next() {
+		var r RelatedRecord
+		if err := rows.Scan(&r.RelatedPath, &r.SymbolName, &r.SymbolType, &r.Relation, &r.Direction); err == nil {
+			r.RelatedLanguage = detectLanguageFromPath(r.RelatedPath)
+			results = append(results, r)
+		}
+	}
+
+	rows, err = s.db.Query(`
+		SELECT f.path, n.name, n.type, e.relation, 'incoming'
+		FROM edges e
+		JOIN nodes n ON e.source_id = n.id
+		JOIN files f ON n.file_id = f.id
+		WHERE e.target_id IN (SELECT id FROM nodes WHERE file_id = ?)
+		LIMIT ?
+	`, fileID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var r RelatedRecord
+		if err := rows.Scan(&r.RelatedPath, &r.SymbolName, &r.SymbolType, &r.Relation, &r.Direction); err == nil {
+			r.RelatedLanguage = detectLanguageFromPath(r.RelatedPath)
+			results = append(results, r)
+		}
+	}
+
+	return results, nil
+}
+
+// FindCycles finds cycles in the graph.
+func (s *Storage) FindCycles() ([]CycleRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rows, err := s.db.Query(`
+		SELECT f1.path, f2.path
+		FROM edges e1
+		JOIN nodes n1 ON e1.source_id = n1.id
+		JOIN files f1 ON n1.file_id = f1.id
+		JOIN edges e2 ON e1.target_id = e2.source_id AND e1.source_id = e2.target_id
+		JOIN nodes n2 ON e2.target_id = n2.id
+		JOIN files f2 ON n2.file_id = f2.id
+		GROUP BY f1.path, f2.path
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	cycleMap := make(map[string]bool)
+	var cycles []CycleRecord
+	for rows.Next() {
+		var from, to string
+		if err := rows.Scan(&from, &to); err == nil {
+			key := from + "|" + to
+			if !cycleMap[key] {
+				cycleMap[key] = true
+				cycles = append(cycles, CycleRecord{
+					Files: []string{from, to},
+					Edges: []CycleEdge{{From: from, To: to}, {From: to, To: from}},
+				})
+			}
+		}
+	}
+	return cycles, nil
+}
+
+// FindShortestPath finds the shortest path between two symbols.
+func (s *Storage) FindShortestPath(fromName, toName string, limit int) (*ShortestPathResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if limit <= 0 {
+		limit = 6
+	}
+
+	fromNodes, err := s.getNodesByName(fromName)
+	if err != nil {
+		return &ShortestPathResult{Found: false}, nil
+	}
+	toNodes, err := s.getNodesByName(toName)
+	if err != nil {
+		return &ShortestPathResult{Found: false}, nil
+	}
+
+	if len(fromNodes) == 0 || len(toNodes) == 0 {
+		return &ShortestPathResult{Found: false}, nil
+	}
+
+	fromID := fromNodes[0].ID
+	toID := toNodes[0].ID
+
+	type bfsItem struct {
+		nodeID int64
+		path   []ShortestPathStep
+		depth  int
+	}
+
+	visited := make(map[int64]bool)
+	queue := []bfsItem{{fromID, nil, 0}}
+	visited[fromID] = true
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		if current.nodeID == toID {
+			return &ShortestPathResult{Found: true, Path: current.path}, nil
+		}
+
+		if current.depth >= limit {
+			continue
+		}
+
+		rows, err := s.db.Query(`
+			SELECT n.name, f.path, n.start_line, n.end_line, e.relation
+			FROM edges e
+			JOIN nodes n ON e.target_id = n.id
+			JOIN files f ON n.file_id = f.id
+			WHERE e.source_id = ?
+		`, current.nodeID)
+		if err != nil {
+			continue
+		}
+		var outgoing []struct {
+			name      string
+			path      string
+			startLine int
+			endLine   int
+			relation  string
+		}
+		for rows.Next() {
+			var n struct {
+				name      string
+				path      string
+				startLine int
+				endLine   int
+				relation  string
+			}
+			if err := rows.Scan(&n.name, &n.path, &n.startLine, &n.endLine, &n.relation); err == nil {
+				outgoing = append(outgoing, n)
+			}
+		}
+		rows.Close()
+
+		for _, edge := range outgoing {
+			nextID := int64(0)
+			_ = s.db.QueryRow(`SELECT id FROM nodes WHERE name = ? AND file_id = (SELECT id FROM files WHERE path = ?)`, edge.name, edge.path).Scan(&nextID)
+			if nextID == 0 || visited[nextID] {
+				continue
+			}
+			visited[nextID] = true
+			newPath := make([]ShortestPathStep, len(current.path)+1)
+			copy(newPath, current.path)
+			newPath[len(current.path)] = ShortestPathStep{
+				SourceName:  fromNodes[0].Name,
+				SourceFile:  fromNodes[0].Path,
+				SourceLine:  fromNodes[0].StartLine,
+				TargetName:  edge.name,
+				TargetFile:  edge.path,
+				TargetLine:  edge.startLine,
+				Relation:    edge.relation,
+			}
+			queue = append(queue, bfsItem{nextID, newPath, current.depth + 1})
+		}
+	}
+
+	return &ShortestPathResult{Found: false}, nil
+}
+
+func (s *Storage) getNodesByName(name string) ([]NodeRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.db.Query(`SELECT id, file_id, type, name, language, path, qualified_name, signature, docstring, start_line, end_line, content FROM nodes WHERE name = ? OR qualified_name = ?`, name, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var nodes []NodeRecord
+	for rows.Next() {
+		var n NodeRecord
+		if err := rows.Scan(&n.ID, &n.FileID, &n.Type, &n.Name, &n.Language, &n.Path, &n.QualifiedName, &n.Signature, &n.Docstring, &n.StartLine, &n.EndLine, &n.Content); err != nil {
+			continue
+		}
+		nodes = append(nodes, n)
+	}
+	return nodes, nil
 }
