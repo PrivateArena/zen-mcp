@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/jang/zen-mcp/internal/mcpcfg"
+	"github.com/jang/zen-mcp/internal/skills"
 )
 
 // DetectedSkill represents a detected skill.
@@ -31,17 +32,17 @@ func DetectSkills(argText string, enableTrigger bool, enableName bool, alreadyIn
 		}
 	}
 
-	skills, err := LoadSkills()
+	skillEntries, err := skills.LoadSkills()
 	if err != nil {
 		return nil, err
 	}
 
 	matchedIDs := make(map[string]bool)
-	for _, skill := range skills {
+	for _, skill := range skillEntries {
 		if enableName && phraseMatch(matchText, skill.ID) {
 			matchedIDs[skill.ID] = true
 		}
-		if enableTrigger && skill.Triggers != nil {
+		if enableTrigger && len(skill.Triggers) > 0 {
 			for _, trigger := range skill.Triggers {
 				if phraseMatch(matchText, trigger) {
 					matchedIDs[skill.ID] = true
@@ -122,84 +123,40 @@ func min(a, b int) int {
 	return b
 }
 
-// LoadSkills loads all skills from the skills directory.
+// LoadSkills loads all skills from the skills directory (prompts wrapper).
 func LoadSkills() ([]Skill, error) {
-	skillsDir := mcpcfg.SkillsDir()
-	if _, err := os.Stat(skillsDir); os.IsNotExist(err) {
-		return nil, nil
-	}
-
-	entries, err := os.ReadDir(skillsDir)
+	entries, err := skills.LoadSkills()
 	if err != nil {
 		return nil, err
 	}
-
-	var skills []Skill
-	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".") || strings.HasPrefix(entry.Name(), "_") {
-			continue
-		}
-
-		var skillFile string
-		var skillID string
-
-		if entry.IsDir() {
-			skillFile = filepath.Join(skillsDir, entry.Name(), "SKILL.md")
-			if _, err := os.Stat(skillFile); os.IsNotExist(err) {
-				continue
-			}
-			skillID = entry.Name()
-		} else if strings.HasSuffix(entry.Name(), ".md") {
-			skillFile = filepath.Join(skillsDir, entry.Name())
-			skillID = strings.TrimSuffix(entry.Name(), ".md")
-		} else {
-			continue
-		}
-
-		data, err := os.ReadFile(skillFile)
-		if err != nil {
-			continue
-		}
-		fm := parseFrontmatter(string(data))
-		id := fm.Name
-		if id == "" {
-			id = skillID
-		}
-		title := fm.Name
-		if title == "" {
-			title = skillID
-		}
-		desc := fm.Description
-		if desc == "" {
-			desc = title
-		}
-		skills = append(skills, Skill{
-			ID:          id,
-			Title:       title,
-			Description: desc,
-			Triggers:    fm.Triggers,
+	out := make([]Skill, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, Skill{
+			ID:          e.ID,
+			Title:       e.Title,
+			Description: e.Description,
+			Triggers:    e.Triggers,
 		})
 	}
-	return skills, nil
+	return out, nil
 }
 
-// LoadSkillContent loads the content of a skill by ID.
+// LoadSkillContent loads the content of a skill by ID with reference resolution.
 func LoadSkillContent(skillID string) (string, error) {
-	skillsDir := mcpcfg.SkillsDir()
-
-	// Try directory first
-	dirPath := filepath.Join(skillsDir, skillID, "SKILL.md")
-	if data, err := os.ReadFile(dirPath); err == nil {
-		return string(data), nil
+	skill, err := skills.FindSkillByID(skillID)
+	if err != nil {
+		return "", err
 	}
 
-	// Try file
-	filePath := filepath.Join(skillsDir, skillID+".md")
-	if data, err := os.ReadFile(filePath); err == nil {
-		return string(data), nil
+	content, err := os.ReadFile(skill.Path)
+	if err != nil {
+		return "", err
 	}
 
-	return "", fmt.Errorf("skill not found: %s", skillID)
+	skillDir := filepath.Dir(skill.Path)
+	resolved := skills.ResolveSkillContent(string(content), skillDir, skillID)
+
+	return fmt.Sprintf("# Skill: %s\n\n%s", skill.Title, resolved.Enriched), nil
 }
 
 func execGit(args ...string) (string, error) {
