@@ -41,3 +41,4 @@ telemetry.db
 tmp/
 src/resources/commands/
 telemetry/
+.kilo/kilo.jsonc
