@@ -37,6 +37,6 @@ firefox-bridge/
 bun.lock
 _scratch/
 .scratch/
-telemetry/
+telemetry.db
 tmp/
 src/resources/commands/
