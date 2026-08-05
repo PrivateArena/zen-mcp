@@ -1,0 +1,190 @@
+{
+  "daemonPort": 31337,
+  "proxyPort": 31313,
+  "firefoxBridgePort": 9999,
+  "cliPort": 2999,
+  "mcpPort": 3001,
+  "zenCapPort": 4444,
+  "cdpPort": 9222,
+  "wikiPort": 3005,
+  "whiteboardPort": 3033,
+  "host": "127.0.0.1",
+  "mcpTimeoutMs": 2400000,
+  "tool_suggestion_style": "lite",
+  "log_level": "info",
+  "codegraph_watcher": false,
+  "codegraph_mermaid_alpha": true,
+  "telemetry_enabled": true,
+  "chat_file_threshold_kb": 5,
+  "enabled_tools": {
+    "capture": false,
+    "colab": false,
+    "run": false,
+    "think": false,
+    "memory_isolate": false,
+    "memory_shared": false
+  },
+  "gatekeeper_enabled": true,
+  "gatekeeper_interactive": false,
+  "gatekeeper_interactive_auto": "accept",
+  "gatekeeper_interactive_timeout": 60000,
+  "gatekeeper_remember": true,
+  "gatekeeper_remember_paths": [
+    "/dev/null",
+    "/tmp/"
+  ],
+  "codegraph_watcher_debounce_ms": 300000,
+  "codegraph_skip_embeddings": true,
+  "codegraph_markdown_files": true,
+  "codegraph_markdown_fulldump": false,
+  "codegraph_ignore": [
+    ".git",
+    "node_modules",
+    ".venv",
+    "venv",
+    "dist",
+    ".zen",
+    ".zenmcp",
+    "__pycache__",
+    ".next",
+    ".nuxt",
+    "*.min.js",
+    "*.min.ts",
+    "*.bundle.js",
+    "*.bundle.ts",
+    ".output"
+  ],
+  "yt_dlp_cookie_bank": "firefox:/media/jang/home/PortableApp/firefox/profile/",
+  "yt_dlp_path": "/home/jang/.local/bin/yt-dlp",
+  "yt_dlp_sub_lang": "en.*,en-US,en-GB,en-orig",
+  "yt_dlp_sub_format": "json3/vtt/best",
+  "yt_dlp_extractor_args": "youtube:player_client=tv,android,web",
+  "prompt_memory_context": {
+    "enabled": false,
+    "limit": 3,
+    "timeoutMs": 200,
+    "excludeTypes": [
+      "shell",
+      "git"
+    ]
+  },
+  "prompt_features": {
+    "enabled": true,
+    "auto_workspace_root": true,
+    "auto_set_workspace_root": true,
+    "auto_project_scopes": true,
+    "auto_project_scopes_array": true,
+    "auto_project_scopes_limit": 5
+  },
+  "shell_output_blacklist": [
+    {
+      "match": "sfizz_render",
+      "label": "sfizz_render (noisy scheduler warnings)",
+      "max_lines": 2
+    }
+  ],
+  "token_optimization": {
+    "enabled": true,
+    "ultraCompact": false,
+    "maxChainedLength": 51200,
+    "deduplicateThreshold": 3,
+    "profilesPath": "token-profiles.json"
+  },
+  "sandbox": {
+    "timeoutMs": 600000,
+    "activityTimeoutMs": 600000,
+    "languages": {
+      "python": {
+        "ext": ".py",
+        "runner": "python3"
+      },
+      "go": {
+        "ext": ".go",
+        "runner": "go",
+        "args": [
+          "run"
+        ]
+      },
+      "node": {
+        "ext": ".js",
+        "runner": "node"
+      },
+      "bash": {
+        "ext": ".sh",
+        "runner": "bash"
+      },
+      "typescript": {
+        "ext": ".ts",
+        "runner": "tsx"
+      }
+    }
+  },
+  "bypassTools": [
+    "session",
+    "memory",
+    "memory_isolate",
+    "memory_shared",
+    "workspace",
+    "think",
+    "run"
+  ],
+  "toolConfigs": {
+    "browser": {
+      "timeout": 2400000,
+      "format": "raw"
+    },
+    "colab": {
+      "timeout": 900000,
+      "format": "raw"
+    },
+    "shell": {
+      "timeout": 900000,
+      "format": "raw"
+    },
+    "run": {
+      "timeout": 600000,
+      "format": "raw"
+    },
+    "codegraph": {
+      "timeout": 300000,
+      "format": "md"
+    },
+    "server": {
+      "timeout": 90000,
+      "format": "raw"
+    },
+    "capture": {
+      "timeout": 60000,
+      "format": "raw"
+    },
+    "memory": {
+      "timeout": 30000,
+      "format": "md"
+    },
+    "memory_isolate": {
+      "timeout": 30000,
+      "format": "md"
+    },
+    "memory_shared": {
+      "timeout": 30000,
+      "format": "md"
+    },
+    "skills": {
+      "timeout": 30000,
+      "format": "md"
+    },
+    "workspace": {
+      "timeout": 30000,
+      "format": "raw"
+    },
+    "think": {
+      "timeout": 600000,
+      "format": "md"
+    },
+    "session": {
+      "timeout": 600000,
+      "format": "raw"
+    }
+  },
+  "chat_output_path": "/tmp/zen-mcp/chat"
+}

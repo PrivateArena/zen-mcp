@@ -1,0 +1,40 @@
+[
+  {
+    "name": "analyze-samples delegate",
+    "match": {
+      "command": "analyze-samples88888888888888",
+      "type": "contains"
+    },
+    "action": {
+      "type": "delegate",
+      "provider": "gemini",
+      "prompt": "The 'analyze-samples' command output is attached. Please read KONTAKT_RECONSTRUCT_SKILL.md first and summarize the sample analysis, highlight any key warnings or patterns found, and provide a brief diagnostic verdict.",
+      "upload": ["/media/jang/home/Deve/zen-contact/KONTAKT_RECONSTRUCT_SKILL.md"],
+      "app": "analyze-samples"
+    }
+  },
+  {
+    "name": "simple replace warning",
+    "match": {
+      "command": "reconstruct",
+      "type": "contains"
+    },
+    "action": {
+      "type": "replace",
+      "find": "CRITICAL WARNING: obsolete format",
+      "replace": "[Obsolete Format Warning Suppressed]"
+    }
+  },
+  {
+    "name": "git diff redirection",
+    "match": {
+      "command": "git diff",
+      "type": "contains"
+    },
+    "action": {
+      "type": "file",
+      "path": "/tmp/zenmcp-do-not-read/",
+      "message": "[Warning: Present to user and do not read: {path}]"
+    }
+  }
+]
