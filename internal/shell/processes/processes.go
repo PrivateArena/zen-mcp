@@ -13,18 +13,18 @@ var (
 	set = map[*exec.Cmd]struct{}{}
 )
 
-// Register tracks cmd and unregisters it when it exits.
+// Register tracks cmd for AbortAll.
 func Register(cmd *exec.Cmd) {
 	mu.Lock()
 	set[cmd] = struct{}{}
 	mu.Unlock()
+}
 
-	go func() {
-		_ = cmd.Wait()
-		mu.Lock()
-		delete(set, cmd)
-		mu.Unlock()
-	}()
+// Unregister removes cmd from the active set.
+func Unregister(cmd *exec.Cmd) {
+	mu.Lock()
+	delete(set, cmd)
+	mu.Unlock()
 }
 
 // AbortAll kills every registered child process group (SIGKILL) and waits.

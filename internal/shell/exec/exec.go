@@ -103,6 +103,7 @@ func Run(command, cwd string, timeoutMs, activityTimeoutMs int) Result {
 		}
 	}
 	processes.Register(cmd)
+	defer processes.Unregister(cmd)
 
 	go read(stdoutPipe, &stdout)
 	go read(stderrPipe, &stderr)
@@ -246,6 +247,7 @@ func RunSandbox(name string, args []string, cwd, stdin string, activityMs, hardM
 		return SandboxResult{Stdout: "", Stderr: err.Error(), ExitCode: code}
 	}
 	processes.Register(cmd)
+	defer processes.Unregister(cmd)
 
 	go func() {
 		if stdinPipe != nil {

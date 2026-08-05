@@ -63,6 +63,13 @@ func handleRunAction(ctx context.Context, deps Deps, req mcp.CallToolRequest) *m
 	logToMemory := toBool(args["logToMemory"])
 	tail := toInt(args["tail"])
 	head := toInt(args["head"])
+	var rng *struct{ Start, End int }
+	if rv, ok := args["range"].(map[string]any); ok {
+		rng = &struct{ Start, End int }{
+			Start: toInt(rv["start"]),
+			End:   toInt(rv["end"]),
+		}
+	}
 
 	lang, ok := cfg.Sandbox.Languages[language]
 	if !ok {
@@ -108,9 +115,22 @@ func handleRunAction(ctx context.Context, deps Deps, req mcp.CallToolRequest) *m
 	res := exec.RunSandbox(lang.Runner, runnerArgs, execDir, stdin, activityMs, hardMs)
 
 	stdout := res.Stdout
-	if head > 0 || tail > 0 {
+	if rng != nil || head > 0 || tail > 0 {
 		lines := strings.Split(stdout, "\n")
-		if head > 0 {
+		if rng != nil {
+			startLine := rng.Start
+			if startLine < 1 {
+				startLine = 1
+			}
+			endLine := rng.End
+			if endLine > len(lines) {
+				endLine = len(lines)
+			}
+			if startLine > endLine {
+				startLine = endLine
+			}
+			stdout = strings.Join(lines[startLine-1:endLine], "\n")
+		} else if head > 0 {
 			n := head
 			if n < 1 {
 				n = 1
@@ -118,6 +138,7 @@ func handleRunAction(ctx context.Context, deps Deps, req mcp.CallToolRequest) *m
 			if len(lines) > n {
 				lines = lines[:n]
 			}
+			stdout = strings.Join(lines, "\n")
 		} else if tail > 0 {
 			n := tail
 			if n < 1 {
@@ -126,8 +147,8 @@ func handleRunAction(ctx context.Context, deps Deps, req mcp.CallToolRequest) *m
 			if len(lines) > n {
 				lines = lines[len(lines)-n:]
 			}
+			stdout = strings.Join(lines, "\n")
 		}
-		stdout = strings.Join(lines, "\n")
 	}
 
 	result := map[string]any{

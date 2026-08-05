@@ -88,7 +88,7 @@ func loadProjectMemoryState(workspace, memoryName string, deps Deps) map[string]
 
 	lastVisited := state.Timestamp
 	if lastVisited == "" {
-		lastVisited = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
+		lastVisited = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02T15:04:05.000Z")
 	}
 	stateMap["git_signals"] = projectmemory.GetGitSignals(workspace, lastVisited)
 
@@ -163,7 +163,7 @@ func actionSave(dataDir, memoryName, dbPath, workspace, sessionTitle, objective,
 		prevObjective = prevState.Objective
 	}
 
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	merged := projectmemory.BrainEvent{
 		SchemaVersion: 3,
 		Timestamp:     now,
