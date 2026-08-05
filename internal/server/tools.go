@@ -7,6 +7,7 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	mcp "github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/jang/zen-mcp/internal/prompts"
 	"github.com/jang/zen-mcp/internal/toolregistry"
 	"github.com/jang/zen-mcp/internal/toolresponse"
 	"github.com/jang/zen-mcp/internal/tools"
@@ -59,6 +60,8 @@ func RegisterAllTools(ctx context.Context, srv *mcpserver.MCPServer, reg *toolre
 	toolstate.ApplyToolStates(workspace, reg)
 
 	registerToolCatalogResource(srv, reg, deps)
+	prompts.RegisterPrompts(srv, workspace)
+	prompts.RegisterResources(srv)
 	return nil
 }
 

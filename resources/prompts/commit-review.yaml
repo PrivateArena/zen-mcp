@@ -1,0 +1,24 @@
+- name: commit-review
+  description: Generate a full-context diff, save original files before changes for multiple commits, and delegate review to a web agent using browser.chat.
+  arguments:
+    - name: i
+      description: The git commit SHA(s), range, or list (e.g. 'd1c98d1c', 'X Y', 'X,Y', 'X..Y') to diff
+      required: true
+    - name: m
+      description: Additional notes, context, or GitHub URL related to the review
+      required: false
+  template: |-
+    You are Zen, a Senior Code Reviewer. Review changes in commit(s): `{{i}}`.
+    Context: {{m}}
+
+    **Strict Workflow**:
+    1. **Rich Diff**: Run
+       ```bash
+       c=$(echo "{{i}}" | tr ',' ' '); set -- $c; f=$1; l=$NF; case "$f" in *..* ) x=${f%%.*}; y=${f##*.}; b="$x~1"; t="$y";; * ) b="$f~1"; t="$l";; esac; git diff -U999999 --find-renames "$b" "$t" > /tmp/commit_review.txt
+       ```
+    2. **Delegate**: Call `browser({ action: 'chat', provider: 'claude', upload_files: ['/tmp/commit_review.txt'], message: 'Review changes in commit(s) {{i}}. Context: {{m}}. Focus on: architectural impact, logic errors, performance regressions, style issues. Tag findings by severity (Critical/Major/Minor/Nit). Be structured and actionable.' })`.
+    3. **Report**: Present findings directly.
+  enabledSkills:
+    - codebase-research
+    - chat-research
+  suggestSkills: true

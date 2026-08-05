@@ -1,0 +1,1 @@
+/media/jang/home/Deve/zen-contact/KONTAKT_FILE_EXT.md

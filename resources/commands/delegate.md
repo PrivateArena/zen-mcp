@@ -1,0 +1,14 @@
+---
+description: Offload file/codebase understanding to browser.chat instead of reading files yourself. Preserves context.
+argument-hint: |-
+  i: What to understand/review, and which files/project
+---
+Task: '{{i}}'.
+
+Do NOT read target file contents yourself. Find file paths only (listing/grep/codegraph — metadata, not content), then delegate in ONE call:
+
+browser action="chat" provider="claude" message="<specific ask: architecture/entry points/risks/etc for {{i}}>" upload_files=["PROJECT_OVERVIEW.md" if present, <entry point>, <2-3 core files>]
+
+Use browser.brainstorm instead if you need multiple perspectives.
+
+Use the returned summary to answer. Only read a file yourself if no browser tool exists or the gap is trivial.

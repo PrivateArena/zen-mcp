@@ -1,0 +1,1 @@
+/media/jang/home/Deve/zenmidi/pkg/abcconv/ABC_NOTATION_SKILL.md

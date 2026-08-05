@@ -1,0 +1,12 @@
+- name: codegraph-mermaid
+  description: "Deep code analysis: indexing, architecture (Mermaid), and symbol usage."
+  arguments: []
+  template: |-
+    Execute a full CodeGraph analysis:
+    1. **Status**: Use `codegraph({ action: 'status' })` to check whether the index is current.
+    2. **Index (only if stale)**: If status reports the index is missing or outdated, run `codegraph({ action: 'index' })`. Skip this step if the index is already current — don't rebuild it unconditionally.
+    3. **Diagram**: Generate a Mermaid architecture diagram using `codegraph({ action: 'mermaid' })`.
+    4. **Summary**: Provide a strategic architectural overview of the project.
+  enabledSkills:
+    - codebase-research
+  suggestSkills: true

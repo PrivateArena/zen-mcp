@@ -1,0 +1,137 @@
+- name: project-overview
+  description: Generate a comprehensive, deeply informative project architecture overview from CodeGraph skeletons — no full-file reads, no browser. Scales to large multi-scope projects via root index + per-scope overviews.
+  arguments: []
+  template: |-
+     Generate a project architecture overview.
+
+     MANDATE — Use CodeGraph as the primary source. FORBIDDEN: reading full source file bodies, using browser/chat tools, web search. Skeletons give function/class signatures WITHOUT body — this is intentional for token efficiency and is the core signal.
+     EXCEPTION: You MAY read small manifest/config files directly (package.json, go.mod, Makefile, Cargo.toml, pyproject.toml, .env.example) — these are structured metadata, not source, and codegraph skeletons don't cover them. Cap at ~5 such reads.
+
+     STEP 0 — SCOPE SIZE CHECK:
+     Run `codegraph({ action: 'files' })` and count files per top-level scope (root, and any subtree that is itself a separate module/binary — e.g. cmd/*, apps/*, services/*).
+     - If a scope has ≤ 60 files: fold it into the single PROJECT_OVERVIEW.md as normal.
+     - If a scope has > 60 files: it gets its OWN file, `PROJECT_OVERVIEW.<scope-name>.md` (e.g. PROJECT_OVERVIEW.cmd-daw.md), using the FULL schema below. The root PROJECT_OVERVIEW.md then references it in a `## Scope Map` section instead of inlining its Component Roles table.
+     This prevents large projects from either blowing the token budget or under-representing scopes by truncation.
+
+     WORKFLOW (per scope being written):
+     1. **List files**: `codegraph({ action: 'files' })` — skip if PROJECT_OVERVIEW.md (or the relevant scoped file) already exists AND the file count matches within 5% of last run; otherwise this run is stale, do not skip.
+     2. **Map dependencies**: `codegraph({ action: 'map' })` or `codegraph({ action: 'mermaid' })`.
+     3. **Skeleton key files**: `codegraph({ action: 'skeletons', query: '<entry points, tool registrations, core lib files identified in 1-2>' })`. Extract not just names but FULL signatures (param types, return types) — this is required, see Key Exports rules below.
+     4. **Find cross-links**: `codegraph({ action: 'related', query: '<entry point path>' })` for each of the top 5-6 highest-fan-in/fan-out files. This output is REQUIRED to populate `## Cross-References` — do not discard it.
+     5. **Manifest scan** (optional, capped at 5 reads): open package.json/go.mod/Makefile/etc. directly for build/test/run scripts and top-level dependency versions.
+
+     OUTPUT SCHEMA — follow exactly. Prefer informative depth over artificial brevity. No Generated / Project Root / timestamp footers.
+
+     # <Project> <optional: vX.Y — Stack>
+
+     ## Purpose
+     One paragraph: what the project does, its primary output, the language stack.
+
+     <optional: ## Architecture
+     Compact flow diagram (max 5 lines) showing transport → server core → subsystem layering. Use ASCII arrows, no box drawing. If a Data Flow section is also present, this stays purely structural — no protocol detail here, that belongs in Data Flow.>
+
+     <if project was split per Step 0:
+     ## Scope Map
+     | Scope | Files | Overview File | One-line purpose |
+     |---|---|---|---|
+     | cmd/daw | 112 | PROJECT_OVERVIEW.cmd-daw.md | DAW HTTP server + engines |
+     | root | 439 | (this file) | CLI pipeline + shared libs |
+     Root file omits per-scope Component Roles tables for any scope with its own file — link out instead of inlining.>
+
+     ## File Tree
+     ```
+     <architectural nodes — max 16 nodes for this scope. Include top-level dirs AND structurally critical leaf files (entry points, main configs). For split projects, this tree covers only this scope's files.>
+     ```
+
+     <optional, if scope has 5+ distinct binaries/CLIs/tool modules:
+     ## Tools
+     | Tool / Binary | File | Purpose |
+     |---|---|---|
+     | <name> | <path> | One sentence |
+     >
+
+     ## Component Roles
+     For multi-language projects, split by sub-scope (Backend/Frontend headers). For single-language, flat table.
+
+     | File / Module | Role | LOC | Key Exports (with signatures) |
+     |---|---|---|---|
+     | <path> | One sentence | <approx, e.g. ~120> | <see rules below> |
+
+     Key Exports rules:
+     - Include abbreviated SIGNATURES, not just names: `CreateSession(ctx, cfg *Config) (*Session, error)` not `CreateSession`.
+     - Trim generic params/receivers if it keeps the line under ~90 chars; keep the parts that change how you'd call it (required args, error returns, pointer vs value).
+     - For .tsx/.jsx component files with no meaningful function exports, replace the column header contextually with "Props / Hooks used" instead of leaving exports blank.
+     - Omit the column value (not the row) if skeleton returned nothing — write "no exports" rather than an em-dash, so it's clear this was checked, not skipped.
+
+     ## Cross-References
+     For the 5-6 structurally central files (highest fan-in/fan-out from the `related` calls in Step 4):
+     | File | Called by / calls | Why it's central |
+     |---|---|---|
+     | <path> | <2-4 key callers/callees> | One clause |
+
+     <optional, if project has a well-defined client↔server protocol:
+     ## Data Flow
+     ASCII diagram (max 15 lines) showing protocol arrows (REST/SSE/WS/gRPC), major endpoint groups, direction.>
+
+     ## Key Architectural Patterns
+     3-8 items. Specific and actionable, not generic — name the actual struct/interface/mechanism.
+     1. <Pattern name>: <1-2 sentences>
+
+     ## Read Triggers
+     A lookup table mapping common task types to the SPECIFIC files an agent should open (not just this overview) — this is the section that most directly prevents unnecessary exploration.
+     | If you need to... | Open these files |
+     |---|---|
+     | Add a new REST endpoint | pkg/daw/api/api_<domain>.go, pkg/daw/api/api.go (Register), matching store action file |
+     | Add a new real-time engine | pkg/daw/engine/types/audio_engine.go (interface), an existing engine as template, api_generative.go |
+     | Change session persistence | pkg/daw/session.go, session_history.go |
+     Populate with 5-10 rows covering the most likely modification types for this specific project — infer these from the architecture, don't invent generic ones.
+
+     ## Dependencies
+     Group by layer when the project has clear layering. Top-level packages only. Group related deps in one row.
+     ### <Layer name>
+     | Package / Module | Role | Version (if manifest read) |
+     |---|---|---|
+
+     <optional, if manifests were read in Step 5:
+     ## Build & Run
+     | Command | Purpose |
+     |---|---|
+     | `go build ./cmd/daw` | Build DAW server binary |
+     | `npm run dev` | Frontend dev server |
+     Keep to the 3-6 commands an agent actually needs (build, test, dev/run, lint).>
+
+     TOKEN GUARDRAILS:
+     - File tree: max 16 nodes per scope file.
+     - Component Roles: per-file granularity preferred. No hard row cap — truncate only if clearly bloated (40+ rows AND scope has its own file where the full table lives); for the root file summarizing a split-out scope, list only the 5-10 most important files, not all of them.
+     - Cross-References: exactly 5-6 rows, no more.
+     - Read Triggers: 5-10 rows.
+     - Patterns: 3-8 items max, 1-2 sentences each.
+     - If a cell exceeds 100 chars, abbreviate keeping the key signal (prefer trimming prose over trimming signatures).
+
+     DETERMINISTIC RULES:
+     - No Generated: / Project Root: / timestamp footers. A hidden staleness marker is allowed: a single HTML comment at the very top, `<!-- codegraph-file-count: N -->`, so a future run can detect drift without a human-readable footer.
+     - No box-drawing diagrams, no Connection Map tables.
+     - Required H2s: Purpose, File Tree, Component Roles, Key Architectural Patterns, Read Triggers, Dependencies.
+     - Optional H2s (Architecture, Scope Map, Tools, Cross-References, Data Flow, Build & Run) included when they add signal; Scope Map and per-scope overview files are REQUIRED (not optional) once Step 0 crosses the 60-file threshold.
+     - For multi-language projects, Component Roles MUST have separate Backend/Frontend sub-scope sections.
+     - If any section has insufficient data from skeletons, state "No data from CodeGraph" instead of inventing structure.
+
+     VALIDATION — Before writing:
+     - Required H2s present (see above).
+     - File Tree ≥ 5 nodes (unless project is tiny), ≤ 16 nodes per scope file.
+     - Component Roles per sub-scope ≥ 4 rows (in the file where that scope's full table lives).
+     - Key Exports column contains signatures, not bare names, for at least 80% of populated rows.
+     - Cross-References section is non-empty if step 4 returned any data.
+     - Read Triggers has ≥ 5 rows and references files that actually appear in Component Roles.
+     - If multi-language and Component Roles lacks Backend/Frontend split, restructure.
+     - If scope > 60 files and no separate scope file was written, restructure per Step 0.
+
+     CRITICAL RULES:
+     - MUST NOT read full source file bodies. Skeletons are sufficient; manifests are the only file-read exception (capped at 5).
+     - MUST NOT call browser/chat/web search.
+     - MUST output plain text. No markdown formatting beyond the tables and fenced code blocks above.
+     - IF a skeleton or related call returns no data for a path, fall back to `codegraph({ action: 'files' })` to verify the path exists.
+     - Write result to PROJECT_OVERVIEW.md (and any PROJECT_OVERVIEW.<scope>.md files) at project root, overwriting existing files.
+  enabledSkills:
+    - codebase-research
+  suggestSkills: true

@@ -23,6 +23,7 @@ import (
 	"github.com/jang/zen-mcp/internal/tools"
 	"github.com/jang/zen-mcp/internal/toolresponse"
 	"github.com/jang/zen-mcp/internal/terminal"
+	_ "github.com/jang/zen-mcp/internal/terminal/handlers"
 )
 
 func newMcpServer(id string, reg *toolregistry.ToolRegistry, deps tools.Deps) *mcpserver.MCPServer {

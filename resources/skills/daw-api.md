@@ -1,0 +1,1 @@
+/media/jang/home/Deve/zenmidi/cmd/daw/DAW_AGENT_SKILL.md

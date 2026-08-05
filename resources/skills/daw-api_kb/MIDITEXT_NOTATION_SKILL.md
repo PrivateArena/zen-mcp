@@ -1,0 +1,1 @@
+/media/jang/home/Deve/zenmidi/pkg/miditext/MIDITEXT_NOTATION_SKILL.md

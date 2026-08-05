@@ -1,0 +1,83 @@
+package prompts
+
+import (
+	"context"
+
+	mcpserver "github.com/mark3labs/mcp-go/server"
+	mcp "github.com/mark3labs/mcp-go/mcp"
+)
+
+// RegisterPrompts registers all prompts with the MCP server.
+func RegisterPrompts(srv *mcpserver.MCPServer, workspace string) {
+	defs, err := LoadPromptDefinitions()
+	if err != nil {
+		return
+	}
+
+	for _, p := range defs {
+		opts := []mcp.PromptOption{
+			mcp.WithPromptDescription(p.Description),
+		}
+		for _, arg := range p.Arguments {
+			argOpts := []mcp.ArgumentOption{
+				mcp.ArgumentDescription(arg.Description),
+			}
+			if arg.Required {
+				argOpts = append(argOpts, mcp.RequiredArgument())
+			}
+			opts = append(opts, mcp.WithArgument(arg.Name, argOpts...))
+		}
+
+		promptDef := mcp.NewPrompt(p.Name, opts...)
+
+		handler := func(ctx context.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			safeArgs := make(map[string]string)
+			for k, v := range req.Params.Arguments {
+				safeArgs[k] = v
+			}
+			freshP, _ := GetPromptDefinition(p.Name)
+			if freshP.Name == "" {
+				freshP = p
+			}
+			text, err := ResolvePrompt(freshP, safeArgs, workspace)
+			if err != nil {
+				return nil, err
+			}
+			return &mcp.GetPromptResult{
+				Description: p.Description,
+				Messages: []mcp.PromptMessage{
+					{
+						Role: "user",
+						Content: mcp.TextContent{
+							Type: "text",
+							Text: text,
+						},
+					},
+				},
+			}, nil
+		}
+
+		srv.AddPrompt(promptDef, handler)
+	}
+}
+
+// RegisterResources registers the tools/catalog resource.
+func RegisterResources(srv *mcpserver.MCPServer) {
+	srv.AddResource(
+		mcp.NewResource("tools/catalog", "tools://catalog", mcp.WithResourceDescription("Full action catalog for all MCP tools"), mcp.WithMIMEType("text/plain")),
+		func(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+			return []mcp.ResourceContents{
+				mcp.TextResourceContents{
+					URI:      "tools://catalog",
+					MIMEType: "text/plain",
+					Text:     BuildToolCatalog(),
+				},
+			}, nil
+		},
+	)
+}
+
+// BuildToolCatalog builds the tool catalog text.
+func BuildToolCatalog() string {
+	return "Tool catalog - see tools/list for full details"
+}

@@ -1,0 +1,26 @@
+- name: organize-samples
+  description: Analyze sample naming patterns and generate a Python script to organize them into a hierarchical structure (Category/Instrument/Mic/Articulation) with strict dry-run safety and zero-fallback logic.
+  arguments:
+    - name: path
+      description: The path to the Samples directory
+      required: true
+    - name: instruments_path
+      description: The path to the Instruments directory for name reference
+      required: true
+  template: |-
+    You are Zen, a meticulous Data Engineer specializing in media asset organization. Your highest priority is zero data loss — every operation is audited before execution, unmapped files are flagged explicitly, and no fallback logic is ever silent. I need to organize the samples in '{{path}}' based on the instrument names in '{{instruments_path}}'.
+
+    Please follow this High-Efficiency Organization protocol:
+
+    1. **Analyze**: Use `zen-contact analyze-samples` and `find`/`ls` to identify prefixes, mic positions, and articulation patterns.
+    2. **Strategy**: Map each unique prefix to a corresponding instrument. Identify common mic position (e.g., Close, OH) and articulation (e.g., Staccato, Legato, Bass Pick) codes.
+    3. **Implement**: Write a Python script (`organize_samples.py`) following these **Strict Safety Mandates**:
+       - **NO DELETION**: The script must contain NO destructive logic (`rm`, `shutil.rmtree`). Only `shutil.move` and `os.makedirs` are allowed.
+       - **DRY RUN BY DEFAULT**: Dry-run mode MUST be enabled by default. An explicit `--run` flag is required for any movement.
+       - **NO FALLBACK**: Do NOT use folder names or guesses as fallbacks. If a sample doesn't match a known pattern confidently, it must be ignored.
+       - **UNMAPPED LOGGING**: In dry-run mode, print `[UNMAPPED] filename` for every file that failed to categorize for audit purposes.
+       - **OVERWRITE PROTECTION**: Check if the destination exists; never overwrite data.
+       - **HIERARCHICAL STRUCTURE**: Move files into a 4-level structure: './organized/Category/Instrument/Mic/Articulation/'.
+       - **LOGGING & SUMMARY**: Print all planned moves clearly. The final output must show a summary of: `Total Scanned` vs `Correctly Categorized`.
+       - **NO OVERWRITING ORIGINALS**: Always move to a separate './organized/' folder to preserve the source structure.
+    4. **Verify**: Perform a full dry-run and confirm the hierarchical mapping and articulation detection (e.g., ensuring 'Bass Pick' isn't part of 'General') looks perfect before execution.

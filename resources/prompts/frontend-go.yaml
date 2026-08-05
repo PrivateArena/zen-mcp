@@ -1,0 +1,17 @@
+- name: frontend-go
+  description: Build Go frontends — TUI with tview, GUI with gio. Zero-idle CPU architecture. Use when the task involves terminal UI, native desktop, or cross-platform GUI in Go.
+  arguments:
+    - name: i
+      description: Frontend requirements — component, screen, layout, or interaction to build
+      required: true
+  template: |-
+    Build a Go frontend for: {{i}}
+
+    Use `frontend-go` skill for library-specific guidance (tview/gio APIs, patterns, pitfalls).
+    Use `frontend-design` skill for aesthetic and UX direction (typography, layout, color, spatial composition).
+
+    Skill scanning is enabled — if the task involves scrolling or large data views, the `tview-scroll` skill may be auto-activated.
+  enabledSkills:
+    - frontend-design
+    - frontend-go
+  suggestSkills: true
