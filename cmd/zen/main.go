@@ -2,14 +2,31 @@ package main
 
 import (
 	"fmt"
+	"net"
+	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
+	"strconv"
+	"strings"
 	"time"
+
+	mcpserver "github.com/mark3labs/mcp-go/server"
 
 	"github.com/jang/zen-mcp/internal/logfilter"
 	"github.com/jang/zen-mcp/internal/mcpcfg"
+	"github.com/jang/zen-mcp/internal/server"
+	"github.com/jang/zen-mcp/internal/session"
+	"github.com/jang/zen-mcp/internal/shared"
+	"github.com/jang/zen-mcp/internal/toolregistry"
+	"github.com/jang/zen-mcp/internal/terminal"
 )
+
+func newMcpServer(_ string, _ *toolregistry.ToolRegistry) *mcpserver.MCPServer {
+	return mcpserver.NewMCPServer(server.ServerName, server.ServerVersion,
+		mcpserver.WithToolCapabilities(true),
+		mcpserver.WithResourceCapabilities(false, false),
+		mcpserver.WithPromptCapabilities(false),
+	)
+}
 
 func main() {
 	isStdio := false
@@ -38,7 +55,7 @@ func main() {
 
 	startTime := time.Now()
 
-	stop := mcpcfg.WatchConfig(func() {
+	stopWatch := mcpcfg.WatchConfig(func() {
 		if err := mcpcfg.Load(); err != nil {
 			logfilter.Debugf("[Config] Failed to reload config.json: %v", err)
 			return
@@ -46,17 +63,126 @@ func main() {
 		logfilter.Setup(mcpcfg.Get().LogLevel)
 		logfilter.Info("[Config] Live-reloaded config.json successfully.")
 	})
-	defer stop()
+	defer stopWatch()
 
-	logfilter.Info(`
+	store := shared.NewStore()
+	sessMgr := session.New(store)
+	if err := sessMgr.Load(); err != nil {
+		logfilter.Debugf("[MCP] Failed to load session state: %v", err)
+	}
+
+	mode := "sse"
+	if isStdio {
+		mode = "stdio"
+	}
+	os.Setenv("MCP_TRANSPORT", mode)
+	server.SetupShutdownHandlers(mode, sessMgr.Save, func(format string, args ...any) {
+		logfilter.Info(fmt.Sprintf(format, args...))
+	})
+
+	if isStdio {
+		logfilter.Info("[MCP] STDIO mode: session transport wiring lands in M4.")
+		return
+	}
+
+	runHTTPServers(startTime, cfg, store)
+}
+
+func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.Store) {
+	mcpPort := cfg.McpPort
+	cliPort := cfg.CliPort
+	if p := os.Getenv("PORT"); p != "" {
+		if n, err := strconv.Atoi(p); err == nil {
+			mcpPort = n
+		}
+	}
+	if p := os.Getenv("CLI_PORT"); p != "" {
+		if n, err := strconv.Atoi(p); err == nil {
+			cliPort = n
+		}
+	}
+
+	filteredReg := toolregistry.Create()
+	unfilteredReg := toolregistry.Create()
+
+	filteredFactory := func(id string) *mcpserver.MCPServer {
+		return newMcpServer(id, filteredReg)
+	}
+	unfilteredFactory := func(id string) *mcpserver.MCPServer {
+		return newMcpServer(id, unfilteredReg)
+	}
+
+	mcpMux := http.NewServeMux()
+	server.SetupRoutes(mcpMux, server.RouteDeps{
+		CreateMCPServer:       filteredFactory,
+		Registry:              filteredReg,
+		Shared:                store,
+		PendingCollaborations: map[string]func(string){},
+		StartTime:             startTime,
+		Tag:                   fmt.Sprintf("%d", mcpPort),
+	})
+
+	cliMux := http.NewServeMux()
+	server.SetupRoutes(cliMux, server.RouteDeps{
+		CreateMCPServer:       unfilteredFactory,
+		Registry:              unfilteredReg,
+		Shared:                store,
+		PendingCollaborations: map[string]func(string){},
+		StartTime:             startTime,
+		Tag:                   fmt.Sprintf("%d", cliPort),
+	})
+
+	mcpSrv := &http.Server{Addr: fmt.Sprintf(":%d", mcpPort), Handler: mcpMux}
+	cliSrv := &http.Server{Addr: fmt.Sprintf(":%d", cliPort), Handler: cliMux}
+
+	mcpLn, err := net.Listen("tcp", mcpSrv.Addr)
+	if err != nil {
+		logfilter.Debugf("[MCP] Fatal: could not bind filtered port %d: %v", mcpPort, err)
+		os.Exit(1)
+	}
+
+	cliLn, cliErr := net.Listen("tcp", cliSrv.Addr)
+	cliAvailable := true
+	if cliErr != nil && isAddrInUse(cliErr) {
+		logfilter.Warnf("[MCP] Port %d already in use — unfiltered server disabled. CLI export will fall back to port %d.", cliPort, mcpPort)
+		cliAvailable = false
+	} else if cliErr != nil {
+		logfilter.Debugf("[MCP] Unfiltered server error: %v", cliErr)
+		cliAvailable = false
+	}
+	exportPort := terminal.FallbackPort(cliPort, mcpPort, cliAvailable)
+
+	logfilter.Info(fmt.Sprintf(`
 ╔════════════════════════════════════════════════════════════╗
 ║  Zen Tools MCP Server v2.4.1 - STABLE EDITION              ║
 ╠════════════════════════════════════════════════════════════╣
-║  Started: ` + startTime.Format("15:04:05") + `                                            ║
+║  Filtered Port: %-42d║
+║  Started: %-41s║
 ║  Status: READY                                             ║
-╚════════════════════════════════════════════════════════════╝`)
+╚════════════════════════════════════════════════════════════╝`, mcpPort, startTime.Format("15:04:05")))
 
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
+	go func() {
+		if err := mcpSrv.Serve(mcpLn); err != nil && err != http.ErrServerClosed {
+			logfilter.Debugf("[MCP] Filtered server error: %v", err)
+		}
+	}()
+	if cliAvailable {
+		go func() {
+			if err := cliSrv.Serve(cliLn); err != nil && err != http.ErrServerClosed {
+				logfilter.Debugf("[MCP] Unfiltered server error: %v", err)
+			}
+		}()
+	}
+
+	stopReaper := server.StartIdleReaper()
+	defer stopReaper()
+
+	logfilter.Info(fmt.Sprintf("[MCP] Terminal commander started. Export port: %d.", exportPort))
+	terminal.StartTerminalCommander("default")
+
+	select {}
+}
+
+func isAddrInUse(err error) bool {
+	return strings.Contains(err.Error(), "address already in use")
 }
