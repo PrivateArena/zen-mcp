@@ -132,10 +132,12 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 	unfilteredReg := toolregistry.Create()
 
 	gk := gatekeeper.New(sessMgr)
+	pendingCollabs := map[string]func(string){}
 	deps := tools.Deps{
-		Store:      store,
-		Sess:       sessMgr,
-		Gatekeeper: gk,
+		Store:                store,
+		Sess:                 sessMgr,
+		Gatekeeper:           gk,
+		PendingCollaborations: pendingCollabs,
 	}
 
 	filteredFactory := func(id string) *mcpserver.MCPServer {
@@ -154,7 +156,7 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 		CreateMCPServer:       filteredFactory,
 		Registry:              filteredReg,
 		Shared:                store,
-		PendingCollaborations: map[string]func(string){},
+		PendingCollaborations: pendingCollabs,
 		StartTime:             startTime,
 		Tag:                   fmt.Sprintf("%d", mcpPort),
 	})
@@ -164,7 +166,7 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 		CreateMCPServer:       unfilteredFactory,
 		Registry:              unfilteredReg,
 		Shared:                store,
-		PendingCollaborations: map[string]func(string){},
+		PendingCollaborations: pendingCollabs,
 		StartTime:             startTime,
 		Tag:                   fmt.Sprintf("%d", cliPort),
 	})

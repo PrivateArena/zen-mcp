@@ -10,10 +10,11 @@ import (
 // Deps bundles the collaborators the M4 tool subset needs. Everything is
 // injected from cmd/zen; the tools package never constructs singletons.
 type Deps struct {
-	Store      *shared.Store
-	Sess       *session.Manager
-	Reg        *toolregistry.ToolRegistry
-	Gatekeeper *gatekeeper.Gatekeeper
+	Store                *shared.Store
+	Sess                 *session.Manager
+	Reg                  *toolregistry.ToolRegistry
+	Gatekeeper           *gatekeeper.Gatekeeper
+	PendingCollaborations map[string]func(string)
 }
 
 // ToolDef describes one MCP tool. The Schema is the exact JSON Schema served
@@ -27,7 +28,7 @@ type ToolDef struct {
 	Handler     toolregistry.Handler
 }
 
-// AllDefs returns the M4 tool subset in TS registration order.
+// AllDefs returns the M4 + M5 tool subset in TS registration order.
 func AllDefs(workspace string, deps Deps) []ToolDef {
 	return []ToolDef{
 		defWorkspace(workspace, deps),
@@ -36,6 +37,13 @@ func AllDefs(workspace string, deps Deps) []ToolDef {
 		defShell(workspace, deps),
 		defThink(workspace, deps),
 		defRun(deps),
+		defBrowser(workspace, deps),
+		defMemoryIsolate(workspace, deps),
+		defMemoryShared(workspace, deps),
+		defColab(workspace, deps),
+		defCapture(workspace, deps),
+		defUiVision(workspace, deps),
+		defSkills(workspace, deps),
 	}
 }
 
