@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -11,21 +12,41 @@ import (
 
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
+	"github.com/jang/zen-mcp/internal/gatekeeper"
 	"github.com/jang/zen-mcp/internal/logfilter"
 	"github.com/jang/zen-mcp/internal/mcpcfg"
 	"github.com/jang/zen-mcp/internal/server"
 	"github.com/jang/zen-mcp/internal/session"
 	"github.com/jang/zen-mcp/internal/shared"
+	"github.com/jang/zen-mcp/internal/shell/tokenoptimizer"
 	"github.com/jang/zen-mcp/internal/toolregistry"
+	"github.com/jang/zen-mcp/internal/tools"
+	"github.com/jang/zen-mcp/internal/toolresponse"
 	"github.com/jang/zen-mcp/internal/terminal"
 )
 
-func newMcpServer(_ string, _ *toolregistry.ToolRegistry) *mcpserver.MCPServer {
-	return mcpserver.NewMCPServer(server.ServerName, server.ServerVersion,
+func newMcpServer(id string, reg *toolregistry.ToolRegistry, deps tools.Deps) *mcpserver.MCPServer {
+	cfg := mcpcfg.Get()
+	workspace := id
+	if id == "" || id == "default" {
+		workspace = cfg.DefaultWorkspaceRoot
+		if workspace == "" {
+			cwd, _ := os.Getwd()
+			workspace = cwd
+		}
+	}
+
+	srv := mcpserver.NewMCPServer(server.ServerName, server.ServerVersion,
 		mcpserver.WithToolCapabilities(true),
-		mcpserver.WithResourceCapabilities(false, false),
+		mcpserver.WithToolFilter(server.FilterEnabled(reg)),
+		mcpserver.WithResourceCapabilities(true, true),
 		mcpserver.WithPromptCapabilities(false),
 	)
+
+	if err := server.RegisterAllTools(context.Background(), srv, reg, deps, workspace); err != nil {
+		logfilter.Debugf("[MCP] Failed to register tools: %v", err)
+	}
+	return srv
 }
 
 func main() {
@@ -71,6 +92,11 @@ func main() {
 		logfilter.Debugf("[MCP] Failed to load session state: %v", err)
 	}
 
+	toolresponse.SetVirtualizer(func(tool, text string) (string, error) {
+		ws, _ := store.Get("workspace-root")
+		return tokenoptimizer.CheckAndVirtualizeOutput(tool, text, ws, ""), nil
+	})
+
 	mode := "sse"
 	if isStdio {
 		mode = "stdio"
@@ -85,10 +111,10 @@ func main() {
 		return
 	}
 
-	runHTTPServers(startTime, cfg, store)
+	runHTTPServers(startTime, cfg, store, sessMgr)
 }
 
-func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.Store) {
+func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.Store, sessMgr *session.Manager) {
 	mcpPort := cfg.McpPort
 	cliPort := cfg.CliPort
 	if p := os.Getenv("PORT"); p != "" {
@@ -105,11 +131,22 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 	filteredReg := toolregistry.Create()
 	unfilteredReg := toolregistry.Create()
 
+	gk := gatekeeper.New(sessMgr)
+	deps := tools.Deps{
+		Store:      store,
+		Sess:       sessMgr,
+		Gatekeeper: gk,
+	}
+
 	filteredFactory := func(id string) *mcpserver.MCPServer {
-		return newMcpServer(id, filteredReg)
+		d := deps
+		d.Reg = filteredReg
+		return newMcpServer(id, filteredReg, d)
 	}
 	unfilteredFactory := func(id string) *mcpserver.MCPServer {
-		return newMcpServer(id, unfilteredReg)
+		d := deps
+		d.Reg = unfilteredReg
+		return newMcpServer(id, unfilteredReg, d)
 	}
 
 	mcpMux := http.NewServeMux()

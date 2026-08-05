@@ -161,6 +161,12 @@ func (d RouteDeps) postMCP(w http.ResponseWriter, r *http.Request) {
 
 	handler := mcpserver.NewStreamableHTTPServer(srv, mcpserver.WithStateLess(true))
 	ctx := WithPoolServer(r.Context(), srv)
+	if jsonBodyMethod(r) == "tools/list" {
+		bw := toolsListRewriter(w)
+		handler.ServeHTTP(bw, r.WithContext(ctx))
+		_ = bw.finish()
+		return
+	}
 	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
