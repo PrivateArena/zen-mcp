@@ -29,12 +29,12 @@ func defMemory(workspace string, deps Deps) ToolDef {
 			"scope":         strProp("[scope] Scope ID to view/update"),
 		}, []string{"action"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return handleMemoryAction(ctx, workspace, deps, req), nil
+			return HandleMemoryAction(ctx, workspace, deps, req), nil
 		},
 	}
 }
 
-func handleMemoryAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
+func HandleMemoryAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
 	action, _ := args["action"].(string)

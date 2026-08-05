@@ -30,12 +30,12 @@ func defMemoryShared(workspace string, deps Deps) ToolDef {
 			"card_slug":     strProp("[load] Card slug for single-card drill-down (omit for full board map)"),
 		}, []string{"action"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return handleMemorySharedAction(ctx, workspace, deps, req), nil
+			return HandleMemorySharedAction(ctx, workspace, deps, req), nil
 		},
 	}
 }
 
-func handleMemorySharedAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
+func HandleMemorySharedAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
 	action, _ := args["action"].(string)
@@ -52,17 +52,17 @@ func handleMemorySharedAction(ctx context.Context, workspace string, deps Deps, 
 
 	switch action {
 	case "load":
-		return handleSharedLoad(ctx, client, actualWorkspace, args, start)
+		return HandleSharedLoad(ctx, client, actualWorkspace, args, start)
 	case "save":
-		return handleSharedSave(ctx, client, actualWorkspace, args, start)
+		return HandleSharedSave(ctx, client, actualWorkspace, args, start)
 	case "scope":
-		return handleSharedScope(ctx, client, actualWorkspace, args, start)
+		return HandleSharedScope(ctx, client, actualWorkspace, args, start)
 	default:
 		return toolresponse.WrapErrorWithContext(ctx, "memory_shared", fmt.Errorf("Unknown action: %s", action), start)
 	}
 }
 
-func handleSharedLoad(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
+func HandleSharedLoad(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
 	state, err := client.LoadBoardState(ctx)
 	if err != nil {
 		return toolresponse.WrapErrorWithContext(ctx, "memory_shared", err, start)
@@ -136,7 +136,7 @@ func handleSharedLoad(ctx context.Context, client *whiteboard.Client, ws string,
 	}, start)
 }
 
-func handleSharedSave(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
+func HandleSharedSave(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
 	sessionTitle, _ := args["session_title"].(string)
 	sessionNotes, _ := args["session_notes"].(string)
 	slugInfo := whiteboard.ResolveProjectSlug(ws)
@@ -198,7 +198,7 @@ func handleSharedSave(ctx context.Context, client *whiteboard.Client, ws string,
 	return toolresponse.WrapSuccess(ctx, "memory_shared", result, start)
 }
 
-func handleSharedScope(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
+func HandleSharedScope(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
 	state, err := client.LoadBoardState(ctx)
 	if err != nil {
 		return toolresponse.WrapErrorWithContext(ctx, "memory_shared", err, start)

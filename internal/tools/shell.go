@@ -24,12 +24,12 @@ func defShell(workspace string, deps Deps) ToolDef {
 			"command": strProp("Shell command"),
 		}, []string{"command"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return handleShellAction(ctx, workspace, deps, req), nil
+			return HandleShellAction(ctx, workspace, deps, req), nil
 		},
 	}
 }
 
-func handleShellAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
+func HandleShellAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
 	command, _ := args["command"].(string)

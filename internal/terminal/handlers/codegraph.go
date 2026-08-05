@@ -8,7 +8,7 @@ import (
 
 func init() {
 	terminal.Register("index", func(args []string, sessionID string) error {
-		fmt.Println("Indexing codebase...")
+		fmt.Println(terminal.ExecuteTool("codegraph", map[string]any{"action": "status"}))
 		return nil
 	})
 
@@ -16,17 +16,17 @@ func init() {
 		if len(args) == 0 {
 			return fmt.Errorf("usage: search <query>")
 		}
-		fmt.Printf("Searching for: %s\n", args[0])
+		fmt.Println(terminal.ExecuteTool("codegraph", map[string]any{"action": "search", "query": args[0]}))
 		return nil
 	})
 
 	terminal.Register("map", func(args []string, sessionID string) error {
-		fmt.Println("Repository map:")
+		fmt.Println(terminal.ExecuteTool("codegraph", map[string]any{"action": "map"}))
 		return nil
 	})
 
 	terminal.Register("cs", func(args []string, sessionID string) error {
-		fmt.Println("CodeGraph status:")
+		fmt.Println(terminal.ExecuteTool("codegraph", map[string]any{"action": "status"}))
 		return nil
 	})
 }

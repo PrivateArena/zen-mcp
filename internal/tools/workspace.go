@@ -25,12 +25,12 @@ func defWorkspace(workspace string, deps Deps) ToolDef {
 		}, []string{"path"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			path := req.GetArguments()["path"].(string)
-			return handleWorkspaceAction(ctx, path, workspace, deps), nil
+			return HandleWorkspaceAction(ctx, path, workspace, deps), nil
 		},
 	}
 }
 
-func handleWorkspaceAction(ctx context.Context, path, workspace string, deps Deps) *mcp.CallToolResult {
+func HandleWorkspaceAction(ctx context.Context, path, workspace string, deps Deps) *mcp.CallToolResult {
 	start := time.Now()
 	cwd, _ := os.Getwd()
 	workspaceRoot := workspace

@@ -22,12 +22,12 @@ func defSkills(workspace string, deps Deps) ToolDef {
 			"id": strProp("Skill ID"),
 		}, []string{"id"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return handleSkillsAction(ctx, workspace, deps, req), nil
+			return HandleSkillsAction(ctx, workspace, deps, req), nil
 		},
 	}
 }
 
-func handleSkillsAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
+func HandleSkillsAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
 	id, _ := args["id"].(string)

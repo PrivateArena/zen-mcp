@@ -37,12 +37,12 @@ func defCapture(workspace string, deps Deps) ToolDef {
 			"delay":      numProp("Delay seconds before capture"),
 		}, []string{"action"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return handleCaptureAction(ctx, workspace, deps, req), nil
+			return HandleCaptureAction(ctx, workspace, deps, req), nil
 		},
 	}
 }
 
-func handleCaptureAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
+func HandleCaptureAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
 	action, _ := args["action"].(string)
@@ -67,13 +67,13 @@ func handleCaptureAction(ctx context.Context, workspace string, deps Deps, req m
 	}
 
 	if mode == "collaborate" {
-		return handleCollaborateCapture(ctx, apiAddr, targetPath, start, deps)
+		return HandleCollaborateCapture(ctx, apiAddr, targetPath, start, deps)
 	}
 
-	return handleStandardCapture(ctx, apiAddr, targetPath, mode, args, start)
+	return HandleStandardCapture(ctx, apiAddr, targetPath, mode, args, start)
 }
 
-func handleCollaborateCapture(ctx context.Context, apiAddr, targetPath string, start time.Time, deps Deps) *mcp.CallToolResult {
+func HandleCollaborateCapture(ctx context.Context, apiAddr, targetPath string, start time.Time, deps Deps) *mcp.CallToolResult {
 	collabID := fmt.Sprintf("collab_%d_%06x", time.Now().Unix(), rand.Int31())
 	port := mcpcfg.Get().McpPort
 	if port == 0 {
@@ -99,7 +99,7 @@ func handleCollaborateCapture(ctx context.Context, apiAddr, targetPath string, s
 	}
 }
 
-func handleStandardCapture(ctx context.Context, apiAddr, targetPath, mode string, args map[string]any, start time.Time) *mcp.CallToolResult {
+func HandleStandardCapture(ctx context.Context, apiAddr, targetPath, mode string, args map[string]any, start time.Time) *mcp.CallToolResult {
 	region, _ := args["region"].(string)
 	window, _ := args["window"].(string)
 	pid, _ := args["pid"].(float64)

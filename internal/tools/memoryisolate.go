@@ -27,12 +27,12 @@ func defMemoryIsolate(workspace string, deps Deps) ToolDef {
 			"card_slug":     strProp("[load] Card slug for single-card drill-down (omit for full board map)"),
 		}, []string{"action"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return handleMemoryIsolateAction(ctx, workspace, deps, req), nil
+			return HandleMemoryIsolateAction(ctx, workspace, deps, req), nil
 		},
 	}
 }
 
-func handleMemoryIsolateAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
+func HandleMemoryIsolateAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
 	action, _ := args["action"].(string)
@@ -49,17 +49,17 @@ func handleMemoryIsolateAction(ctx context.Context, workspace string, deps Deps,
 
 	switch action {
 	case "load":
-		return handleIsolateLoad(ctx, client, actualWorkspace, args, start)
+		return HandleIsolateLoad(ctx, client, actualWorkspace, args, start)
 	case "save":
-		return handleIsolateSave(ctx, client, actualWorkspace, args, start)
+		return HandleIsolateSave(ctx, client, actualWorkspace, args, start)
 	case "scope":
-		return handleIsolateScope(ctx, client, actualWorkspace, args, start)
+		return HandleIsolateScope(ctx, client, actualWorkspace, args, start)
 	default:
 		return toolresponse.WrapErrorWithContext(ctx, "memory_isolate", fmt.Errorf("Unknown action: %s", action), start)
 	}
 }
 
-func handleIsolateLoad(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
+func HandleIsolateLoad(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
 	state, err := client.LoadBoardState(ctx)
 	if err != nil {
 		return toolresponse.WrapErrorWithContext(ctx, "memory_isolate", err, start)
@@ -82,7 +82,7 @@ func handleIsolateLoad(ctx context.Context, client *whiteboard.Client, ws string
 	}, start)
 }
 
-func handleIsolateSave(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
+func HandleIsolateSave(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
 	sessionTitle, _ := args["session_title"].(string)
 	sessionNotes, _ := args["session_notes"].(string)
 	slugInfo := whiteboard.ResolveProjectSlug(ws)
@@ -110,7 +110,7 @@ func handleIsolateSave(ctx context.Context, client *whiteboard.Client, ws string
 	}, start)
 }
 
-func handleIsolateScope(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
+func HandleIsolateScope(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
 	state, err := client.LoadBoardState(ctx)
 	if err != nil {
 		return toolresponse.WrapErrorWithContext(ctx, "memory_isolate", err, start)

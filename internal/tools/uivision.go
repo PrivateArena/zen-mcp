@@ -28,12 +28,12 @@ func defUiVision(workspace string, deps Deps) ToolDef {
 			"message": strProp("Natural-language prompt for Gemini to describe the GUI state"),
 		}, []string{"path", "message"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return handleUiVisionAction(ctx, workspace, deps, req), nil
+			return HandleUiVisionAction(ctx, workspace, deps, req), nil
 		},
 	}
 }
 
-func handleUiVisionAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
+func HandleUiVisionAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
 	appPath, _ := args["path"].(string)

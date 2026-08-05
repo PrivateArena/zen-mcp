@@ -36,22 +36,22 @@ func init() {
 	})
 
 	terminal.Register("ls", func(args []string, sessionID string) error {
-		fmt.Println("ACTIVE WORKSPACE: .")
+		fmt.Println(terminal.ExecuteTool("workspace", map[string]any{}))
 		return nil
 	})
 
 	terminal.Register("sessions", func(args []string, sessionID string) error {
-		fmt.Println("ACTIVE WORKSPACE: .")
+		fmt.Println(terminal.ExecuteTool("workspace", map[string]any{}))
 		return nil
 	})
 
 	terminal.Register("telemetry", func(args []string, sessionID string) error {
-		fmt.Println("Telemetry:")
+		fmt.Println(terminal.ExecuteTool("memory", map[string]any{"action": "scope"}))
 		return nil
 	})
 
 	terminal.Register("mcp-catalog", func(args []string, sessionID string) error {
-		fmt.Println("MCP Tools Catalog:")
+		fmt.Println(terminal.ExecuteTool("codegraph", map[string]any{"action": "map"}))
 		return nil
 	})
 

@@ -45,12 +45,12 @@ func defBrowser(workspace string, deps Deps) ToolDef {
 			"take_screenshot": boolProp("[chat] Take screenshot of current tab and send to AI"),
 		}, []string{"action"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return handleBrowserAction(ctx, workspace, deps, req), nil
+			return HandleBrowserAction(ctx, workspace, deps, req), nil
 		},
 	}
 }
 
-func handleBrowserAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
+func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
 	action, _ := args["action"].(string)

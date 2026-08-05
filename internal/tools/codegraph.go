@@ -43,12 +43,12 @@ func defCodegraph(workspace string, deps Deps) ToolDef {
 			"semantic": boolProp("Use semantic search"),
 		}, []string{"action"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return handleCodegraphAction(ctx, workspace, deps, req), nil
+			return HandleCodegraphAction(ctx, workspace, deps, req), nil
 		},
 	}
 }
 
-func handleCodegraphAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
+func HandleCodegraphAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
 	action, _ := args["action"].(string)

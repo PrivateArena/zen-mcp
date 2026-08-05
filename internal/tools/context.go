@@ -23,12 +23,12 @@ func defContext(workspace string, deps Deps) ToolDef {
 			"query":     strProp("Retrieval ID"),
 		}, []string{"query"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return handleContextAction(ctx, workspace, deps, req), nil
+			return HandleContextAction(ctx, workspace, deps, req), nil
 		},
 	}
 }
 
-func handleContextAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
+func HandleContextAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
 	inputWorkspace, _ := args["workspace"].(string)

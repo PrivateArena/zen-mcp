@@ -42,7 +42,7 @@ func defThink(workspace string, deps Deps) ToolDef {
 			"branchId":          strProp("[sequential_thinking] Branch ID"),
 		}, []string{"action"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return handleThinkAction(ctx, workspace, req), nil
+			return HandleThinkAction(ctx, workspace, req), nil
 		},
 	}
 }
@@ -360,7 +360,7 @@ func (p *planManager) finishTask() (string, error) {
 	return fmt.Sprintf("Finished all tasks (%d marked done).", updatedCount), nil
 }
 
-func handleThinkAction(ctx context.Context, workspace string, req mcp.CallToolRequest) *mcp.CallToolResult {
+func HandleThinkAction(ctx context.Context, workspace string, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
 	action, _ := args["action"].(string)

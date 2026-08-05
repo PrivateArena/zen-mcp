@@ -23,12 +23,12 @@ func defColab(workspace string, deps Deps) ToolDef {
 			"timeout": numProp("Bridge call timeout ms (default 60000)"),
 		}, []string{"action"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return handleColabAction(ctx, workspace, deps, req), nil
+			return HandleColabAction(ctx, workspace, deps, req), nil
 		},
 	}
 }
 
-func handleColabAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
+func HandleColabAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
 	action, _ := args["action"].(string)

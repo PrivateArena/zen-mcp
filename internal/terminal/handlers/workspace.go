@@ -11,14 +11,14 @@ func init() {
 		if len(args) == 0 {
 			return fmt.Errorf("usage: root <path>")
 		}
-		fmt.Printf("Setting workspace root: %s\n", args[0])
+		fmt.Println(terminal.ExecuteTool("workspace", map[string]any{"path": args[0]}))
 		return nil
 	})
 	terminal.Register("cd", func(args []string, sessionID string) error {
 		if len(args) == 0 {
 			return fmt.Errorf("usage: cd <path>")
 		}
-		fmt.Printf("Changing directory: %s\n", args[0])
+		fmt.Println(terminal.ExecuteTool("workspace", map[string]any{"path": args[0]}))
 		return nil
 	})
 }

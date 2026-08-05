@@ -8,7 +8,7 @@ import (
 
 func init() {
 	terminal.Register("bl", func(args []string, sessionID string) error {
-		fmt.Println("Loading brain timeline memory...")
+		fmt.Println(terminal.ExecuteTool("memory", map[string]any{"action": "load"}))
 		return nil
 	})
 	terminal.Register("bs", func(args []string, sessionID string) error {
@@ -26,11 +26,11 @@ func init() {
 		return nil
 	})
 	terminal.Register("loadi", func(args []string, sessionID string) error {
-		fmt.Println("Loading memory from isolated whiteboard...")
+		fmt.Println(terminal.ExecuteTool("memory", map[string]any{"action": "load"}))
 		return nil
 	})
 	terminal.Register("loads", func(args []string, sessionID string) error {
-		fmt.Println("Loading memory from shared whiteboard...")
+		fmt.Println(terminal.ExecuteTool("memory", map[string]any{"action": "load"}))
 		return nil
 	})
 	terminal.Register("savei", func(args []string, sessionID string) error {
@@ -48,11 +48,11 @@ func init() {
 		return nil
 	})
 	terminal.Register("scope", func(args []string, sessionID string) error {
-		fmt.Println("Managing project scopes...")
+		fmt.Println(terminal.ExecuteTool("memory", map[string]any{"action": "scope"}))
 		return nil
 	})
 	terminal.Register("scopes", func(args []string, sessionID string) error {
-		fmt.Println("Available scopes:")
+		fmt.Println(terminal.ExecuteTool("memory", map[string]any{"action": "scope"}))
 		return nil
 	})
 }

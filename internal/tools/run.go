@@ -45,12 +45,12 @@ func defRun(deps Deps) ToolDef {
 			},
 		}, []string{"language", "code"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return handleRunAction(ctx, deps, req), nil
+			return HandleRunAction(ctx, deps, req), nil
 		},
 	}
 }
 
-func handleRunAction(ctx context.Context, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
+func HandleRunAction(ctx context.Context, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	cfg := mcpcfg.Get()
 	langs := sortedKeys2(cfg.Sandbox.Languages)

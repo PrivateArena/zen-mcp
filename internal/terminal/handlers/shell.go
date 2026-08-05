@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/jang/zen-mcp/internal/terminal"
 )
@@ -11,7 +12,7 @@ func init() {
 		if len(args) == 0 {
 			return fmt.Errorf("usage: shell <cmd>")
 		}
-		fmt.Printf("Executing shell command: %s\n", args[0])
+		fmt.Println(terminal.ExecuteTool("shell", map[string]any{"action": "run", "cmd": strings.Join(args, " ")}))
 		return nil
 	})
 }
