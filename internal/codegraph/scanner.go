@@ -59,12 +59,8 @@ func (s *Scanner) GetFilesToProcess() ([]FileRecord, error) {
 	}
 
 	var toProcess []FileRecord
-	for _, fullPath := range files {
-		relPath, err := filepath.Rel(s.rootDir, fullPath)
-		if err != nil {
-			continue
-		}
-		relPath = filepath.ToSlash(relPath)
+	for _, relPath := range files {
+		fullPath := filepath.Join(s.rootDir, relPath)
 
 		if !isSupported(relPath) {
 			continue
@@ -115,7 +111,11 @@ func (s *Scanner) getDiskFiles() ([]string, error) {
 			}
 			return nil
 		}
-		files = append(files, path)
+		relPath, relErr := filepath.Rel(s.rootDir, path)
+		if relErr != nil {
+			return nil
+		}
+		files = append(files, filepath.ToSlash(relPath))
 		return nil
 	})
 	return files, err

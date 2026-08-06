@@ -82,7 +82,7 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 		_ = cg.storage.DeleteEdgesForFile(fileID)
 
 		// Parse and insert nodes
-		nodes, relations, err := cg.parser.Parse("."+filepath.Ext(fr.Path), content)
+		nodes, relations, err := cg.parser.Parse(filepath.Ext(fr.Path), content)
 		if err != nil {
 			continue
 		}
@@ -206,33 +206,42 @@ func (cg *CodeGraph) Map() (string, error) {
 	return sb.String(), nil
 }
 
-// GetSkeleton returns the skeleton for a specific file.
+// GetSkeleton returns the skeleton for a specific file from the index.
 func (cg *CodeGraph) GetSkeleton(relPath string) (string, error) {
-	fullPath := filepath.Join(cg.rootDir, relPath)
-	content, err := os.ReadFile(fullPath)
+	file := cg.storage.GetFileByPath(relPath)
+	if file == nil {
+		return fmt.Sprintf("File not found in index: %s", relPath), nil
+	}
+
+	nodes, err := cg.storage.GetNodesForFile(file.ID)
 	if err != nil {
 		return "", err
 	}
 
-	ext := "." + filepath.Ext(relPath)
-	nodes, _, err := cg.parser.Parse(ext, content)
-	if err != nil {
-		return "", err
+	if len(nodes) == 0 {
+		return fmt.Sprintf("File %s has no indexed symbols.", relPath), nil
 	}
 
 	var sb stringsBuilder
+	sb.WriteString(fmt.Sprintf("File Skeleton: %s\n", relPath))
+	sb.WriteString(fmt.Sprintf("Language: %s\n", file.Language))
+	sb.WriteString("----------------------------------------\n")
+
 	for _, n := range nodes {
-		sb.WriteString(fmt.Sprintf("## %s %s at %s:%d\n", n.Type, n.Name, relPath, n.StartLine))
-		if n.Signature != "" {
-			sb.WriteString(fmt.Sprintf("```\n%s\n```\n\n", n.Signature))
+		loc := fmt.Sprintf("(lines %d-%d)", n.StartLine, n.EndLine)
+		sig := strings.TrimSpace(n.Signature)
+		if sig != "" {
+			oneLineSig := strings.Join(strings.Fields(sig), " ")
+			sb.WriteString(fmt.Sprintf("%s %s %s %s\n", n.Type, n.Name, oneLineSig, loc))
+		} else {
+			sb.WriteString(fmt.Sprintf("%s %s %s\n", n.Type, n.Name, loc))
+		}
+		if n.Docstring != "" {
+			sb.WriteString(fmt.Sprintf("  \"%s\"\n", n.Docstring))
 		}
 	}
 
-	result := sb.String()
-	if result == "" {
-		return "File not found in index", nil
-	}
-	return result, nil
+	return sb.String(), nil
 }
 
 // Skeletons returns symbol skeletons.

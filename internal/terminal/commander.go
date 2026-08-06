@@ -3,7 +3,6 @@ package terminal
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -100,15 +99,6 @@ func Ws() string {
 	return "."
 }
 
-// showResult formats and prints a result object as JSON.
-func showResult(data any) {
-	b, _ := json.MarshalIndent(data, "", "  ")
-	if len(b) == 0 {
-		b = []byte("null")
-	}
-	fmt.Fprintf(LogOut, "[ZEN-CLI] RESULT:\n%s\n", string(b))
-}
-
 // isNumeric checks if a string consists only of digits.
 func isNumeric(s string) bool {
 	for _, r := range s {
@@ -134,14 +124,16 @@ type ParsedCodegraphArgs struct {
 	DryRun     bool
 }
 
-// parseCodegraphArgs parses codegraph command arguments.
-func parseCodegraphArgs(args []string) ParsedCodegraphArgs {
+// ParseCodegraphArgs parses codegraph command arguments.
+func ParseCodegraphArgs(args []string) ParsedCodegraphArgs {
 	result := ParsedCodegraphArgs{Isolate: 0}
 	for _, a := range args {
 		switch {
 		case isNumeric(a):
-			i := parseInt(a)
-			result.Limit = &i
+			if result.Limit == nil {
+				i := parseInt(a)
+				result.Limit = &i
+			}
 		case strings.HasPrefix(a, "isolate="):
 			result.Isolate = parseInt(strings.TrimPrefix(a, "isolate="))
 		case a == "--json":
@@ -149,7 +141,9 @@ func parseCodegraphArgs(args []string) ParsedCodegraphArgs {
 		case a == "--dry-run":
 			result.DryRun = true
 		case a != "--force" && a != "---force" && !strings.HasPrefix(a, "--"):
-			result.Query = a
+			if result.Query == "" {
+				result.Query = a
+			}
 		}
 	}
 	return result
@@ -210,30 +204,31 @@ func ExecuteTool(name string, args map[string]any) string {
 
 	ctx := context.Background()
 	req := MakeFakeRequest(args)
+	ws := Ws()
 
 	var result *mcp.CallToolResult
 	switch name {
 	case "codegraph":
-		result = tools.HandleCodegraphAction(ctx, "", d, req)
+		result = tools.HandleCodegraphAction(ctx, ws, d, req)
 	case "memory":
-		result = tools.HandleMemoryAction(ctx, "", d, req)
+		result = tools.HandleMemoryAction(ctx, ws, d, req)
 	case "memory_isolate":
-		result = tools.HandleMemoryIsolateAction(ctx, "", d, req)
+		result = tools.HandleMemoryIsolateAction(ctx, ws, d, req)
 	case "memory_shared":
-		result = tools.HandleMemorySharedAction(ctx, "", d, req)
+		result = tools.HandleMemorySharedAction(ctx, ws, d, req)
 	case "shell":
-		result = tools.HandleShellAction(ctx, "", d, req)
+		result = tools.HandleShellAction(ctx, ws, d, req)
 	case "browser":
-		result = tools.HandleBrowserAction(ctx, "", d, req)
+		result = tools.HandleBrowserAction(ctx, ws, d, req)
 	case "skill":
-		result = tools.HandleSkillsAction(ctx, "", d, req)
+		result = tools.HandleSkillsAction(ctx, ws, d, req)
 	case "context":
-		result = tools.HandleContextAction(ctx, "", d, req)
+		result = tools.HandleContextAction(ctx, ws, d, req)
 	case "ui-vision":
-		result = tools.HandleUiVisionAction(ctx, "", d, req)
+		result = tools.HandleUiVisionAction(ctx, ws, d, req)
 	case "workspace":
 		path, _ := args["path"].(string)
-		result = tools.HandleWorkspaceAction(ctx, path, "", d)
+		result = tools.HandleWorkspaceAction(ctx, path, ws, d)
 	default:
 		return "ERROR: unknown tool " + name
 	}

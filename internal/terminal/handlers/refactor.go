@@ -2,8 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
-	"strings"
 
 	"github.com/jang/zen-mcp/internal/terminal"
 )
@@ -11,36 +9,28 @@ import (
 func init() {
 	terminal.Register("refactor-copy", func(args []string) error {
 		if len(args) == 0 {
-			return fmt.Errorf("usage: refactor-copy <target> [mode] [--dry-run] [isolate=N] --sources <json>")
+			terminal.Logf("ERROR: Missing target_path. Usage: refactor-copy <target_path> [mode] [--dry-run] [isolate=N] --sources <json>")
+			return nil
 		}
+		parsed := terminal.ParseCodegraphArgs(args)
 		targetPath := args[0]
 		mode := "append"
 		sourcesJSON := "[]"
-		dryRun := false
-		isolate := 0
 
 		sourcesIdx := -1
 		for i, a := range args {
 			switch a {
 			case "append", "overwrite":
 				mode = a
-			case "--dry-run":
-				dryRun = true
-			case "--json":
-				// handled by codegraph action
-			default:
-				if strings.HasPrefix(a, "isolate=") {
-					fmt.Sscanf(a, "isolate=%d", &isolate)
-				} else if a == "--sources" {
-					sourcesIdx = i
-				}
+			case "--sources":
+				sourcesIdx = i
 			}
 		}
 		if sourcesIdx != -1 && sourcesIdx+1 < len(args) {
 			sourcesJSON = args[sourcesIdx+1]
 		}
 
-		terminal.Logf("REFACTOR COPY: %s (mode: %s, dry-run: %v)", targetPath, mode, dryRun)
+		terminal.Logf("REFACTOR COPY: %s (mode: %s, dry-run: %v)", targetPath, mode, parsed.DryRun)
 
 		var sources []map[string]any
 		if err := json.Unmarshal([]byte(sourcesJSON), &sources); err != nil {
@@ -51,8 +41,8 @@ func init() {
 		res := terminal.ExecuteTool("codegraph", map[string]any{
 			"action":      "refactor_copy",
 			"query":       targetPath,
-			"isolate":     isolate,
-			"dry_run":     dryRun,
+			"isolate":     parsed.Isolate,
+			"dry_run":     parsed.DryRun,
 			"target_path": targetPath,
 			"mode":        mode,
 			"sources":     sources,
@@ -62,30 +52,21 @@ func init() {
 	})
 
 	terminal.Register("refactor-delete", func(args []string) error {
+		parsed := terminal.ParseCodegraphArgs(args)
 		targetsJSON := "[]"
-		dryRun := false
-		isolate := 0
 
 		targetsIdx := -1
 		for i, a := range args {
 			switch a {
-			case "--dry-run":
-				dryRun = true
-			case "--json":
-				// handled by codegraph action
-			default:
-				if strings.HasPrefix(a, "isolate=") {
-					fmt.Sscanf(a, "isolate=%d", &isolate)
-				} else if a == "--targets" {
-					targetsIdx = i
-				}
+			case "--targets":
+				targetsIdx = i
 			}
 		}
 		if targetsIdx != -1 && targetsIdx+1 < len(args) {
 			targetsJSON = args[targetsIdx+1]
 		}
 
-		terminal.Logf("REFACTOR DELETE (dry-run: %v)", dryRun)
+		terminal.Logf("REFACTOR DELETE (dry-run: %v)", parsed.DryRun)
 
 		var targets []map[string]any
 		if err := json.Unmarshal([]byte(targetsJSON), &targets); err != nil {
@@ -95,8 +76,8 @@ func init() {
 
 		res := terminal.ExecuteTool("codegraph", map[string]any{
 			"action":   "refactor_delete",
-			"isolate":  isolate,
-			"dry_run":  dryRun,
+			"isolate":  parsed.Isolate,
+			"dry_run":  parsed.DryRun,
 			"targets":  targets,
 		})
 		terminal.Logf("RESULT:\n%s", res)
@@ -105,21 +86,16 @@ func init() {
 
 	terminal.Register("refactor-rollback", func(args []string) error {
 		if len(args) == 0 {
-			return fmt.Errorf("usage: refactor-rollback <file> [isolate=N]")
+			terminal.Logf("ERROR: Missing file path. Usage: refactor-rollback <file_path> [isolate=N]")
+			return nil
 		}
+		parsed := terminal.ParseCodegraphArgs(args)
 		query := args[0]
-		isolate := 0
-		for _, a := range args[1:] {
-			if strings.HasPrefix(a, "isolate=") {
-				fmt.Sscanf(a, "isolate=%d", &isolate)
-			}
-		}
-
 		terminal.Logf("REFACTOR ROLLBACK: \"%s\"", query)
 		res := terminal.ExecuteTool("codegraph", map[string]any{
 			"action":  "refactor_rollback",
 			"query":   query,
-			"isolate": isolate,
+			"isolate": parsed.Isolate,
 		})
 		terminal.Logf("RESULT:\n%s", res)
 		return nil

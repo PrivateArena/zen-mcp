@@ -156,8 +156,8 @@ func (s *Storage) GetFileByPath(path string) *FileRecord {
 	defer s.mu.Unlock()
 
 	var fr FileRecord
-	err := s.db.QueryRow(`SELECT path, hash, mtime, language, is_test FROM files WHERE path = ?`, path).
-		Scan(&fr.Path, &fr.Hash, &fr.MTime, &fr.Language, &fr.IsTest)
+	err := s.db.QueryRow(`SELECT id, path, hash, mtime, language, is_test FROM files WHERE path = ?`, path).
+		Scan(&fr.ID, &fr.Path, &fr.Hash, &fr.MTime, &fr.Language, &fr.IsTest)
 	if err != nil {
 		return nil
 	}
@@ -643,6 +643,27 @@ func (s *Storage) FindShortestPath(fromName, toName string, limit int) (*Shortes
 	}
 
 	return &ShortestPathResult{Found: false}, nil
+}
+
+// GetNodesForFile returns all nodes for a given file ID.
+func (s *Storage) GetNodesForFile(fileID int64) ([]NodeRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.db.Query(`SELECT id, file_id, type, name, language, qualified_name, signature, docstring, start_line, end_line, content FROM nodes WHERE file_id = ?`, fileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var nodes []NodeRecord
+	for rows.Next() {
+		var n NodeRecord
+		if err := rows.Scan(&n.ID, &n.FileID, &n.Type, &n.Name, &n.Language, &n.QualifiedName, &n.Signature, &n.Docstring, &n.StartLine, &n.EndLine, &n.Content); err != nil {
+			continue
+		}
+		nodes = append(nodes, n)
+	}
+	return nodes, nil
 }
 
 func (s *Storage) getNodesByName(name string) ([]NodeRecord, error) {

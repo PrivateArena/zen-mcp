@@ -158,6 +158,14 @@ func ClearSessionGraph(session *layeredGraphSession) {
 	}
 }
 
+func ClearSessionGraphByWorkspace(workspace string) {
+	if s, ok := graphRegistry.Load(workspace); ok {
+		session := s.(*layeredGraphSession)
+		ClearSessionGraph(session)
+		graphRegistry.Delete(workspace)
+	}
+}
+
 func getTargetGraphs(session *layeredGraphSession, isolate int) []layeredGraphEntry {
 	if isolate == 0 {
 		return session.entries
