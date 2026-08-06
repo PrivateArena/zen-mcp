@@ -2,6 +2,7 @@ package prompts
 
 import (
 	"context"
+	"log"
 
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	mcp "github.com/mark3labs/mcp-go/mcp"
@@ -41,8 +42,10 @@ func RegisterPrompts(srv *mcpserver.MCPServer, workspace string) {
 			}
 			text, err := ResolvePrompt(freshP, safeArgs, workspace)
 			if err != nil {
+				log.Printf("[DEBUG] prompts/get name=%s args=%v status=ERROR err=%v", p.Name, safeArgs, err)
 				return nil, err
 			}
+			log.Printf("[DEBUG] prompts/get name=%s args=%v status=OK len=%d", p.Name, safeArgs, len(text))
 			return &mcp.GetPromptResult{
 				Description: p.Description,
 				Messages: []mcp.PromptMessage{

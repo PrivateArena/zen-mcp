@@ -144,8 +144,6 @@ func (d RouteDeps) postMCP(w http.ResponseWriter, r *http.Request) {
 	}
 	method := jsonBodyMethod(r)
 
-	log.Printf("[DEBUG] POST /mcp - Method: %s - Workspace: %s", method, logicalID)
-
 	srv, err := AcquireServer(d.Tag, logicalID, d.CreateMCPServer, d.Registry)
 	if err != nil {
 		writeMCPInternalError(w, err)
