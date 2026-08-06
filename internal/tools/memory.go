@@ -63,7 +63,11 @@ func HandleMemoryAction(ctx context.Context, workspace string, deps Deps, req mc
 	var result any
 	switch action {
 	case "load":
-		result = loadProjectMemoryState(actualWorkspace, memoryName, deps)
+		state, err := loadProjectMemoryState(actualWorkspace, memoryName, deps)
+		if err != nil {
+			return toolresponse.WrapErrorWithContext(ctx, "memory", err, start)
+		}
+		result = state
 	case "save":
 		result = actionSave(dataDir, memoryName, dbPath, actualWorkspace, sessionTitle, objective, sessionNotes)
 	case "scope":
@@ -73,12 +77,12 @@ func HandleMemoryAction(ctx context.Context, workspace string, deps Deps, req mc
 }
 
 // loadProjectMemoryState ports loadProjectMemoryState.
-func loadProjectMemoryState(workspace, memoryName string, deps Deps) map[string]any {
+func loadProjectMemoryState(workspace, memoryName string, deps Deps) (map[string]any, error) {
 	dataDir := filepath.Join(workspace, ".zenmcp")
 	dbPath := filepath.Join(dataDir, "context.db")
 
 	if err := deps.Gatekeeper.ValidatePathSafety(workspace, "memory load"); err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	state := projectmemory.ReconstructState(dataDir, memoryName)
@@ -106,7 +110,7 @@ func loadProjectMemoryState(workspace, memoryName string, deps Deps) map[string]
 
 	stateMap["recent_commands"] = loadRecentCommands(dbPath)
 
-	return stateMap
+	return stateMap, nil
 }
 
 func loadRecentCommands(dbPath string) []map[string]any {

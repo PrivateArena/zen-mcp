@@ -169,9 +169,9 @@ func ClearSessionGraphByWorkspace(workspace string) {
 	})
 }
 
-func getTargetGraphs(session *layeredGraphSession, isolate int) []layeredGraphEntry {
+func getTargetGraphs(session *layeredGraphSession, isolate int) ([]layeredGraphEntry, error) {
 	if isolate == 0 {
-		return session.entries
+		return session.entries, nil
 	}
 	idx := isolate - 1
 	if idx < 0 || idx >= len(session.entries) {
@@ -179,9 +179,9 @@ func getTargetGraphs(session *layeredGraphSession, isolate int) []layeredGraphEn
 		for _, e := range session.entries {
 			scopes = append(scopes, fmt.Sprintf("  [%d] %s (%s)", e.index, e.label, e.root))
 		}
-		panic(fmt.Sprintf("isolate=%d out of range. Available scopes:\n%s", isolate, strings.Join(scopes, "\n")))
+		return nil, fmt.Errorf("isolate=%d out of range. Available scopes:\n%s", isolate, strings.Join(scopes, "\n"))
 	}
-	return []layeredGraphEntry{session.entries[idx]}
+	return []layeredGraphEntry{session.entries[idx]}, nil
 }
 
 func expandQueryPaths(query string, session *layeredGraphSession) []string {
@@ -268,20 +268,26 @@ func formatLayered(results []layeredResult, single bool) string {
 	return strings.Join(parts, "\n\n")
 }
 
-func resolveRefactorTarget(session *layeredGraphSession, isolate int) (layeredGraphEntry, string) {
+func resolveRefactorTarget(session *layeredGraphSession, isolate int) (layeredGraphEntry, string, error) {
 	target := session.entries[0]
 	warning := ""
 	if isolate != 0 {
-		targets := getTargetGraphs(session, isolate)
+		targets, err := getTargetGraphs(session, isolate)
+		if err != nil {
+			return layeredGraphEntry{}, "", err
+		}
 		target = targets[0]
 	} else if len(session.entries) > 1 {
 		warning = "[WARNING] isolate=0 (default) selected. Defaulting refactor to ROOT scope. Use isolate=N to target sub-scopes.\n\n"
 	}
-	return target, warning
+	return target, warning, nil
 }
 
-func actionIndex(session *layeredGraphSession, isolate int) string {
-	targets := getTargetGraphs(session, isolate)
+func actionIndex(session *layeredGraphSession, isolate int) (string, error) {
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
 	parts := make([]string, 0, len(targets))
 	for _, target := range targets {
 		_, _ = target.graph.Index()
@@ -292,11 +298,14 @@ func actionIndex(session *layeredGraphSession, isolate int) string {
 		}
 		parts = append(parts, fmt.Sprintf("Scope [%s]: %d total files.", target.label, filesIndexed))
 	}
-	return strings.Join(parts, "\n")
+	return strings.Join(parts, "\n"), nil
 }
 
-func actionMap(session *layeredGraphSession, isolate int, limit *int) string {
-	targets := getTargetGraphs(session, isolate)
+func actionMap(session *layeredGraphSession, isolate int, limit *int) (string, error) {
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
 	results := make([]layeredResult, 0, len(targets))
 	l := 0
 	if limit != nil {
@@ -306,11 +315,14 @@ func actionMap(session *layeredGraphSession, isolate int, limit *int) string {
 		data, _ := target.graph.GetRepositoryMap(l)
 		results = append(results, layeredResult{label: target.label, data: data})
 	}
-	return formatLayered(results, isolate != 0)
+	return formatLayered(results, isolate != 0), nil
 }
 
-func actionNeighbors(session *layeredGraphSession, isolate int, query string, limit *int) string {
-	targets := getTargetGraphs(session, isolate)
+func actionNeighbors(session *layeredGraphSession, isolate int, query string, limit *int) (string, error) {
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
 	results := make([]layeredResult, 0, len(targets))
 	l := 20
 	if limit != nil {
@@ -324,13 +336,16 @@ func actionNeighbors(session *layeredGraphSession, isolate int, query string, li
 		results = append(results, layeredResult{label: target.label, data: fmt.Sprintf("%v", neighbors)})
 	}
 	if len(results) == 0 {
-		panic(fmt.Sprintf(`No neighbors found for "%s" in any of the active scopes.`, query))
+		return "", fmt.Errorf(`No neighbors found for "%s" in any of the active scopes.`, query)
 	}
-	return formatLayered(results, isolate != 0)
+	return formatLayered(results, isolate != 0), nil
 }
 
-func actionUsage(session *layeredGraphSession, isolate int, query string) string {
-	targets := getTargetGraphs(session, isolate)
+func actionUsage(session *layeredGraphSession, isolate int, query string) (string, error) {
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
 	results := make([]layeredResult, 0, len(targets))
 	for _, target := range targets {
 		usages, err := target.graph.FindUsage(query, 50)
@@ -342,9 +357,9 @@ func actionUsage(session *layeredGraphSession, isolate int, query string) string
 		}
 	}
 	if len(results) == 0 {
-		panic(fmt.Sprintf(`No usages found for "%s" in any of the active scopes. Make sure the index is up to date and the symbol name is exact.`, query))
+		return "", fmt.Errorf(`No usages found for "%s" in any of the active scopes. Make sure the index is up to date and the symbol name is exact.`, query)
 	}
-	return formatLayered(results, isolate != 0)
+	return formatLayered(results, isolate != 0), nil
 }
 
 func fmtFileList(paths []string) string {
@@ -378,8 +393,11 @@ func fmtFileList(paths []string) string {
 	return strings.Join(lines, "\n")
 }
 
-func actionFiles(session *layeredGraphSession, isolate int, query string, limit *int) string {
-	targets := getTargetGraphs(session, isolate)
+func actionFiles(session *layeredGraphSession, isolate int, query string, limit *int) (string, error) {
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
 	results := make([]layeredResult, 0, len(targets))
 
 	expanded := make([]string, 0)
@@ -424,17 +442,20 @@ func actionFiles(session *layeredGraphSession, isolate int, query string, limit 
 			data:  header + "\n" + fmtFileList(paths),
 		})
 	}
-	return formatLayered(results, isolate != 0)
+	return formatLayered(results, isolate != 0), nil
 }
 
-func actionRelated(session *layeredGraphSession, isolate int, query string, limit *int) string {
+func actionRelated(session *layeredGraphSession, isolate int, query string, limit *int) (string, error) {
 	expanded := expandQueryPaths(query, session)
 	if len(expanded) == 0 {
-		panic(fmt.Sprintf(`No indexed files found for query "%s". Ensure the files are indexed.`, query))
+		return "", fmt.Errorf(`No indexed files found for query "%s". Ensure the files are indexed.`, query)
 	}
 	filePath := expanded[0]
 
-	targets := getTargetGraphs(session, isolate)
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
 	results := make([]layeredResult, 0, len(targets))
 	l := 50
 	if limit != nil {
@@ -466,7 +487,11 @@ func actionRelated(session *layeredGraphSession, isolate int, query string, limi
 		}
 	}
 	if len(results) == 0 {
-		target := getTargetGraphs(session, isolate)[0]
+		targets, err := getTargetGraphs(session, isolate)
+		if err != nil {
+			return "", err
+		}
+		target := targets[0]
 		fileList, _ := target.graph.Files(filePath, 1)
 		fileInIndex := false
 		for _, f := range fileList {
@@ -481,13 +506,16 @@ func actionRelated(session *layeredGraphSession, isolate int, query string, limi
 		} else {
 			advice += fmt.Sprintf(` The file is indexed but has no cross-file edges detected. Try 'codegraph skeletons "%s"' to verify the file has parsed symbols, or re-index.`, query)
 		}
-		panic(advice)
+		return "", fmt.Errorf("%s", advice)
 	}
-	return formatLayered(results, isolate != 0)
+	return formatLayered(results, isolate != 0), nil
 }
 
-func actionSearch(session *layeredGraphSession, isolate int, query string, limit *int) string {
-	targets := getTargetGraphs(session, isolate)
+func actionSearch(session *layeredGraphSession, isolate int, query string, limit *int) (string, error) {
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
 	results := make([]layeredResult, 0, len(targets))
 	l := 10
 	if limit != nil {
@@ -497,11 +525,14 @@ func actionSearch(session *layeredGraphSession, isolate int, query string, limit
 		graphResults, _ := target.graph.Search(query, l)
 		results = append(results, layeredResult{label: target.label, data: fmt.Sprintf("%v", graphResults)})
 	}
-	return formatLayered(results, isolate != 0)
+	return formatLayered(results, isolate != 0), nil
 }
 
-func actionStatus(session *layeredGraphSession, isolate int) string {
-	targets := getTargetGraphs(session, isolate)
+func actionStatus(session *layeredGraphSession, isolate int) (string, error) {
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
 	results := make([]layeredResult, 0, len(targets))
 	for _, target := range targets {
 		stats, _ := target.graph.Status()
@@ -515,16 +546,19 @@ func actionStatus(session *layeredGraphSession, isolate int) string {
 		}
 		text += "\n\nAvailable scopes: " + strings.Join(scopes, " | ") + "\nUse isolate=N to target a specific scope."
 	}
-	return text
+	return text, nil
 }
 
-func actionSkeletons(session *layeredGraphSession, isolate int, query string) string {
+func actionSkeletons(session *layeredGraphSession, isolate int, query string) (string, error) {
 	expanded := expandQueryPaths(query, session)
 	if len(expanded) == 0 {
-		panic(fmt.Sprintf(`No indexed files found for query "%s". Ensure the files are indexed (run codegraph index first).`, query))
+		return "", fmt.Errorf(`No indexed files found for query "%s". Ensure the files are indexed (run codegraph index first).`, query)
 	}
 
-	targets := getTargetGraphs(session, isolate)
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
 	var output []string
 	for _, p := range expanded {
 		found := false
@@ -543,13 +577,16 @@ func actionSkeletons(session *layeredGraphSession, isolate int, query string) st
 
 	trimmed := strings.TrimSpace(strings.Join(output, "\n\n"))
 	if trimmed == "" {
-		panic(fmt.Sprintf(`Could not retrieve skeleton for "%s" in any of the active scopes. Expanded paths: [%s]`, query, strings.Join(expanded, ", ")))
+		return "", fmt.Errorf(`Could not retrieve skeleton for "%s" in any of the active scopes. Expanded paths: [%s]`, query, strings.Join(expanded, ", "))
 	}
-	return trimmed
+	return trimmed, nil
 }
 
-func actionMermaid(session *layeredGraphSession, isolate int, query string, limit *int) string {
-	targets := getTargetGraphs(session, isolate)
+func actionMermaid(session *layeredGraphSession, isolate int, query string, limit *int) (string, error) {
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
 	parts := make([]string, 0, len(targets))
 	l := 60
 	if limit != nil {
@@ -559,13 +596,16 @@ func actionMermaid(session *layeredGraphSession, isolate int, query string, limi
 		diagram, _ := target.graph.GenerateMermaid(query, l)
 		parts = append(parts, fmt.Sprintf("### Scope: %s\n```mermaid\n%s\n```", target.label, diagram))
 	}
-	return strings.Join(parts, "\n\n")
+	return strings.Join(parts, "\n\n"), nil
 }
 
-func actionMarkdown(session *layeredGraphSession, isolate int, query string) string {
-	targets := getTargetGraphs(session, isolate)
+func actionMarkdown(session *layeredGraphSession, isolate int, query string) (string, error) {
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
 	if len(targets) == 0 {
-		panic("No scopes available for markdown dump.")
+		return "", fmt.Errorf("No scopes available for markdown dump.")
 	}
 
 	showFileList := true
@@ -647,11 +687,14 @@ func actionMarkdown(session *layeredGraphSession, isolate int, query string) str
 	outputPath := filepath.Join(dumpDir, fmt.Sprintf("codegraph-markdown-%s.md", timestamp))
 	os.WriteFile(outputPath, []byte(strings.Join(mdParts, "\n")), 0644)
 
-	return outputPath
+	return outputPath, nil
 }
 
-func actionDeadcode(session *layeredGraphSession, isolate int, query string, limit *int) string {
-	targets := getTargetGraphs(session, isolate)
+func actionDeadcode(session *layeredGraphSession, isolate int, query string, limit *int) (string, error) {
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
 	parts := make([]string, 0, len(targets))
 	l := 200
 	if limit != nil {
@@ -706,7 +749,7 @@ func actionDeadcode(session *layeredGraphSession, isolate int, query string, lim
 	}
 
 	if len(parts) == 0 {
-		panic("No scopes available for dead code analysis.")
+		return "", fmt.Errorf("No scopes available for dead code analysis.")
 	}
 	results := make([]layeredResult, 0, len(parts))
 	for i, p := range parts {
@@ -718,11 +761,14 @@ func actionDeadcode(session *layeredGraphSession, isolate int, query string, lim
 		}
 		results = append(results, layeredResult{label: label, data: p})
 	}
-	return formatLayered(results, isolate != 0)
+	return formatLayered(results, isolate != 0), nil
 }
 
-func actionExplain(session *layeredGraphSession, isolate int, query string) string {
-	targets := getTargetGraphs(session, isolate)
+func actionExplain(session *layeredGraphSession, isolate int, query string) (string, error) {
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
 
 	qualifiedMatch := regexp.MustCompile(`^(.+\.\w+):(.+)$`).FindStringSubmatch(query)
 	exactFile := ""
@@ -750,7 +796,7 @@ func actionExplain(session *layeredGraphSession, isolate int, query string) stri
 	}
 
 	if len(allResults) == 0 {
-		panic(fmt.Sprintf(`Symbol "%s" not found in any active scope. Try re-indexing or check the exact name.`, query))
+		return "", fmt.Errorf(`Symbol "%s" not found in any active scope. Try re-indexing or check the exact name.`, query)
 	}
 
 	nameCount := make(map[string]int)
@@ -766,7 +812,7 @@ func actionExplain(session *layeredGraphSession, isolate int, query string) stri
 			lines = append(lines, fmt.Sprintf("  [%s:%d] %s (%s)", r.symbol.Path, r.symbol.StartLine, r.symbol.Name, r.symbol.Type))
 		}
 		lines = append(lines, "", "Rerun with qualified name: explain('src/path/to/file.ts:symbolName')")
-		return strings.Join(lines, "\n")
+		return strings.Join(lines, "\n"), nil
 	}
 
 	target, best := allResults[0].target, allResults[0].symbol
@@ -862,11 +908,14 @@ func actionExplain(session *layeredGraphSession, isolate int, query string) stri
 		}
 	}
 
-	return strings.Join(lines, "\n")
+	return strings.Join(lines, "\n"), nil
 }
 
-func actionImpact(session *layeredGraphSession, isolate int, query string) string {
-	targets := getTargetGraphs(session, isolate)
+func actionImpact(session *layeredGraphSession, isolate int, query string) (string, error) {
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
 	parts := make([]string, 0, len(targets))
 
 	for _, target := range targets {
@@ -999,20 +1048,23 @@ func actionImpact(session *layeredGraphSession, isolate int, query string) strin
 		parts = append(parts, strings.Join(lines, "\n"))
 	}
 
-	return strings.Join(parts, "\n\n")
+	return strings.Join(parts, "\n\n"), nil
 }
 
-func actionShortestPath(session *layeredGraphSession, isolate int, query string) string {
+func actionShortestPath(session *layeredGraphSession, isolate int, query string) (string, error) {
 	parts := strings.SplitN(query, ",", 2)
 	if len(parts) < 2 {
-		panic("query must be 'from,to' for shortestPath")
+		return "", fmt.Errorf("query must be 'from,to' for shortestPath")
 	}
 	from := strings.TrimSpace(parts[0])
 	to := strings.TrimSpace(parts[1])
-	target, _ := resolveRefactorTarget(session, isolate)
+	target, _, err := resolveRefactorTarget(session, isolate)
+	if err != nil {
+		return "", err
+	}
 	result, _ := target.graph.FindShortestPath(from, to, 6)
 	if !result.Found {
-		return fmt.Sprintf("No path found from \"%s\" to \"%s\".", from, to)
+		return fmt.Sprintf("No path found from \"%s\" to \"%s\".", from, to), nil
 	}
 	lines := make([]string, 0, len(result.Path))
 	for _, step := range result.Path {
@@ -1026,14 +1078,17 @@ func actionShortestPath(session *layeredGraphSession, isolate int, query string)
 		}
 		lines = append(lines, fmt.Sprintf("%s --%s--> %s", src, step.Relation, tgt))
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(lines, "\n"), nil
 }
 
-func actionFindCycles(session *layeredGraphSession, isolate int) string {
-	target, _ := resolveRefactorTarget(session, isolate)
+func actionFindCycles(session *layeredGraphSession, isolate int) (string, error) {
+	target, _, err := resolveRefactorTarget(session, isolate)
+	if err != nil {
+		return "", err
+	}
 	cycles, _ := target.graph.FindCycles()
 	if len(cycles) == 0 {
-		return "No circular dependencies found."
+		return "No circular dependencies found.", nil
 	}
 	lines := make([]string, 0, len(cycles))
 	for i, c := range cycles {
@@ -1044,7 +1099,7 @@ func actionFindCycles(session *layeredGraphSession, isolate int) string {
 		}
 		lines = append(lines, fmt.Sprintf("Cycle %d:\n  Files: %s\n  Edges: %s", i+1, files, strings.Join(edgeParts, ", ")))
 	}
-	return strings.Join(lines, "\n\n")
+	return strings.Join(lines, "\n\n"), nil
 }
 
 func HandleCodegraphAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
@@ -1081,63 +1136,73 @@ func HandleCodegraphAction(ctx context.Context, workspace string, deps Deps, req
 	}
 
 	if isolate != 0 {
-		getTargetGraphs(session, isolate)
+		if _, err := getTargetGraphs(session, isolate); err != nil {
+			return toolresponse.WrapErrorWithContext(ctx, "codegraph", err, start)
+		}
+	}
+
+	run := func(fn func() (string, error)) *mcp.CallToolResult {
+		text, err := fn()
+		if err != nil {
+			return toolresponse.WrapErrorWithContext(ctx, "codegraph", err, start)
+		}
+		return toolresponse.WrapSuccess(ctx, "codegraph", text, start)
 	}
 
 	switch action {
 	case "index":
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionIndex(session, isolate), start)
+		return run(func() (string, error) { return actionIndex(session, isolate) })
 	case "search":
 		if query == "" {
 			return toolresponse.WrapErrorWithContext(ctx, "codegraph", fmt.Errorf("query is required for search"), start)
 		}
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionSearch(session, isolate, query, limit), start)
+		return run(func() (string, error) { return actionSearch(session, isolate, query, limit) })
 	case "status":
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionStatus(session, isolate), start)
+		return run(func() (string, error) { return actionStatus(session, isolate) })
 	case "map":
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionMap(session, isolate, limit), start)
+		return run(func() (string, error) { return actionMap(session, isolate, limit) })
 	case "skeletons":
 		if query == "" {
 			return toolresponse.WrapErrorWithContext(ctx, "codegraph", fmt.Errorf("file path(s) (query) required for skeleton action"), start)
 		}
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionSkeletons(session, isolate, query), start)
+		return run(func() (string, error) { return actionSkeletons(session, isolate, query) })
 	case "mermaid":
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionMermaid(session, isolate, query, limit), start)
+		return run(func() (string, error) { return actionMermaid(session, isolate, query, limit) })
 	case "markdown":
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionMarkdown(session, isolate, query), start)
+		return run(func() (string, error) { return actionMarkdown(session, isolate, query) })
 	case "usage":
 		if query == "" {
 			return toolresponse.WrapErrorWithContext(ctx, "codegraph", fmt.Errorf("symbol name (query) is required for usage action"), start)
 		}
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionUsage(session, isolate, query), start)
+		return run(func() (string, error) { return actionUsage(session, isolate, query) })
 	case "neighbors":
 		if query == "" {
 			return toolresponse.WrapErrorWithContext(ctx, "codegraph", fmt.Errorf("symbol name (query) is required for neighbors action"), start)
 		}
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionNeighbors(session, isolate, query, limit), start)
+		return run(func() (string, error) { return actionNeighbors(session, isolate, query, limit) })
 	case "files":
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionFiles(session, isolate, query, limit), start)
+		return run(func() (string, error) { return actionFiles(session, isolate, query, limit) })
 	case "explain":
 		if query == "" {
 			return toolresponse.WrapErrorWithContext(ctx, "codegraph", fmt.Errorf("symbol name (query) is required for explain action"), start)
 		}
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionExplain(session, isolate, query), start)
+		return run(func() (string, error) { return actionExplain(session, isolate, query) })
 	case "deadcode":
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionDeadcode(session, isolate, query, limit), start)
+		return run(func() (string, error) { return actionDeadcode(session, isolate, query, limit) })
 	case "shortestPath":
 		if query == "" {
 			return toolresponse.WrapErrorWithContext(ctx, "codegraph", fmt.Errorf("query (source,target) required for shortestPath action"), start)
 		}
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionShortestPath(session, isolate, query), start)
+		return run(func() (string, error) { return actionShortestPath(session, isolate, query) })
 	case "findCycles":
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionFindCycles(session, isolate), start)
+		return run(func() (string, error) { return actionFindCycles(session, isolate) })
 	case "impact":
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionImpact(session, isolate, query), start)
+		return run(func() (string, error) { return actionImpact(session, isolate, query) })
 	case "related":
 		if query == "" {
 			return toolresponse.WrapErrorWithContext(ctx, "codegraph", fmt.Errorf("file path (query) is required for related action"), start)
 		}
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionRelated(session, isolate, query, limit), start)
+		return run(func() (string, error) { return actionRelated(session, isolate, query, limit) })
 	default:
 		return toolresponse.WrapErrorWithContext(ctx, "codegraph", fmt.Errorf("unknown action: %s", action), start)
 	}
