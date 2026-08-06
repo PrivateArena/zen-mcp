@@ -24,7 +24,7 @@ func NewScanner(storage *Storage, rootDir string) *Scanner {
 	s := &Scanner{
 		storage: storage,
 		rootDir: rootDir,
-		parser:  &Parser{},
+		parser:  GetParser(),
 	}
 	return s
 }

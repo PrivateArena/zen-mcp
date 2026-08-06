@@ -28,7 +28,7 @@ func NewCodeGraph(rootDir string) (*CodeGraph, error) {
 		return nil, err
 	}
 
-	parser := &Parser{}
+	parser := GetParser()
 	scanner := NewScanner(storage, rootDir)
 	scanner.SetParser(parser)
 

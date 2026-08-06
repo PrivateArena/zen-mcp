@@ -1,0 +1,55 @@
+package codegraph
+
+import (
+	tree_sitter "github.com/tree-sitter/go-tree-sitter"
+	ts_lua "github.com/tree-sitter-grammars/tree-sitter-lua/bindings/go"
+)
+
+type luaPlugin struct {
+	basePlugin
+}
+
+func newLuaPlugin() LanguagePlugin {
+	return &luaPlugin{}
+}
+
+func (p *luaPlugin) Extensions() []string { return []string{".lua"} }
+func (p *luaPlugin) LanguageName() string { return "lua" }
+
+func (p *luaPlugin) Init() error {
+	p.mu.Lock()
+	if p.parser != nil {
+		p.mu.Unlock()
+		return nil
+	}
+	p.mu.Unlock()
+
+	lang := tree_sitter.NewLanguage(ts_lua.Language())
+	parser := tree_sitter.NewParser()
+	parser.SetLanguage(lang)
+	p.setParser(parser, lang)
+	return nil
+}
+
+func (p *luaPlugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, error) {
+	parser, language := p.getParser()
+	if parser == nil || language == nil {
+		return nil, nil, nil
+	}
+
+	tree := parser.Parse(src, nil)
+	if tree == nil {
+		return nil, nil, nil
+	}
+	defer tree.Close()
+
+	root := tree.RootNode()
+	nodes := make([]ParsedNode, 0)
+	relations := make([]ParsedRelation, 0)
+
+	ExtractQueryMatches(language, root, src, "(chunk (function_declaration name: (identifier) @name) @def)", "function", &nodes)
+	ExtractQueryMatches(language, root, src, "(chunk (function_statement name: (identifier) @name) @def)", "function", &nodes)
+	ExtractQueryMatches(language, root, src, "(chunk (local_function name: (identifier) @name) @def)", "function", &nodes)
+
+	return DeduplicateNodes(nodes), relations, nil
+}

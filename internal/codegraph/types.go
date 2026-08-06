@@ -20,21 +20,14 @@ type ParsedRelation struct {
 	Metadata   string
 }
 
-// LanguagePlugin abstracts a tree-sitter language backend.
-type LanguagePlugin struct {
-	Extensions   []string
-	LanguageName string
-	Parse        func(src []byte) ([]ParsedNode, []ParsedRelation, error)
-}
-
 // RelatedRecord represents a related file/symbol edge.
 type RelatedRecord struct {
-	RelatedPath   string
-	RelatedLanguage string
-	Direction     string
-	Relation      string
-	SymbolName    string
-	SymbolType    string
+	RelatedPath      string
+	RelatedLanguage  string
+	Direction        string
+	Relation         string
+	SymbolName       string
+	SymbolType       string
 }
 
 // DeadcodeResult represents dead code analysis output.
