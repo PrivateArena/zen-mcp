@@ -3,6 +3,7 @@ package handlers
 import (
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/jang/zen-mcp/internal/terminal"
 	"github.com/jang/zen-mcp/internal/tools"
@@ -28,7 +29,10 @@ func init() {
 			}
 		}
 		terminal.Logf("CodeGraph Indexing...")
+		start := time.Now()
 		res := terminal.ExecuteTool("codegraph", map[string]any{"action": "index"})
+		elapsed := time.Since(start)
+		terminal.Logf("Index completed in %s", elapsed)
 		terminal.Logf("RESULT:\n%s", res)
 		return nil
 	})

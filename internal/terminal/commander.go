@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/jang/zen-mcp/internal/tools"
@@ -73,7 +74,9 @@ func List() []string {
 
 // Logf mirrors the TS terminal `log()` helper ([ZEN-CLI] prefix).
 func Logf(format string, args ...any) {
-	fmt.Fprintf(LogOut, "[ZEN-CLI] "+format+"\n", args...)
+	now := time.Now()
+	ts := fmt.Sprintf("[%02d:%02d:%02d.%03d]", now.Hour(), now.Minute(), now.Second(), now.Nanosecond()/1e6)
+	fmt.Fprintf(LogOut, "%s [ZEN-CLI] "+format+"\n", append([]any{ts}, args...)...)
 }
 
 // FallbackPort resolves the export-cli port when the CLI listener failed with

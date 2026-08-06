@@ -159,11 +159,14 @@ func ClearSessionGraph(session *layeredGraphSession) {
 }
 
 func ClearSessionGraphByWorkspace(workspace string) {
-	if s, ok := graphRegistry.Load(workspace); ok {
-		session := s.(*layeredGraphSession)
-		ClearSessionGraph(session)
-		graphRegistry.Delete(workspace)
-	}
+	graphRegistry.Range(func(key, value any) bool {
+		session := value.(*layeredGraphSession)
+		if session.workspaceRoot == workspace {
+			ClearSessionGraph(session)
+			graphRegistry.Delete(key)
+		}
+		return true
+	})
 }
 
 func getTargetGraphs(session *layeredGraphSession, isolate int) []layeredGraphEntry {

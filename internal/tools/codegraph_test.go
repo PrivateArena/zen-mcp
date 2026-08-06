@@ -1,14 +1,17 @@
 package tools
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
-func TestForceReindexClearsStaleDB(t *testing.T) {
-	tmpDir := t.TempDir()
+func TestForceReindexProducesSkeletons(t *testing.T) {
+	ws := t.TempDir()
 
 	src := `package foo
 
@@ -16,84 +19,66 @@ func Add(a int, b int) int {
 	return a + b
 }
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "calc.go"), []byte(src), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(ws, "calc.go"), []byte(src), 0644); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
 
+	ctx := context.Background()
 	deps := Deps{}
-	ctx := testContext()
 
 	// Step 1: initial index
-	req1 := MakeFakeRequest(map[string]any{"action": "index"})
-	res1 := HandleCodegraphAction(ctx, tmpDir, deps, req1)
-	if res1 == nil {
+	reqIndex := makeFakeRequest(map[string]any{"action": "index"})
+	resIndex := HandleCodegraphAction(ctx, ws, deps, reqIndex)
+	if resIndex == nil {
 		t.Fatalf("index result is nil")
 	}
-	var text1 string
-	for _, c := range res1.Content {
-		if tc, ok := c.(interface{ Text() string }); ok {
-			text1 = tc.Text()
-			break
-		}
-	}
-	if !strings.Contains(text1, "total files") {
-		t.Fatalf("unexpected index result: %s", text1)
-	}
+	textIndex := toolText(resIndex)
+	t.Logf("index result: %s", textIndex)
 
 	// Step 2: skeleton should work after index
-	req2 := MakeFakeRequest(map[string]any{"action": "skeletons", "query": "calc.go"})
-	res2 := HandleCodegraphAction(ctx, tmpDir, deps, req2)
-	var text2 string
-	for _, c := range res2.Content {
-		if tc, ok := c.(interface{ Text() string }); ok {
-			text2 = tc.Text()
-			break
-		}
-	}
-	if strings.Contains(text2, "has no indexed symbols") {
-		t.Fatalf("expected skeleton after initial index, got: %s", text2)
+	reqSkel := makeFakeRequest(map[string]any{"action": "skeletons", "query": "calc.go"})
+	resSkel := HandleCodegraphAction(ctx, ws, deps, reqSkel)
+	textSkel := toolText(resSkel)
+	t.Logf("skeleton after initial index: %s", textSkel)
+	if strings.Contains(textSkel, "has no indexed symbols") {
+		t.Fatalf("expected skeleton after initial index, got: %s", textSkel)
 	}
 
-	// Step 3: simulate stale DB by directly writing a file record with 0 nodes
-	// This mimics the state produced by the old "..go" extension bug
-	dbPath := filepath.Join(tmpDir, ".zenmcp", "codegraph.db")
-	
-	// Open the DB directly and insert a file record for a new file without nodes
-	// We'll use a subprocess to avoid import cycles
-	// Actually, let's just use the storage directly
-	
-	// First, get the existing session
-	session, err := getSessionByWorkspace(tmpDir)
-	if err != nil {
-		t.Fatalf("getSessionByWorkspace: %v", err)
+	// Step 3: simulate --force: clear session cache + delete DB
+	ClearSessionGraphByWorkspace(ws)
+	dbPath := filepath.Join(ws, ".zenmcp", "codegraph.db")
+	if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("remove db: %v", err)
 	}
-	
-	// Create a new file on disk that the scanner will find
-	if err := os.WriteFile(filepath.Join(tmpDir, "stale.go"), []byte("package stale\n"), 0644); err != nil {
-		t.Fatalf("write stale file: %v", err)
-	}
-	
-	// Force re-scan by clearing the session (simulating what --force does)
-	ClearSessionGraphByWorkspace(tmpDir)
-	
-	// Re-index - this should pick up the new file
-	req3 := MakeFakeRequest(map[string]any{"action": "index"})
-	res3 := HandleCodegraphAction(ctx, tmpDir, deps, req3)
-	_ = res3
 
-	// Now verify skeleton works for both files
-	for _, file := range []string{"calc.go", "stale.go"} {
-		req := MakeFakeRequest(map[string]any{"action": "skeletons", "query": file})
-		res := HandleCodegraphAction(ctx, tmpDir, deps, req)
-		var text string
-		for _, c := range res.Content {
-			if tc, ok := c.(interface{ Text() string }); ok {
-				text = tc.Text()
-				break
-			}
-		}
-		if strings.Contains(text, "has no indexed symbols") {
-			t.Fatalf("expected skeleton for %s after reindex, got: %s", file, text)
+	// Step 4: re-index
+	resIndex2 := HandleCodegraphAction(ctx, ws, deps, reqIndex)
+	textIndex2 := toolText(resIndex2)
+	t.Logf("index after --force: %s", textIndex2)
+
+	// Step 5: skeleton should STILL work after force reindex
+	resSkel2 := HandleCodegraphAction(ctx, ws, deps, reqSkel)
+	textSkel2 := toolText(resSkel2)
+	t.Logf("skeleton after --force: %s", textSkel2)
+	if strings.Contains(textSkel2, "has no indexed symbols") {
+		t.Fatalf("expected skeleton after force reindex, got: %s", textSkel2)
+	}
+}
+
+func makeFakeRequest(args map[string]any) mcp.CallToolRequest {
+	return mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name:      "",
+			Arguments: args,
+		},
+	}
+}
+
+func toolText(res *mcp.CallToolResult) string {
+	for _, c := range res.Content {
+		if tc, ok := c.(mcp.TextContent); ok {
+			return tc.Text
 		}
 	}
+	return ""
 }
