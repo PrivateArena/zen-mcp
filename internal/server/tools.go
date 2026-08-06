@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	mcpserver "github.com/mark3labs/mcp-go/server"
 	mcp "github.com/mark3labs/mcp-go/mcp"
+	mcpserver "github.com/mark3labs/mcp-go/server"
 
 	"github.com/jang/zen-mcp/internal/prompts"
 	"github.com/jang/zen-mcp/internal/toolregistry"

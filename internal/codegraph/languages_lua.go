@@ -1,8 +1,8 @@
 package codegraph
 
 import (
-	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	ts_lua "github.com/tree-sitter-grammars/tree-sitter-lua/bindings/go"
+	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
 type luaPlugin struct {

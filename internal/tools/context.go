@@ -63,14 +63,14 @@ func actionRetrieveContext(dbPath, query string) map[string]any {
 		return map[string]any{
 			"content": content,
 			"analysis": map[string]any{
-				"file_type":     ftLabel,
-				"confidence":    formatPercent(fileType.Confidence),
-				"reading_tool":  reading.Tool,
+				"file_type":      ftLabel,
+				"confidence":     formatPercent(fileType.Confidence),
+				"reading_tool":   reading.Tool,
 				"reading_advice": reading.Explanation,
-				"warning":       reading.Warning,
-				"line_count":    analysisResult.LineCount,
-				"byte_size":     analysisResult.ByteSize,
-				"sample":        sample,
+				"warning":        reading.Warning,
+				"line_count":     analysisResult.LineCount,
+				"byte_size":      analysisResult.ByteSize,
+				"sample":         sample,
 			},
 		}
 	}

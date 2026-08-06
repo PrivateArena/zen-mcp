@@ -9,17 +9,17 @@ type PromptArgument struct {
 
 // PromptDefinition represents a prompt definition.
 type PromptDefinition struct {
-	Name              string            `yaml:"name"`
-	Description       string            `yaml:"description"`
-	Arguments         []PromptArgument  `yaml:"arguments"`
-	Template          string            `yaml:"template"`
-	EnabledSkills     []string          `yaml:"enabledSkills"`
-	EnableMemoryContext *bool           `yaml:"enableMemoryContext"`
-	EnableSkillTrigger *bool           `yaml:"enableSkillTrigger"`
-	EnableSkillName   *bool            `yaml:"enableSkillName"`
-	SuggestSkills     *bool            `yaml:"suggestSkills"`
-	Adaptive          *bool            `yaml:"adaptive"`
-	DefaultPersona    string            `yaml:"defaultPersona"`
+	Name                string           `yaml:"name"`
+	Description         string           `yaml:"description"`
+	Arguments           []PromptArgument `yaml:"arguments"`
+	Template            string           `yaml:"template"`
+	EnabledSkills       []string         `yaml:"enabledSkills"`
+	EnableMemoryContext *bool            `yaml:"enableMemoryContext"`
+	EnableSkillTrigger  *bool            `yaml:"enableSkillTrigger"`
+	EnableSkillName     *bool            `yaml:"enableSkillName"`
+	SuggestSkills       *bool            `yaml:"suggestSkills"`
+	Adaptive            *bool            `yaml:"adaptive"`
+	DefaultPersona      string           `yaml:"defaultPersona"`
 }
 
 // Skill represents a skill definition.
@@ -57,7 +57,7 @@ Please follow this plan:
 	{
 		Name:        "debug-zen-midi",
 		Description: "Diagnose visual or process issues in zen-midi",
-		Arguments:  []PromptArgument{},
+		Arguments:   []PromptArgument{},
 		Template: `I am seeing issues with zen-midi. Please investigate:
 
 1. **Process Check**: Use processManager to check if 'zen-midi' is running and what its uptime is.

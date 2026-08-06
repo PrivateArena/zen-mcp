@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	workspaceDir       = ".zenmcp"
-	workspaceCfgName   = "config.json"
+	workspaceDir     = ".zenmcp"
+	workspaceCfgName = "config.json"
 )
 
 type ToolStateLayers struct {

@@ -185,8 +185,8 @@ func IndexActiveMemory(dbPath string, items []MemoryIndexItem) {
 		return
 	}
 	type activeRow struct {
-		id      int64
-		key     string
+		id  int64
+		key string
 	}
 	var existing []activeRow
 	for rows.Next() {
@@ -265,11 +265,11 @@ func SearchIndexedMemory(dbPath, query string, limit int) []SearchResult {
 	}
 
 	type doc struct {
-		id            int64
-		typ, title    string
-		content       string
-		archived      int
-		lexRank       int
+		id         int64
+		typ, title string
+		content    string
+		archived   int
+		lexRank    int
 	}
 	var docs []doc
 

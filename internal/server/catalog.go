@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	mcpserver "github.com/mark3labs/mcp-go/server"
 	mcp "github.com/mark3labs/mcp-go/mcp"
+	mcpserver "github.com/mark3labs/mcp-go/server"
 
 	"github.com/jang/zen-mcp/internal/toolregistry"
 	"github.com/jang/zen-mcp/internal/tools"

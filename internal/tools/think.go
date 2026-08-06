@@ -21,7 +21,7 @@ import (
 
 func defThink(workspace string, deps Deps) ToolDef {
 	return ToolDef{
-		Name: "think",
+		Name:        "think",
 		Description: "Reasoning + planning for agents. Actions: sequential_thinking, create_plan, update_task, get_plan, add_task, finish_task.",
 		Schema: jsonSchema(map[string]any{
 			"action":            strEnumProp("Action", []string{"create_plan", "add_task", "update_task", "get_plan", "sequential_thinking", "finish_task"}),

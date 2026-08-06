@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	mcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/jang/zen-mcp/internal/bridge"
 	"github.com/jang/zen-mcp/internal/toolresponse"
+	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
 func defColab(workspace string, deps Deps) ToolDef {

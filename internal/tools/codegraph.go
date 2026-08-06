@@ -10,13 +10,13 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 	"sync"
+	"time"
 
-	mcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/jang/zen-mcp/internal/codegraph"
 	"github.com/jang/zen-mcp/internal/mcpcfg"
 	"github.com/jang/zen-mcp/internal/toolresponse"
+	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
 type layeredGraphEntry struct {
@@ -28,7 +28,7 @@ type layeredGraphEntry struct {
 
 type layeredGraphSession struct {
 	workspaceRoot string
-	entries      []layeredGraphEntry
+	entries       []layeredGraphEntry
 }
 
 var graphRegistry = new(sync.Map)
@@ -135,7 +135,7 @@ func getSessionByWorkspace(workspace string) (*layeredGraphSession, error) {
 
 	session := &layeredGraphSession{
 		workspaceRoot: root,
-		entries:      entries,
+		entries:       entries,
 	}
 	graphRegistry.Store(workspace, session)
 
@@ -823,9 +823,9 @@ func actionExplain(session *layeredGraphSession, isolate int, query string) stri
 	}
 
 	type hop2Node struct {
-		name       string
-		path       string
-		relation   string
+		name        string
+		path        string
+		relation    string
 		hopRelation string
 	}
 	var hop2Nodes []hop2Node
@@ -846,9 +846,9 @@ func actionExplain(session *layeredGraphSession, isolate int, query string) stri
 				}
 				seen[k2] = true
 				hop2Nodes = append(hop2Nodes, hop2Node{
-					name:       c.Name,
-					path:       c.Path,
-					relation:   "calls",
+					name:        c.Name,
+					path:        c.Path,
+					relation:    "calls",
 					hopRelation: "calls",
 				})
 			}

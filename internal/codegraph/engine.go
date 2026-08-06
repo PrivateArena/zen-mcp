@@ -425,13 +425,15 @@ func (cg *CodeGraph) FindDeadCode(query string, limit int) (*DeadcodeResult, err
 	}
 
 	// Find nodes with no incoming edges (simplified deadcode detection)
+	// Exclude 'module' and 'EXTERNAL' types — they are structural, not dead code.
 	rows, err := cg.storage.db.Query(`
 		SELECT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
 		FROM nodes n
 		JOIN files f ON n.file_id = f.id
-		WHERE NOT EXISTS (
-			SELECT 1 FROM edges WHERE target_id = n.id
-		)
+		WHERE n.type NOT IN ('module', 'EXTERNAL')
+		  AND NOT EXISTS (
+			  SELECT 1 FROM edges WHERE target_id = n.id
+		  )
 		LIMIT ?
 	`, limit)
 	if err != nil {

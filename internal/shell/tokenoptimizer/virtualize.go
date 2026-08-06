@@ -64,9 +64,9 @@ func CheckAndVirtualizeOutput(toolName, text, workspaceRoot string) string {
 
 	dbPath := filepath.Join(workspaceRoot, ".zenmcp", "context.db")
 	virtID := projectmemory.IndexVirtualContext(dbPath, projectmemory.VirtualContextData{
-		SourceTool:   toolName,
-		Intent:       "Virtualization for " + toolName,
-		Payload:      text,
+		SourceTool: toolName,
+		Intent:     "Virtualization for " + toolName,
+		Payload:    text,
 	})
 	if virtID == "" {
 		return text
@@ -82,18 +82,18 @@ func CheckAndVirtualizeOutput(toolName, text, workspaceRoot string) string {
 	kbSize := formatKb(byteLength)
 
 	out, err := json.MarshalIndent(map[string]any{
-		"status":      "success",
-		"summary":     "Successfully virtualized large output from tool '" + toolName + "'.",
+		"status":       "success",
+		"summary":      "Successfully virtualized large output from tool '" + toolName + "'.",
 		"index_handle": virtID,
 		"analysis": map[string]any{
-			"file_type":     result.FileType.Type,
-			"subtype":       orUndefined(result.FileType.Subtype),
-			"confidence":    result.FileType.Confidence,
-			"reading_tool":  result.ReadingAdvice.Tool,
+			"file_type":      result.FileType.Type,
+			"subtype":        orUndefined(result.FileType.Subtype),
+			"confidence":     result.FileType.Confidence,
+			"reading_tool":   result.ReadingAdvice.Tool,
 			"reading_advice": result.ReadingAdvice.Explanation,
-			"warning":       result.ReadingAdvice.Warning,
-			"line_count":    result.LineCount,
-			"volume_kb":     kbSize,
+			"warning":        result.ReadingAdvice.Warning,
+			"line_count":     result.LineCount,
+			"volume_kb":      kbSize,
 		},
 		"vocabulary_preview": distinctTerms,
 		"match_count":        lineCount,

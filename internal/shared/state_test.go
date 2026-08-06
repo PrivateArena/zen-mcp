@@ -63,12 +63,12 @@ func TestStoreOnChangeOtherKey(t *testing.T) {
 func TestResolveWorkspacePriority(t *testing.T) {
 	cwd := cwd(t)
 	cases := []struct {
-		name        string
-		input       string
+		name         string
+		input        string
 		registration string
-		store       func() *Store
-		env         string
-		want        string
+		store        func() *Store
+		env          string
+		want         string
 	}{
 		{
 			name:  "1-explicit-input-wins",
@@ -92,17 +92,17 @@ func TestResolveWorkspacePriority(t *testing.T) {
 			want: "/shared-ws",
 		},
 		{
-			name:     "4-env-workspace-root",
-			input:    "",
-			store:    func() *Store { return NewStore() },
-			env:      "/env-ws",
-			want:     "/env-ws",
+			name:  "4-env-workspace-root",
+			input: "",
+			store: func() *Store { return NewStore() },
+			env:   "/env-ws",
+			want:  "/env-ws",
 		},
 		{
-			name:     "5-cwd-fallback",
-			input:    "",
-			store:    func() *Store { return NewStore() },
-			want:     cwd,
+			name:  "5-cwd-fallback",
+			input: "",
+			store: func() *Store { return NewStore() },
+			want:  cwd,
 		},
 	}
 

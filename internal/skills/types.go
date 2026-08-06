@@ -12,9 +12,9 @@ type SkillRegistryEntry struct {
 
 // BundledResources represents bundled skill resources.
 type BundledResources struct {
-	Rules    []string
-	Scripts  []string
-	Assets   []string
+	Rules   []string
+	Scripts []string
+	Assets  []string
 }
 
 // ResolvedReference represents a resolved file reference.
@@ -25,7 +25,7 @@ type ResolvedReference struct {
 
 // ResolvedSkillContent represents enriched skill content with references.
 type ResolvedSkillContent struct {
-	Enriched      string
-	CommandHints  []string
+	Enriched       string
+	CommandHints   []string
 	FileReferences []ResolvedReference
 }

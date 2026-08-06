@@ -18,11 +18,11 @@ import (
 	"github.com/jang/zen-mcp/internal/server"
 	"github.com/jang/zen-mcp/internal/shared"
 	"github.com/jang/zen-mcp/internal/shell/tokenoptimizer"
-	"github.com/jang/zen-mcp/internal/toolregistry"
-	"github.com/jang/zen-mcp/internal/tools"
-	"github.com/jang/zen-mcp/internal/toolresponse"
 	"github.com/jang/zen-mcp/internal/terminal"
 	_ "github.com/jang/zen-mcp/internal/terminal/handlers"
+	"github.com/jang/zen-mcp/internal/toolregistry"
+	"github.com/jang/zen-mcp/internal/toolresponse"
+	"github.com/jang/zen-mcp/internal/tools"
 )
 
 func newMcpServer(id string, reg *toolregistry.ToolRegistry, deps tools.Deps) *mcpserver.MCPServer {
@@ -130,9 +130,9 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 	gk := gatekeeper.New(store)
 	pendingCollabs := map[string]func(string){}
 	deps := tools.Deps{
-		Store:                store,
-		Reg:                  filteredReg,
-		Gatekeeper:           gk,
+		Store:                 store,
+		Reg:                   filteredReg,
+		Gatekeeper:            gk,
 		PendingCollaborations: pendingCollabs,
 	}
 

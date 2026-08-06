@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	mcpserver "github.com/mark3labs/mcp-go/server"
 	mcp "github.com/mark3labs/mcp-go/mcp"
+	mcpserver "github.com/mark3labs/mcp-go/server"
 
 	"github.com/jang/zen-mcp/internal/shared"
 	"github.com/jang/zen-mcp/internal/toolregistry"
@@ -850,4 +850,3 @@ func TestPostMCPLongCallWith200ConcurrentClients(t *testing.T) {
 		t.Fatalf("factory called %d times, expected 1", factoryCalls)
 	}
 }
-

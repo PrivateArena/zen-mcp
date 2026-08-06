@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	mcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/jang/zen-mcp/internal/tools"
+	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
 // Handler is a terminal command handler.

@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	mcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/jang/zen-mcp/internal/mcpcfg"
 	"github.com/jang/zen-mcp/internal/toolresponse"
 	"github.com/jang/zen-mcp/internal/whiteboard"
+	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
 func defMemoryShared(workspace string, deps Deps) ToolDef {
@@ -130,8 +130,8 @@ func HandleSharedLoad(ctx context.Context, client *whiteboard.Client, ws string,
 			"slug": state.Slug, "title": state.Title,
 			"sections": state.Sections, "viewport": state.Viewport,
 		},
-		"cards":             state.Cards,
-		"connections":       state.Connections,
+		"cards":              state.Cards,
+		"connections":        state.Connections,
 		"dependency_context": dependencyContext,
 	}, start)
 }
@@ -185,9 +185,9 @@ func HandleSharedSave(ctx context.Context, client *whiteboard.Client, ws string,
 	}
 
 	result := map[string]any{
-		"saved":     true,
+		"saved":      true,
 		"whiteboard": slugInfo.Slug,
-		"slug":      cardSlug,
+		"slug":       cardSlug,
 	}
 	if len(linkedProjects) > 0 {
 		result["linkedProjects"] = linkedProjects
@@ -219,10 +219,10 @@ func HandleSharedScope(ctx context.Context, client *whiteboard.Client, ws string
 	related := loadRelatedProjects()
 	slugInfo := whiteboard.ResolveProjectSlug(ws)
 	return toolresponse.WrapSuccess(ctx, "memory_shared", map[string]any{
-		"project":       ws,
-		"whiteboard":    slugInfo.Slug,
-		"groups":        groups,
-		"totalCards":    len(cards),
+		"project":    ws,
+		"whiteboard": slugInfo.Slug,
+		"groups":     groups,
+		"totalCards": len(cards),
 		"relatedProjects": func() []string {
 			if r, ok := related[slugInfo.Slug]; ok {
 				return r

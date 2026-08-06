@@ -13,7 +13,9 @@ func newTypeScriptPlugin() LanguagePlugin {
 	return &typescriptPlugin{}
 }
 
-func (p *typescriptPlugin) Extensions() []string { return []string{".ts", ".tsx", ".js", ".jsx", ".mjs"} }
+func (p *typescriptPlugin) Extensions() []string {
+	return []string{".ts", ".tsx", ".js", ".jsx", ".mjs"}
+}
 func (p *typescriptPlugin) LanguageName() string { return "typescript" }
 
 func (p *typescriptPlugin) Init() error {

@@ -198,8 +198,8 @@ func autoDetectWorkspace(r *http.Request, st *shared.Store) string {
 	r.Body = io.NopCloser(bytes.NewReader(body))
 
 	var msg struct {
-		Method string                 `json:"method"`
-		Params map[string]any         `json:"params"`
+		Method string         `json:"method"`
+		Params map[string]any `json:"params"`
 	}
 	_ = json.Unmarshal(body, &msg)
 	if msg.Method == "initialize" {

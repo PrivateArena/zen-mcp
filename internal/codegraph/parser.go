@@ -22,21 +22,21 @@ func GetParser() *Parser {
 	parserOnce.Do(func() {
 		globalParser = &Parser{
 			plugins: map[string]LanguagePlugin{
-				".go":    newGoPlugin(),
-				".py":    newPythonPlugin(),
-				".ts":    newTypeScriptPlugin(),
-				".tsx":   newTypeScriptPlugin(),
-				".js":    newTypeScriptPlugin(),
-				".jsx":   newTypeScriptPlugin(),
-				".mjs":   newTypeScriptPlugin(),
-				".rs":    newRustPlugin(),
-				".java":  newJavaPlugin(),
-				".c":     newCPlugin(),
-				".cpp":   newCppPlugin(),
-				".h":     newCPlugin(),
-				".hpp":   newCppPlugin(),
-				".rb":    newRubyPlugin(),
-				".lua":   newLuaPlugin(),
+				".go":   newGoPlugin(),
+				".py":   newPythonPlugin(),
+				".ts":   newTypeScriptPlugin(),
+				".tsx":  newTypeScriptPlugin(),
+				".js":   newTypeScriptPlugin(),
+				".jsx":  newTypeScriptPlugin(),
+				".mjs":  newTypeScriptPlugin(),
+				".rs":   newRustPlugin(),
+				".java": newJavaPlugin(),
+				".c":    newCPlugin(),
+				".cpp":  newCppPlugin(),
+				".h":    newCPlugin(),
+				".hpp":  newCppPlugin(),
+				".rb":   newRubyPlugin(),
+				".lua":  newLuaPlugin(),
 			},
 		}
 	})
@@ -123,14 +123,14 @@ func ExtractQueryMatches(lang *tree_sitter.Language, node *tree_sitter.Node, src
 			qn := buildQualifiedName(defNode, name, node, src)
 
 			*nodes = append(*nodes, ParsedNode{
-				Type:        symbolType,
-				Name:        name,
+				Type:          symbolType,
+				Name:          name,
 				QualifiedName: &qn,
-				Signature:   sig,
-				Docstring:   doc,
-				StartLine:   int(defNode.StartPosition().Row) + 1,
-				EndLine:     int(defNode.EndPosition().Row) + 1,
-				Content:     defNode.Utf8Text(src),
+				Signature:     sig,
+				Docstring:     doc,
+				StartLine:     int(defNode.StartPosition().Row) + 1,
+				EndLine:       int(defNode.EndPosition().Row) + 1,
+				Content:       defNode.Utf8Text(src),
 			})
 		}
 	}

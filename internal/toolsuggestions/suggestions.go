@@ -149,12 +149,12 @@ func GetAllToolNames() []string {
 
 func GetToolsByCategory() map[string][]ToolRef {
 	categories := map[string][]string{
-		"👁️ Vision & Capture":    {"capture", "colab"},
-		"🌐 Browser & Automation": {"browser"},
-		"📁 Workspace & Storage":  {"workspace", "memory"},
-		"🔧 Shell & Sandbox":      {"shell", "run"},
+		"👁️ Vision & Capture":      {"capture", "colab"},
+		"🌐 Browser & Automation":   {"browser"},
+		"📁 Workspace & Storage":    {"workspace", "memory"},
+		"🔧 Shell & Sandbox":        {"shell", "run"},
 		"⚙️ Reasoning & Knowledge": {"think", "skills", "codegraph"},
-		"🛠️ Server Management":   {"server"},
+		"🛠️ Server Management":     {"server"},
 	}
 	result := make(map[string][]ToolRef)
 	for category, tools := range categories {

@@ -9,9 +9,9 @@ import (
 // Deps bundles the collaborators the M4 tool subset needs. Everything is
 // injected from cmd/zen; the tools package never constructs singletons.
 type Deps struct {
-	Store                *shared.Store
-	Reg                  *toolregistry.ToolRegistry
-	Gatekeeper           *gatekeeper.Gatekeeper
+	Store                 *shared.Store
+	Reg                   *toolregistry.ToolRegistry
+	Gatekeeper            *gatekeeper.Gatekeeper
 	PendingCollaborations map[string]func(string)
 }
 

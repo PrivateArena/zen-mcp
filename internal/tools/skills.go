@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	mcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/jang/zen-mcp/internal/skills"
 	"github.com/jang/zen-mcp/internal/toolresponse"
+	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
 func defSkills(workspace string, deps Deps) ToolDef {

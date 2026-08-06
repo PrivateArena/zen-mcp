@@ -14,6 +14,7 @@ import (
 	"github.com/jang/zen-mcp/internal/toolresponse"
 	"github.com/jang/zen-mcp/internal/toolstate"
 )
+
 func defWorkspace(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "workspace",

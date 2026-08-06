@@ -7,20 +7,20 @@ import (
 	"strings"
 	"time"
 
-	mcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/jang/zen-mcp/internal/bridge"
 	"github.com/jang/zen-mcp/internal/mcpcfg"
 	"github.com/jang/zen-mcp/internal/toolresponse"
+	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
 var currentContainer string
 
 var CONTAINER_MAP = map[string]string{
-	"github.com":   "Work",
-	"slack.com":    "Work",
-	"google.com":   "Personal",
-	"youtube.com":  "Personal",
-	"localhost":    "Development",
+	"github.com":  "Work",
+	"slack.com":   "Work",
+	"google.com":  "Personal",
+	"youtube.com": "Personal",
+	"localhost":   "Development",
 }
 
 func defBrowser(workspace string, deps Deps) ToolDef {

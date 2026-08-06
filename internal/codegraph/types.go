@@ -2,14 +2,14 @@ package codegraph
 
 // ParsedNode represents a code symbol extracted by tree-sitter.
 type ParsedNode struct {
-	Type        string
-	Name        string
+	Type          string
+	Name          string
 	QualifiedName *string
-	Signature   string
-	Docstring   string
-	StartLine   int
-	EndLine     int
-	Content     string
+	Signature     string
+	Docstring     string
+	StartLine     int
+	EndLine       int
+	Content       string
 }
 
 // ParsedRelation represents a relationship between two symbols.
@@ -22,12 +22,12 @@ type ParsedRelation struct {
 
 // RelatedRecord represents a related file/symbol edge.
 type RelatedRecord struct {
-	RelatedPath      string
-	RelatedLanguage  string
-	Direction        string
-	Relation         string
-	SymbolName       string
-	SymbolType       string
+	RelatedPath     string
+	RelatedLanguage string
+	Direction       string
+	Relation        string
+	SymbolName      string
+	SymbolType      string
 }
 
 // DeadcodeResult represents dead code analysis output.
@@ -38,13 +38,13 @@ type DeadcodeResult struct {
 
 // ShortestPathStep represents one hop in a shortest path.
 type ShortestPathStep struct {
-	SourceName  string
-	SourceFile  string
-	SourceLine  int
-	TargetName  string
-	TargetFile  string
-	TargetLine  int
-	Relation    string
+	SourceName string
+	SourceFile string
+	SourceLine int
+	TargetName string
+	TargetFile string
+	TargetLine int
+	Relation   string
 }
 
 // ShortestPathResult represents the result of a shortest path query.

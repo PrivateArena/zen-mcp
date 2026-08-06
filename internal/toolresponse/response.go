@@ -251,7 +251,7 @@ func ToolActionFromContext(ctx context.Context) string {
 // ---- Schema registry (mirrors toolSchemas Map in TS) ----
 
 var (
-	schemaMu   sync.RWMutex
+	schemaMu    sync.RWMutex
 	toolSchemas = make(map[string]map[string]any)
 )
 

@@ -14,40 +14,40 @@ import (
 )
 
 const (
-	httpTimeoutMs = 5000
+	httpTimeoutMs    = 5000
 	cardContentLimit = 40 * 1024
 )
 
 // CardData mirrors whiteboard card shape.
 type CardData struct {
-	CardSlug   string
-	Title      string
-	Content    string
+	CardSlug    string
+	Title       string
+	Content     string
 	Description string
-	Group      string
-	CreatedAt  string
+	Group       string
+	CreatedAt   string
 }
 
 // BoardState mirrors whiteboard board state.
 type BoardState struct {
-	Slug       string
-	Title      string
-	Cards      []CardData
+	Slug        string
+	Title       string
+	Cards       []CardData
 	Connections []struct {
-		ID      string
-		From    string
+		ID       string
+		From     string
 		FromPort string
-		To      string
-		ToPort  string
+		To       string
+		ToPort   string
 	}
 	Sections []struct {
-		ID    string
-		Label string
+		ID         string
+		Label      string
 		X, Y, W, H int
-		Color string
+		Color      string
 	}
 	Viewport struct {
-		X, Y float64
+		X, Y  float64
 		Scale float64
 	}
 }
@@ -60,11 +60,11 @@ type BoardSummary struct {
 
 // Client is the whiteboard HTTP client.
 type Client struct {
-	BaseURL    string
-	Slug       string
-	Title      string
-	Owner      string
-	HTTP       *http.Client
+	BaseURL string
+	Slug    string
+	Title   string
+	Owner   string
+	HTTP    *http.Client
 }
 
 // NewClient creates a whiteboard client.
@@ -75,7 +75,7 @@ func NewClient(baseURL, slug, title, owner string) *Client {
 		Slug:    slug,
 		Title:   title,
 		Owner:   owner,
-		HTTP: &http.Client{Timeout: time.Duration(httpTimeoutMs) * time.Millisecond},
+		HTTP:    &http.Client{Timeout: time.Duration(httpTimeoutMs) * time.Millisecond},
 	}
 }
 
@@ -183,19 +183,19 @@ func (c *Client) LoadBoardState(ctx context.Context) (BoardState, error) {
 		return state, fmt.Errorf("whiteboard state failed: %s", string(txt))
 	}
 	var raw struct {
-		Cards      []CardData  `json:"cards"`
+		Cards       []CardData `json:"cards"`
 		Connections []struct {
-			ID      string
-			From    string
+			ID       string
+			From     string
 			FromPort string
-			To      string
-			ToPort  string
+			To       string
+			ToPort   string
 		} `json:"connections"`
 		Sections []struct {
-			ID    string
-			Label string
+			ID         string
+			Label      string
 			X, Y, W, H int
-			Color string
+			Color      string
 		} `json:"sections"`
 		Viewport map[string]any `json:"viewport"`
 	}

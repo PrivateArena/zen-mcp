@@ -27,10 +27,10 @@ func defRun(deps Deps) ToolDef {
 		Description: "Run code snippets in isolated temp files. Auto-cleanup. Activity-based timeout.\n" +
 			"Supported: " + strings.Join(langs, ", "),
 		Schema: jsonSchema(map[string]any{
-			"language": strEnumProp("Language: "+strings.Join(langs, ", "), langs),
-			"code":     strProp("Code snippet (no escaping)"),
-			"stdin":    strProp("Data to pipe to stdin"),
-			"timeout":  numProp("Idle-kill ms (default " + itoa(cfg.Sandbox.ActivityTimeoutMs) + ", ceiling " + itoa(cfg.Sandbox.TimeoutMs) + ")"),
+			"language":     strEnumProp("Language: "+strings.Join(langs, ", "), langs),
+			"code":         strProp("Code snippet (no escaping)"),
+			"stdin":        strProp("Data to pipe to stdin"),
+			"timeout":      numProp("Idle-kill ms (default " + itoa(cfg.Sandbox.ActivityTimeoutMs) + ", ceiling " + itoa(cfg.Sandbox.TimeoutMs) + ")"),
 			"useWorkspace": boolProp("Run in workspace root"),
 			"logToMemory":  boolProp("Log to project-memory FTS"),
 			"tail":         numProp("Last N lines"),

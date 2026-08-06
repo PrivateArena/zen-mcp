@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	mcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/jang/zen-mcp/internal/toolresponse"
 	"github.com/jang/zen-mcp/internal/whiteboard"
+	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
 func defMemoryIsolate(workspace string, deps Deps) ToolDef {
@@ -77,7 +77,7 @@ func HandleIsolateLoad(ctx context.Context, client *whiteboard.Client, ws string
 			"slug": state.Slug, "title": state.Title,
 			"sections": state.Sections, "viewport": state.Viewport,
 		},
-		"cards":      state.Cards,
+		"cards":       state.Cards,
 		"connections": state.Connections,
 	}, start)
 }
@@ -104,9 +104,9 @@ func HandleIsolateSave(ctx context.Context, client *whiteboard.Client, ws string
 		return toolresponse.WrapErrorWithContext(ctx, "memory_isolate", err, start)
 	}
 	return toolresponse.WrapSuccess(ctx, "memory_isolate", map[string]any{
-		"saved":     true,
+		"saved":      true,
 		"whiteboard": slugInfo.Slug,
-		"slug":      cardSlug,
+		"slug":       cardSlug,
 	}, start)
 }
 
@@ -155,8 +155,8 @@ func findNeighbors(state whiteboard.BoardState, slug string) map[string]any {
 		if conn.From == slug {
 			if n, ok := index[conn.To]; ok {
 				neighbors[conn.To] = map[string]any{
-					"card_slug": n.CardSlug,
-					"title":     n.Title,
+					"card_slug":  n.CardSlug,
+					"title":      n.Title,
 					"created_at": n.CreatedAt,
 					"connection": map[string]any{"fromPort": conn.FromPort, "toPort": conn.ToPort},
 				}
@@ -165,8 +165,8 @@ func findNeighbors(state whiteboard.BoardState, slug string) map[string]any {
 		if conn.To == slug {
 			if n, ok := index[conn.From]; ok {
 				neighbors[conn.From] = map[string]any{
-					"card_slug": n.CardSlug,
-					"title":     n.Title,
+					"card_slug":  n.CardSlug,
+					"title":      n.Title,
 					"created_at": n.CreatedAt,
 					"connection": map[string]any{"fromPort": conn.FromPort, "toPort": conn.ToPort},
 				}

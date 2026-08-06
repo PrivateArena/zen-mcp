@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	mcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/jang/zen-mcp/internal/mcpcfg"
 	"github.com/jang/zen-mcp/internal/toolresponse"
+	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
 var pendingCollaborations = map[string]chan string{}

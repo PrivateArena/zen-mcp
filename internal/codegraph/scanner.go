@@ -13,10 +13,10 @@ import (
 
 // Scanner walks a workspace and determines which files need indexing.
 type Scanner struct {
-	storage       *Storage
-	rootDir       string
-	parser        *Parser
-	mu            sync.Mutex
+	storage *Storage
+	rootDir string
+	parser  *Parser
+	mu      sync.Mutex
 }
 
 // NewScanner creates a new scanner.

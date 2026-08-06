@@ -36,8 +36,8 @@ type BlacklistEntry struct {
 }
 
 type Options struct {
-	UltraCompact      bool
-	SkipOptimization  bool
+	UltraCompact     bool
+	SkipOptimization bool
 }
 
 type TokenProfile struct {
@@ -52,18 +52,18 @@ type ProfileMatch struct {
 }
 
 type ProfileAction struct {
-	Type     string   `json:"type"` // replace | delegate | file
-	Find     *string  `json:"find"`
-	Replace  *string  `json:"replace"`
-	IsRegex  *bool    `json:"is_regex"`
-	Flags    *string  `json:"flags"`
-	Provider *string  `json:"provider"`
-	Prompt   *string  `json:"prompt"`
-	App      *string  `json:"app"`
-	Container *string `json:"container"`
-	Upload   json.RawMessage `json:"upload"`
-	Path     *string  `json:"path"`
-	Message  *string  `json:"message"`
+	Type      string          `json:"type"` // replace | delegate | file
+	Find      *string         `json:"find"`
+	Replace   *string         `json:"replace"`
+	IsRegex   *bool           `json:"is_regex"`
+	Flags     *string         `json:"flags"`
+	Provider  *string         `json:"provider"`
+	Prompt    *string         `json:"prompt"`
+	App       *string         `json:"app"`
+	Container *string         `json:"container"`
+	Upload    json.RawMessage `json:"upload"`
+	Path      *string         `json:"path"`
+	Message   *string         `json:"message"`
 }
 
 func CountTokens(text string) int {

@@ -54,11 +54,11 @@ func New(store *shared.Store) *Gatekeeper {
 	cwd, _ := os.Getwd()
 	return &Gatekeeper{
 		store:              store,
-		cwd:                 cwd,
-		pending:             map[string]*pendingConfirmation{},
-		nextID:              1,
-		cachedAllowedPaths:  nil,
-		lastLoadedPath:      "",
+		cwd:                cwd,
+		pending:            map[string]*pendingConfirmation{},
+		nextID:             1,
+		cachedAllowedPaths: nil,
+		lastLoadedPath:     "",
 	}
 }
 

@@ -134,59 +134,59 @@ func QueryTelemetry(args []string) string {
 			fmt.Fprintf(&out, "  %s.%s: %d calls (%.1f%% success)\n", tool, action, calls, rate)
 		}
 		return strings.TrimRight(out.String(), "\n")
-		case "failures":
-			if len(args) > 1 && args[1] == "--top" {
-				rows, err := d.Query(`SELECT tool, action, error_message, COUNT(*) as count FROM tool_calls WHERE success = 0 AND error_message IS NOT NULL GROUP BY tool, action, error_message ORDER BY count DESC LIMIT 20`)
-				if err != nil {
-					return fmt.Sprintf("[TELEMETRY] Error: %v", err)
-				}
-				defer rows.Close()
-				var out strings.Builder
-				out.WriteString("[TELEMETRY] Top failure reasons:\n")
-				i := 1
-				for rows.Next() {
-					var tool string
-					var action sql.NullString
-					var errMsg string
-					var count int
-					if err := rows.Scan(&tool, &action, &errMsg, &count); err != nil {
-						continue
-					}
-					label := tool
-					if action.Valid && action.String != "" {
-						label = tool + "." + action.String
-					}
-					fmt.Fprintf(&out, "  %d. %s: \"%s\" (%dx)\n", i, label, errMsg, count)
-					i++
-				}
-				return strings.TrimRight(out.String(), "\n")
-			}
-			rows, err := d.Query(`SELECT tool, action, error_message, timestamp FROM tool_calls WHERE success = 0 ORDER BY id DESC LIMIT 20`)
+	case "failures":
+		if len(args) > 1 && args[1] == "--top" {
+			rows, err := d.Query(`SELECT tool, action, error_message, COUNT(*) as count FROM tool_calls WHERE success = 0 AND error_message IS NOT NULL GROUP BY tool, action, error_message ORDER BY count DESC LIMIT 20`)
 			if err != nil {
 				return fmt.Sprintf("[TELEMETRY] Error: %v", err)
 			}
 			defer rows.Close()
 			var out strings.Builder
-			out.WriteString("[TELEMETRY] Recent failures:\n")
+			out.WriteString("[TELEMETRY] Top failure reasons:\n")
+			i := 1
 			for rows.Next() {
 				var tool string
 				var action sql.NullString
-				var errMsg sql.NullString
-				var ts string
-				if err := rows.Scan(&tool, &action, &errMsg, &ts); err != nil {
+				var errMsg string
+				var count int
+				if err := rows.Scan(&tool, &action, &errMsg, &count); err != nil {
 					continue
 				}
 				label := tool
 				if action.Valid && action.String != "" {
 					label = tool + "." + action.String
 				}
-				msg := ""
-				if errMsg.Valid {
-					msg = errMsg.String
-				}
-				fmt.Fprintf(&out, "  %s %s: %s\n", ts, label, msg)
+				fmt.Fprintf(&out, "  %d. %s: \"%s\" (%dx)\n", i, label, errMsg, count)
+				i++
 			}
 			return strings.TrimRight(out.String(), "\n")
+		}
+		rows, err := d.Query(`SELECT tool, action, error_message, timestamp FROM tool_calls WHERE success = 0 ORDER BY id DESC LIMIT 20`)
+		if err != nil {
+			return fmt.Sprintf("[TELEMETRY] Error: %v", err)
+		}
+		defer rows.Close()
+		var out strings.Builder
+		out.WriteString("[TELEMETRY] Recent failures:\n")
+		for rows.Next() {
+			var tool string
+			var action sql.NullString
+			var errMsg sql.NullString
+			var ts string
+			if err := rows.Scan(&tool, &action, &errMsg, &ts); err != nil {
+				continue
+			}
+			label := tool
+			if action.Valid && action.String != "" {
+				label = tool + "." + action.String
+			}
+			msg := ""
+			if errMsg.Valid {
+				msg = errMsg.String
+			}
+			fmt.Fprintf(&out, "  %s %s: %s\n", ts, label, msg)
+		}
+		return strings.TrimRight(out.String(), "\n")
 	case "reset":
 		if _, err := d.Exec(`DELETE FROM tool_calls`); err != nil {
 			return fmt.Sprintf("[TELEMETRY] Error: %v", err)

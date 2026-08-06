@@ -75,10 +75,10 @@ func init() {
 		}
 
 		res := terminal.ExecuteTool("codegraph", map[string]any{
-			"action":   "refactor_delete",
-			"isolate":  parsed.Isolate,
-			"dry_run":  parsed.DryRun,
-			"targets":  targets,
+			"action":  "refactor_delete",
+			"isolate": parsed.Isolate,
+			"dry_run": parsed.DryRun,
+			"targets": targets,
 		})
 		terminal.Logf("RESULT:\n%s", res)
 		return nil

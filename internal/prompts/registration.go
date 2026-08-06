@@ -4,8 +4,8 @@ import (
 	"context"
 	"log"
 
-	mcpserver "github.com/mark3labs/mcp-go/server"
 	mcp "github.com/mark3labs/mcp-go/mcp"
+	mcpserver "github.com/mark3labs/mcp-go/server"
 )
 
 // RegisterPrompts registers all prompts with the MCP server.

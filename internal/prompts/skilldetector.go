@@ -143,10 +143,10 @@ func LoadSkills() ([]Skill, error) {
 // LoadSkillContent loads the content of a skill by ID with reference resolution.
 func LoadSkillContent(skillID string) (string, error) {
 	skillsDir := skills.SkillsDir()
-	
+
 	var path string
 	var title string
-	
+
 	candidate := filepath.Join(skillsDir, skillID+".md")
 	if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
 		path = candidate
@@ -156,7 +156,7 @@ func LoadSkillContent(skillID string) (string, error) {
 			path = candidate
 		}
 	}
-	
+
 	if path == "" {
 		return "", fmt.Errorf("skill %q not found", skillID)
 	}

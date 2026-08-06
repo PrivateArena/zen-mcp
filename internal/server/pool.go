@@ -14,14 +14,14 @@ import (
 )
 
 const (
-	MaxPoolSize              = 3
-	IDLEReap                 = 10 * time.Minute
-	DefaultAcquireTimeout    = 30 * time.Second
-	DeferredAcquireTimeout   = 2_400_000 * time.Millisecond
-	SwapMaxWait              = 45 * time.Minute
-	SwapCloseMaxWait         = 40 * time.Minute
-	ReaperInterval           = 60 * time.Second
-	ReaperPollInterval       = 250 * time.Millisecond
+	MaxPoolSize               = 3
+	IDLEReap                  = 10 * time.Minute
+	DefaultAcquireTimeout     = 30 * time.Second
+	DeferredAcquireTimeout    = 2_400_000 * time.Millisecond
+	SwapMaxWait               = 45 * time.Minute
+	SwapCloseMaxWait          = 40 * time.Minute
+	ReaperInterval            = 60 * time.Second
+	ReaperPollInterval        = 250 * time.Millisecond
 	SwapSerializePollInterval = 25 * time.Millisecond
 )
 
