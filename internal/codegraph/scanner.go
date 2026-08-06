@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	gitignore "github.com/sabhiram/go-gitignore"
 )
 
 // Scanner walks a workspace and determines which files need indexing.
@@ -18,7 +20,7 @@ type Scanner struct {
 	rootDir        string
 	parser         *Parser
 	mu             sync.Mutex
-	ignorePatterns []string
+	ignore         *gitignore.GitIgnore
 	aliasMap       map[string]string
 	aliasBaseUrl   string
 }
@@ -58,6 +60,9 @@ func (s *Scanner) GetFilesToProcess() ([]FileRecord, error) {
 
 	var toProcess []FileRecord
 	for _, relPath := range files {
+		if s.IsIgnored(relPath, false) {
+			continue
+		}
 		fullPath := filepath.Join(s.rootDir, relPath)
 
 		if !isSupported(relPath) {
@@ -102,18 +107,24 @@ func (s *Scanner) getDiskFiles() ([]string, error) {
 		if err != nil {
 			return nil
 		}
-		if d.IsDir() {
-			name := d.Name()
-			if name == ".git" || name == "node_modules" || name == ".zenmcp" || name == "__pycache__" || name == "dist" || name == "build" {
-				return fs.SkipDir
-			}
-			return nil
-		}
 		relPath, relErr := filepath.Rel(s.rootDir, path)
 		if relErr != nil {
 			return nil
 		}
-		files = append(files, filepath.ToSlash(relPath))
+		relPath = filepath.ToSlash(relPath)
+		if d.IsDir() {
+			if relPath == "." {
+				return nil
+			}
+			if s.IsIgnored(relPath, true) {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if s.IsIgnored(relPath, false) {
+			return nil
+		}
+		files = append(files, relPath)
 		return nil
 	})
 	return files, err
@@ -187,62 +198,45 @@ func isTest(relPath string, lang string) bool {
 }
 
 func (s *Scanner) loadIgnorePatterns() {
-	s.ignorePatterns = []string{".git", "node_modules", ".venv", "venv", "dist", ".zen", ".zenmcp", "__pycache__", ".next", ".nuxt", ".output"}
-
-	// Global ignore
-	globalIgnorePath := filepath.Join(s.rootDir, ".codegraphignore")
-	if data, err := os.ReadFile(globalIgnorePath); err == nil {
-		for _, line := range strings.Split(string(data), "\n") {
-			line = strings.TrimSpace(line)
-			if line != "" && !strings.HasPrefix(line, "#") {
-				s.ignorePatterns = append(s.ignorePatterns, line)
-			}
-		}
-	}
+	patterns := []string{".git", "node_modules", ".venv", "venv", "dist", ".zen", ".zenmcp", "__pycache__", ".next", ".nuxt", ".output"}
 
 	// Project-local .gitignore
-	gitignorePath := filepath.Join(s.rootDir, ".gitignore")
-	if data, err := os.ReadFile(gitignorePath); err == nil {
-		for _, line := range strings.Split(string(data), "\n") {
-			line = strings.TrimSpace(line)
-			if line != "" && !strings.HasPrefix(line, "#") {
-				s.ignorePatterns = append(s.ignorePatterns, line)
-			}
+	if data, err := os.ReadFile(filepath.Join(s.rootDir, ".gitignore")); err == nil {
+		patterns = append(patterns, parseIgnoreLines(data)...)
+	}
+
+	// Project-local .codegraphignore (highest priority, added last)
+	if data, err := os.ReadFile(filepath.Join(s.rootDir, ".codegraphignore")); err == nil {
+		patterns = append(patterns, parseIgnoreLines(data)...)
+	}
+
+	s.ignore = gitignore.CompileIgnoreLines(patterns...)
+}
+
+// parseIgnoreLines trims and drops blank/comment lines, matching the TS
+// implementation which maps each line through trim + Boolean filter before
+// handing them to the ignore matcher.
+func parseIgnoreLines(data []byte) []string {
+	var lines []string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "#") {
+			lines = append(lines, line)
 		}
 	}
+	return lines
 }
 
 // IsIgnored checks if a path should be ignored.
 func (s *Scanner) IsIgnored(relPath string, isDirectory bool) bool {
-	if relPath == "" {
+	if relPath == "" || s.ignore == nil {
 		return false
 	}
-	normalizedPath := relPath
+	normalizedPath := strings.ReplaceAll(relPath, "\\", "/")
 	if isDirectory && !strings.HasSuffix(normalizedPath, "/") {
 		normalizedPath += "/"
 	}
-	for _, pattern := range s.ignorePatterns {
-		if matched := matchIgnorePattern(normalizedPath, pattern); matched {
-			return true
-		}
-	}
-	return false
-}
-
-func matchIgnorePattern(path, pattern string) bool {
-	if pattern == "" {
-		return false
-	}
-	if strings.HasPrefix(pattern, "/") {
-		return strings.HasPrefix(path, pattern[1:])
-	}
-	parts := strings.Split(path, "/")
-	for i := range parts {
-		if parts[i] == pattern || strings.HasSuffix(parts[i], pattern) {
-			return true
-		}
-	}
-	return strings.Contains(path, pattern)
+	return s.ignore.MatchesPath(normalizedPath)
 }
 
 // IsSupported checks if a file extension is supported.
