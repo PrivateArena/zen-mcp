@@ -50,7 +50,7 @@ while true; do
     fi
     echo "✅ Build complete"
   fi
-  sleep 2
+  sleep 20
 done &
 
 WATCHER_PID=$!
