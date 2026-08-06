@@ -60,6 +60,30 @@ func TestReconstructStateEmpty(t *testing.T) {
 	}
 }
 
+func TestJSONToMarkdown(t *testing.T) {
+	raw := `{"schema_version":3,"timestamp":"2024-01-01T00:00:00.000Z","session_title":"Port memory","objective":"be handler","session_notes":"## Progress\n- Done\n- Pending"}`
+	got := JSONToMarkdown(raw)
+	want := "**schema_version**: 3\n**timestamp**: 2024-01-01T00:00:00.000Z\n**session_title**: Port memory\n**objective**: be handler\n**session_notes**: ## Progress\n- Done\n- Pending"
+	if got != want {
+		t.Errorf("JSONToMarkdown()\n got: %q\nwant: %q", got, want)
+	}
+}
+
+func TestJSONToMarkdownNested(t *testing.T) {
+	raw := `{"tasks":[{"name":"a","steps":["s1",1]},true],"env":{"k":"v","n":2,"flag":false},"nullv":null}`
+	got := JSONToMarkdown(raw)
+	want := "## tasks\n  -\n    **name**: a\n    ## steps\n      - s1\n      - 1\n  - true\n## env\n  **k**: v\n  **n**: 2\n  **flag**: false\n**nullv**: null"
+	if got != want {
+		t.Errorf("JSONToMarkdown(nested)\n got: %q\nwant: %q", got, want)
+	}
+}
+
+func TestJSONToMarkdownStringInput(t *testing.T) {
+	if got := JSONToMarkdown(`"plain"`); got != "plain" {
+		t.Errorf("JSONToMarkdown(string) = %q, want %q", got, "plain")
+	}
+}
+
 func TestRegisterProjectInMap(t *testing.T) {
 	dir := t.TempDir()
 	mapFile := filepath.Join(dir, "map.json")

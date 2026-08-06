@@ -40,5 +40,8 @@ _scratch/
 telemetry.db
 tmp/
 src/resources/commands/
-telemetry/telemetry.*
 .kilo/kilo.jsonc
+.gitignore
+telemetry/telemetry.db
+telemetry/telemetry.db-wal
+telemetry/telemetry.db-shm
