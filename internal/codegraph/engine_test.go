@@ -106,3 +106,43 @@ func Hello() {}
 		t.Fatalf("GetFileByPath returned language=%q; want %q", fr.Language, "go")
 	}
 }
+
+func TestDeadcodeDoesNotFlagUsedStruct(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	src := `package foo
+
+type AgentChatParams struct {
+	Provider string
+	Message  string
+}
+
+func DelegateToWebAgent(params AgentChatParams) string {
+	return params.Provider + ":" + params.Message
+}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "agent.go"), []byte(src), 0644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	cg, err := NewCodeGraph(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCodeGraph: %v", err)
+	}
+	defer cg.Close()
+
+	if _, err := cg.Index(); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	symbols, err := cg.Deadcode()
+	if err != nil {
+		t.Fatalf("Deadcode: %v", err)
+	}
+
+	for _, s := range symbols {
+		if s.Name == "AgentChatParams" {
+			t.Fatalf("struct used as parameter should not be deadcode, got: %s %s at %s:%d", s.Type, s.Name, s.Path, s.StartLine)
+		}
+	}
+}
