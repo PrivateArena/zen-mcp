@@ -2,66 +2,150 @@ package handlers
 
 import (
 	"fmt"
+	"runtime"
+	"time"
 
+	"github.com/jang/zen-mcp/internal/mcpcfg"
+	"github.com/jang/zen-mcp/internal/prompts"
+	"github.com/jang/zen-mcp/internal/shell/processes"
+	"github.com/jang/zen-mcp/internal/telemetry"
 	"github.com/jang/zen-mcp/internal/terminal"
 )
 
+var startTime = time.Now()
+
 func init() {
 	terminal.Register("status", func(args []string, sessionID string) error {
-		fmt.Println("STATUS:\n - Server: READY\n - Session:", sessionID)
+		var mem runtime.MemStats
+		runtime.ReadMemStats(&mem)
+		terminal.Logf("STATUS:\n - Uptime: %ds\n - Memory: %dMB (RSS)\n - Session: %s\n - Workspace: %s\n - Log Level: %s\n - Platform: %s (%s)",
+			int(time.Since(startTime).Seconds()),
+			mem.Alloc/1024/1024,
+			sessionID,
+			terminal.Ws(sessionID),
+			"debug",
+			runtime.GOOS,
+			runtime.Version())
 		return nil
 	})
 
 	terminal.Register("log-level", func(args []string, sessionID string) error {
 		if len(args) == 0 {
-			fmt.Println("Current Log Level: info")
+			terminal.Logf("Current Log Level: %s", "debug")
 			return nil
 		}
-		fmt.Printf("Log Level set to: %s\n", args[0])
+		level := args[0]
+		valid := []string{"debug", "info", "warn", "error", "off"}
+		found := false
+		for _, v := range valid {
+			if v == level {
+				found = true
+				break
+			}
+		}
+		if !found {
+			terminal.Logf("ERROR: Invalid log level. Valid: %s", fmt.Sprintf("%v", valid))
+			return nil
+		}
+		terminal.Logf("OK: Log Level set to %s", level)
 		return nil
 	})
 
 	terminal.Register("loglevel", func(args []string, sessionID string) error {
 		if len(args) == 0 {
-			fmt.Println("Current Log Level: info")
+			terminal.Logf("Current Log Level: %s", "debug")
 			return nil
 		}
-		fmt.Printf("Log Level set to: %s\n", args[0])
+		level := args[0]
+		valid := []string{"debug", "info", "warn", "error", "off"}
+		found := false
+		for _, v := range valid {
+			if v == level {
+				found = true
+				break
+			}
+		}
+		if !found {
+			terminal.Logf("ERROR: Invalid log level. Valid: %s", fmt.Sprintf("%v", valid))
+			return nil
+		}
+		terminal.Logf("OK: Log Level set to %s", level)
+		return nil
+	})
+
+	terminal.Register("exit", func(args []string, sessionID string) error {
+		terminal.Logf("Shutting down terminal commander.")
+		return nil
+	})
+
+	terminal.Register("quit", func(args []string, sessionID string) error {
+		terminal.Logf("Shutting down terminal commander.")
 		return nil
 	})
 
 	terminal.Register("abort", func(args []string, sessionID string) error {
-		fmt.Println("Aborted 0 command(s).")
+		processes.AbortAll()
+		terminal.Logf("Aborted command(s).")
 		return nil
 	})
 
 	terminal.Register("ls", func(args []string, sessionID string) error {
-		fmt.Println(terminal.ExecuteTool("workspace", map[string]any{}))
+		terminal.Logf("ACTIVE WORKSPACE: %s", terminal.Ws(sessionID))
 		return nil
 	})
 
 	terminal.Register("sessions", func(args []string, sessionID string) error {
-		fmt.Println(terminal.ExecuteTool("workspace", map[string]any{}))
+		terminal.Logf("ACTIVE WORKSPACE: %s", terminal.Ws(sessionID))
 		return nil
 	})
 
 	terminal.Register("telemetry", func(args []string, sessionID string) error {
-		fmt.Println(terminal.ExecuteTool("memory", map[string]any{"action": "scope"}))
+		terminal.Logf(telemetry.QueryTelemetry(args))
+		return nil
+	})
+
+	terminal.Register("cs", func(args []string, sessionID string) error {
+		res := terminal.ExecuteTool("codegraph", map[string]any{"action": "status"})
+		terminal.Logf("RESULT:\n%s", res)
 		return nil
 	})
 
 	terminal.Register("mcp-catalog", func(args []string, sessionID string) error {
-		fmt.Println(terminal.ExecuteTool("codegraph", map[string]any{"action": "map"}))
+		terminal.Logf("\nMCP Tools Catalog:\n")
+		terminal.Logf(prompts.BuildToolCatalog())
 		return nil
 	})
 
 	terminal.Register("mcp-cost", func(args []string, sessionID string) error {
-		fmt.Println("MCP Tool Registration Token Cost Estimation:")
+		terminal.Logf("\n%s", buildToolCost())
 		return nil
 	})
 
 	terminal.Register("export-cli", func(args []string, sessionID string) error {
-		fmt.Println("Exporting CLI wrappers...")
+		sub := ""
+		if len(args) > 0 {
+			sub = args[0]
+		}
+		if sub == "--clean" || sub == "clean" {
+			terminal.ExportCliClean(terminal.LogOut)
+			return nil
+		}
+		c := mcpcfg.Get()
+		cliPort := 0
+		mcpPort := 0
+		if c != nil {
+			cliPort = c.CliPort
+			mcpPort = c.McpPort
+		}
+		terminal.ExportCLI(terminal.LogOut, cliPort, mcpPort)
 		return nil
 	})
+}
+
+func buildToolCost() string {
+	c := mcpcfg.Get()
+	if c == nil {
+		return "MCP Tool Registration Token Cost Estimation:\n  (config not loaded)"
+	}
+	return "MCP Tool Registration Token Cost Estimation:\n  (see tools/list for details)"
 }

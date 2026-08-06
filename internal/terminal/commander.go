@@ -3,10 +3,12 @@ package terminal
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -38,7 +40,7 @@ var LogOut io.Writer = os.Stderr
 
 func init() {
 	Register("help", func(_ []string, _ string) error {
-		logf("Available commands: %s", strings.Join(List(), ", "))
+		Logf("Available commands: %s", strings.Join(List(), ", "))
 		return nil
 	})
 }
@@ -70,8 +72,8 @@ func List() []string {
 	return names
 }
 
-// logf mirrors the TS terminal `log()` helper ([ZEN-CLI] prefix).
-func logf(format string, args ...any) {
+// Logf mirrors the TS terminal `log()` helper ([ZEN-CLI] prefix).
+func Logf(format string, args ...any) {
 	fmt.Fprintf(LogOut, "[ZEN-CLI] "+format+"\n", args...)
 }
 
@@ -84,9 +86,78 @@ func FallbackPort(cliPort, mcpPort int, cliAvailable bool) int {
 	return mcpPort
 }
 
+// Ws returns the workspace root for the given session, falling back to cwd.
+func Ws(sessionID string) string {
+	d := GetDeps()
+	if d.Sess != nil {
+		if w := d.Sess.GetSessionWorkspaceRoot(sessionID); w != "" {
+			return w
+		}
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		return cwd
+	}
+	return "."
+}
+
+// showResult formats and prints a result object as JSON.
+func showResult(data any) {
+	b, _ := json.MarshalIndent(data, "", "  ")
+	if len(b) == 0 {
+		b = []byte("null")
+	}
+	fmt.Fprintf(LogOut, "[ZEN-CLI] RESULT:\n%s\n", string(b))
+}
+
+// isNumeric checks if a string consists only of digits.
+func isNumeric(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return len(s) > 0
+}
+
+// parseInt parses an integer from string, returning 0 on failure.
+func parseInt(s string) int {
+	i, _ := strconv.Atoi(s)
+	return i
+}
+
+// ParsedCodegraphArgs holds parsed codegraph-style CLI arguments.
+type ParsedCodegraphArgs struct {
+	Query      string
+	Limit      *int
+	Isolate    int
+	FormatJson bool
+	DryRun     bool
+}
+
+// parseCodegraphArgs parses codegraph command arguments.
+func parseCodegraphArgs(args []string) ParsedCodegraphArgs {
+	result := ParsedCodegraphArgs{Isolate: 0}
+	for _, a := range args {
+		switch {
+		case isNumeric(a):
+			i := parseInt(a)
+			result.Limit = &i
+		case strings.HasPrefix(a, "isolate="):
+			result.Isolate = parseInt(strings.TrimPrefix(a, "isolate="))
+		case a == "--json":
+			result.FormatJson = true
+		case a == "--dry-run":
+			result.DryRun = true
+		case a != "--force" && a != "---force" && !strings.HasPrefix(a, "--"):
+			result.Query = a
+		}
+	}
+	return result
+}
+
 // runCommander is the line REPL loop. Split for testability.
 func runCommander(r io.Reader, sessionID string, prompt io.Writer) {
-	logf("Human-in-the-Loop Active. Available: type help for commands.")
+	Logf("Human-in-the-Loop Active. Available: type help for commands.")
 	scanner := bufio.NewScanner(r)
 	for {
 		fmt.Fprint(prompt, "> ")
@@ -100,17 +171,17 @@ func runCommander(r io.Reader, sessionID string, prompt io.Writer) {
 		parts := strings.Fields(line)
 		cmd := parts[0]
 		if cmd == "exit" || cmd == "quit" {
-			logf("Shutting down terminal commander.")
+			Logf("Shutting down terminal commander.")
 			return
 		}
 		h, ok := Get(cmd)
 		if !ok {
-			logf("Unknown command: %s (type help)", cmd)
+			Logf("Unknown command: %s (type help)", cmd)
 			continue
 		}
-		logf("START: %s...", cmd)
+		Logf("START: %s...", cmd)
 		if err := h(parts[1:], sessionID); err != nil {
-			logf("ERROR: %v", err)
+			Logf("ERROR: %v", err)
 		}
 	}
 }
@@ -146,6 +217,10 @@ func ExecuteTool(name string, args map[string]any) string {
 		result = tools.HandleCodegraphAction(ctx, "", d, req)
 	case "memory":
 		result = tools.HandleMemoryAction(ctx, "", d, req)
+	case "memory_isolate":
+		result = tools.HandleMemoryIsolateAction(ctx, "", d, req)
+	case "memory_shared":
+		result = tools.HandleMemorySharedAction(ctx, "", d, req)
 	case "shell":
 		result = tools.HandleShellAction(ctx, "", d, req)
 	case "browser":

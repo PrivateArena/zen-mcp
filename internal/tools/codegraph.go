@@ -93,7 +93,7 @@ func getSessionByWorkspace(workspace string) (*layeredGraphSession, error) {
 		if session.workspaceRoot == workspace {
 			return session, nil
 		}
-		clearSessionGraph(session)
+		ClearSessionGraph(session)
 	}
 
 	root := workspace
@@ -152,7 +152,7 @@ func getSessionByWorkspace(workspace string) (*layeredGraphSession, error) {
 	return session, nil
 }
 
-func clearSessionGraph(session *layeredGraphSession) {
+func ClearSessionGraph(session *layeredGraphSession) {
 	for _, entry := range session.entries {
 		_ = entry.graph.Close()
 	}
