@@ -7,3 +7,9 @@ The MCP server runs in **stateless mode** (`internal/server/routes.go:162`). It 
 ## Auto-restart
 
 The server auto-restarts via `.air.toml` (if present). Manual restart is not needed during development.
+
+## In-Progress Porting
+Typescript: /media/jang/home/Deve/web-reader-mcp-master/
+Go: This project
+
+Folder structure is similar, can be compared and then port side by side.
