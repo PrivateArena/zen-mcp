@@ -1,5 +1,4 @@
 root = "."
-tmp_dir = "tmp/air"
 
 [build]
   pre_cmd = [
