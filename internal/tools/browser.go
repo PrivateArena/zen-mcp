@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -97,6 +98,60 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 		bridgeParams[k] = v
 	}
 	bridgeParams["timeout"] = mcpcfg.GetToolConfig("browser").Timeout
+
+	if uploadFiles, ok := bridgeParams["upload_files"]; ok {
+		workspaceRoot := workspace
+		var files []string
+		switch v := uploadFiles.(type) {
+		case []string:
+			files = v
+		case []any:
+			files = make([]string, 0, len(v))
+			for _, f := range v {
+				if s, ok := f.(string); ok {
+					files = append(files, s)
+				}
+			}
+		case string:
+			files = []string{v}
+		}
+
+		if len(files) > 0 {
+			resolved := make([]string, 0, len(files))
+			for _, f := range files {
+				if filepath.IsAbs(f) {
+					resolved = append(resolved, f)
+				} else {
+					resolved = append(resolved, filepath.Join(workspaceRoot, f))
+				}
+			}
+			bridgeParams["upload_files"] = resolved
+		}
+	}
+
+	if action == "brainstorm" || action == "brainstorm_status" {
+		if msg, ok := params["message"]; ok && msg != "" {
+			if _, hasPrompt := bridgeParams["prompt"]; !hasPrompt {
+				bridgeParams["prompt"] = msg
+				delete(params, "message")
+			}
+		}
+	}
+
+	if action == "chat" {
+		if uploadFiles, ok := params["upload_files"]; ok && uploadFiles != nil {
+			if _, hasPath := bridgeParams["path"]; !hasPath {
+				bridgeParams["path"] = uploadFiles
+				delete(bridgeParams, "upload_files")
+			}
+		}
+		if screenshot, ok := params["take_screenshot"]; ok && screenshot != nil {
+			if _, hasScreenshot := bridgeParams["screenshot"]; !hasScreenshot {
+				bridgeParams["screenshot"] = screenshot
+				delete(bridgeParams, "take_screenshot")
+			}
+		}
+	}
 
 	switch action {
 	case "restart":
