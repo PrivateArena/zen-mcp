@@ -337,6 +337,9 @@ func (cg *CodeGraph) Search(query string, limit int) ([]NodeSearchResult, error)
 		}
 		results = append(results, r)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return results, nil
 }
 
@@ -361,6 +364,9 @@ func (cg *CodeGraph) GetRepositoryMap(maxItems int) (string, error) {
 			languages[lang] = count
 		}
 	}
+	if err := langRows.Err(); err != nil {
+		return "", err
+	}
 
 	// Top Directories
 	pathRows, err := cg.storage.db.Query(`SELECT path FROM files`)
@@ -375,6 +381,9 @@ func (cg *CodeGraph) GetRepositoryMap(maxItems int) (string, error) {
 		if err := pathRows.Scan(&p); err == nil {
 			allPaths = append(allPaths, p)
 		}
+	}
+	if err := pathRows.Err(); err != nil {
+		return "", err
 	}
 
 	dirCounts := make(map[string]int)
@@ -432,6 +441,9 @@ func (cg *CodeGraph) GetRepositoryMap(maxItems int) (string, error) {
 			hotspots = append(hotspots, h)
 		}
 	}
+	if err := hotspotRows.Err(); err != nil {
+		return "", err
+	}
 
 	// File Hotspots
 	fileHotspotRows, err := cg.storage.db.Query(`
@@ -459,6 +471,9 @@ func (cg *CodeGraph) GetRepositoryMap(maxItems int) (string, error) {
 			hotspotFiles = append(hotspotFiles, fh)
 		}
 	}
+	if err := fileHotspotRows.Err(); err != nil {
+		return "", err
+	}
 
 	// Heavy Files
 	heavyRows, err := cg.storage.db.Query(`
@@ -484,6 +499,9 @@ func (cg *CodeGraph) GetRepositoryMap(maxItems int) (string, error) {
 		if err := heavyRows.Scan(&hf.Path, &hf.Lines); err == nil {
 			heavyFiles = append(heavyFiles, hf)
 		}
+	}
+	if err := heavyRows.Err(); err != nil {
+		return "", err
 	}
 
 	// Complex Files
@@ -511,6 +529,9 @@ func (cg *CodeGraph) GetRepositoryMap(maxItems int) (string, error) {
 		if err := complexRows.Scan(&cf.Path, &cf.Symbols); err == nil {
 			complexFiles = append(complexFiles, cf)
 		}
+	}
+	if err := complexRows.Err(); err != nil {
+		return "", err
 	}
 
 	result := map[string]interface{}{

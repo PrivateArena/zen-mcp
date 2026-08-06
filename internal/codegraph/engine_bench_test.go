@@ -9,7 +9,7 @@ import (
 func BenchmarkIndex(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		tmpDir := b.TempDir()
 
 		src := []byte("package foo\n\nfunc Add(a int, b int) int {\n\treturn a + b\n}\n\nfunc mul(x, y int) int {\n\treturn x * y\n}\n")
@@ -29,7 +29,7 @@ func BenchmarkIndex(b *testing.B) {
 func BenchmarkIndexScanner(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		tmpDir := b.TempDir()
 
 		src := []byte("package foo\n\nfunc Add(a int, b int) int {\n\treturn a + b\n}\n")
@@ -65,7 +65,7 @@ func BenchmarkIndexParse(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _, _ = cg.parser.Parse(filepath.Ext(files[0].Path), content)
 	}
 }
@@ -92,7 +92,7 @@ func BenchmarkIndexDBWrite(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = cg.storage.DeleteNodesForFile(fileID)
 		_ = cg.storage.DeleteEdgesForFile(fileID)
 		for _, n := range nodes {
@@ -116,7 +116,7 @@ func BenchmarkIndexDBWrite(b *testing.B) {
 func BenchmarkIndexMultiFile(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		tmpDir := b.TempDir()
 
 		for j := 0; j < 50; j++ {

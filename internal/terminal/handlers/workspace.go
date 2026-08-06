@@ -11,15 +11,15 @@ import (
 
 func init() {
 	terminal.Register("root", func(args []string) error {
-		return cd(args, true)
+		return cd(args)
 	})
 
 	terminal.Register("cd", func(args []string) error {
-		return cd(args, false)
+		return cd(args)
 	})
 }
 
-func cd(args []string, isRoot bool) error {
+func cd(args []string) error {
 	force := false
 	pathArg := ""
 	for _, a := range args {

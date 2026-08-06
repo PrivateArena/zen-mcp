@@ -19,7 +19,7 @@ import (
 	"github.com/jang/zen-mcp/internal/toolresponse"
 )
 
-func defThink(workspace string, deps Deps) ToolDef {
+func defThink(workspace string, _ Deps) ToolDef {
 	return ToolDef{
 		Name:        "think",
 		Description: "Reasoning + planning for agents. Actions: sequential_thinking, create_plan, update_task, get_plan, add_task, finish_task.",
@@ -130,11 +130,11 @@ func (s *sequentialThinkingServer) formatThought(input thoughtData) {
 	pad := borderLen - 2
 
 	var b strings.Builder
-	b.WriteString("\n┌" + border + "┐\n")
-	b.WriteString("│ " + header + strings.Repeat(" ", pad-len([]rune(header))) + " │\n")
-	b.WriteString("├" + border + "┤\n")
-	b.WriteString("│ " + inner + strings.Repeat(" ", pad-len([]rune(inner))) + " │\n")
-	b.WriteString("└" + border + "┘")
+	fmt.Fprintf(&b, "\n┌%s┐\n", border)
+	fmt.Fprintf(&b, "│ %s%s │\n", header, strings.Repeat(" ", pad-len([]rune(header))))
+	fmt.Fprintf(&b, "├%s┤\n", border)
+	fmt.Fprintf(&b, "│ %s%s │\n", inner, strings.Repeat(" ", pad-len([]rune(inner))))
+	fmt.Fprintf(&b, "└%s┘", border)
 	logfilter.Info(b.String())
 }
 
@@ -225,14 +225,14 @@ func (p *planManager) savePlan(plan planData) error {
 
 func (p *planManager) printTaskBoard(plan planData) {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("\n 📋 %s ", plan.ProjectName))
-	b.WriteString("\n 🎯 " + plan.Objective)
+	fmt.Fprintf(&b, "\n 📋 %s ", plan.ProjectName)
+	fmt.Fprintf(&b, "\n 🎯 %s", plan.Objective)
 	b.WriteString("\n ─────────────────────────────────────────")
 	for _, t := range plan.Tasks {
 		icon := map[taskStatus]string{statusTodo: "[ ]", statusInProgress: "[▶]", statusBlocked: "[!]", statusDone: "[✔]", statusFailed: "[✘]"}[t.Status]
-		b.WriteString(fmt.Sprintf("\n %s %d: %s", icon, t.ID, t.Title))
+		fmt.Fprintf(&b, "\n %s %d: %s", icon, t.ID, t.Title)
 		if t.Notes != nil && *t.Notes != "" {
-			b.WriteString(fmt.Sprintf("\n       ↳ %s", *t.Notes))
+			fmt.Fprintf(&b, "\n       ↳ %s", *t.Notes)
 		}
 	}
 	b.WriteString("\n ─────────────────────────────────────────\n")
@@ -460,21 +460,21 @@ func HandleThinkAction(ctx context.Context, workspace string, req mcp.CallToolRe
 
 func thinkLogContent(action string, args map[string]any, result *mcp.CallToolResult) string {
 	var b strings.Builder
-	b.WriteString("Action: " + action + "\n")
+	fmt.Fprintf(&b, "Action: %s\n", action)
 	if thought, ok := args["thought"].(string); ok && thought != "" {
 		tn := toInt(args["thoughtNumber"])
 		tt := toInt(args["totalThoughts"])
 		if tt == 0 {
 			tt = tn
 		}
-		b.WriteString(fmt.Sprintf("Thought #%d/%d: %s\n", tn, tt, thought))
+		fmt.Fprintf(&b, "Thought #%d/%d: %s\n", tn, tt, thought)
 	} else {
 		raw, _ := json.Marshal(args)
-		b.WriteString("Params: " + string(raw) + "\n")
+		fmt.Fprintf(&b, "Params: %s\n", string(raw))
 	}
 	if result != nil && len(result.Content) > 0 {
 		if tc, ok := result.Content[0].(mcp.TextContent); ok {
-			b.WriteString("Result:\n" + tc.Text)
+			fmt.Fprintf(&b, "Result:\n%s", tc.Text)
 		}
 	}
 	return b.String()

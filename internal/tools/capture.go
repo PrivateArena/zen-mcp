@@ -16,8 +16,6 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
-var pendingCollaborations = map[string]chan string{}
-
 func defCapture(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "capture",

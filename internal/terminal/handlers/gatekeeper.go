@@ -2,23 +2,10 @@ package handlers
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/jang/zen-mcp/internal/terminal"
 )
-
-func runCommand(command string, args []string, cwd string) (ok bool, stdout, stderr string) {
-	proc := exec.Command(command, args...)
-	proc.Dir = cwd
-	out, err := proc.CombinedOutput()
-	stdout = string(out)
-	if err != nil {
-		stderr = err.Error()
-		return false, stdout, stderr
-	}
-	return true, stdout, stderr
-}
 
 func init() {
 	terminal.Register("accept", func(args []string) error {

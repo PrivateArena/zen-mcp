@@ -486,7 +486,7 @@ func actionRelated(session *layeredGraphSession, isolate int, query string, limi
 	return formatLayered(results, isolate != 0)
 }
 
-func actionSearch(session *layeredGraphSession, isolate int, query string, semantic bool, limit *int) string {
+func actionSearch(session *layeredGraphSession, isolate int, query string, limit *int) string {
 	targets := getTargetGraphs(session, isolate)
 	results := make([]layeredResult, 0, len(targets))
 	l := 10
@@ -618,7 +618,7 @@ func actionMarkdown(session *layeredGraphSession, isolate int, query string) str
 		if doFullDump && (len(fullDumpPaths) == 0 || fullDumpPaths[relPath]) {
 			content, err := os.ReadFile(filepath.Join(target.root, relPath))
 			if err != nil {
-				content = []byte(fmt.Sprintf("(error reading file: %s: %v)", relPath, err))
+				content = fmt.Appendf(nil, "(error reading file: %s: %v)", relPath, err)
 			}
 			lang := filepath.Ext(relPath)
 			if lang != "" {
@@ -1073,15 +1073,7 @@ func HandleCodegraphAction(ctx context.Context, workspace string, deps Deps, req
 		}
 		return nil
 	}
-	getBool := func(key string) bool {
-		if v, ok := args[key].(bool); ok {
-			return v
-		}
-		return false
-	}
-
 	query := getStr("query")
-	semantic := getBool("semantic")
 	limit := getNum("limit")
 	isolate := 0
 	if v, ok := args["isolate"].(float64); ok {
@@ -1099,7 +1091,7 @@ func HandleCodegraphAction(ctx context.Context, workspace string, deps Deps, req
 		if query == "" {
 			return toolresponse.WrapErrorWithContext(ctx, "codegraph", fmt.Errorf("query is required for search"), start)
 		}
-		return toolresponse.WrapSuccess(ctx, "codegraph", actionSearch(session, isolate, query, semantic, limit), start)
+		return toolresponse.WrapSuccess(ctx, "codegraph", actionSearch(session, isolate, query, limit), start)
 	case "status":
 		return toolresponse.WrapSuccess(ctx, "codegraph", actionStatus(session, isolate), start)
 	case "map":

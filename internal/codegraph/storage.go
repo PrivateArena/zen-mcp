@@ -10,8 +10,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 1
-
 // Storage persists codegraph data in SQLite.
 type Storage struct {
 	db    *sql.DB
@@ -459,6 +457,9 @@ func (s *Storage) SearchFTS(query string) ([]NodeSearchResult, error) {
 		}
 		results = append(results, r)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return results, nil
 }
 
@@ -477,6 +478,9 @@ func (s *Storage) FindNodesByName(name string) ([]NodeRecord, error) {
 			continue
 		}
 		nodes = append(nodes, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return nodes, nil
 }
@@ -539,6 +543,9 @@ func (s *Storage) ListFiles(filter string, limit int) ([]FileRecord, error) {
 			continue
 		}
 		files = append(files, fr)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return files, nil
 }
@@ -649,6 +656,9 @@ func (s *Storage) GetAllFiles() []FileRecord {
 		}
 		files = append(files, fr)
 	}
+	if err := rows.Err(); err != nil {
+		return nil
+	}
 	return files
 }
 
@@ -743,6 +753,9 @@ func (s *Storage) FindCycles() ([]CycleRecord, error) {
 			}
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return cycles, nil
 }
 
@@ -822,6 +835,9 @@ func (s *Storage) FindShortestPath(fromName, toName string, limit int) (*Shortes
 				outgoing = append(outgoing, n)
 			}
 		}
+		if err := rows.Err(); err != nil {
+			continue
+		}
 		rows.Close()
 
 		for _, edge := range outgoing {
@@ -867,6 +883,9 @@ func (s *Storage) GetNodesForFile(fileID int64) ([]NodeRecord, error) {
 		}
 		nodes = append(nodes, n)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return nodes, nil
 }
 
@@ -886,6 +905,9 @@ func (s *Storage) getNodesByName(name string) ([]NodeRecord, error) {
 			continue
 		}
 		nodes = append(nodes, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return nodes, nil
 }
@@ -966,6 +988,9 @@ func (s *Storage) GetAllEdges(pathFilter string, limit int) []EdgeRecord {
 			results = append(results, e)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return nil
+	}
 	return results
 }
 
@@ -1041,6 +1066,9 @@ func (s *Storage) SearchSymbols(query string, limit int) []NodeSearchResult {
 			continue
 		}
 		results = append(results, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil
 	}
 	return results
 }
