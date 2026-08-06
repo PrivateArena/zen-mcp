@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jang/zen-mcp/internal/mcpcfg"
@@ -92,10 +93,14 @@ func TestRegisterProjectInMap(t *testing.T) {
 	zenDir := filepath.Join(projectPath, ".zenmcp")
 	_ = os.MkdirAll(zenDir, 0o755)
 
+	first := filepath.Join(dir, "first")
+	_ = os.MkdirAll(filepath.Join(first, ".zenmcp"), 0o755)
+
 	origRoot := mcpcfg.ProjectRoot
 	mcpcfg.ProjectRoot = dir
 	defer func() { mcpcfg.ProjectRoot = origRoot }()
 
+	RegisterProjectInMap(first, nil)
 	RegisterProjectInMap(projectPath, nil)
 
 	raw, err := os.ReadFile(mapFile)
@@ -109,5 +114,10 @@ func TestRegisterProjectInMap(t *testing.T) {
 	}
 	if _, ok := data[projectPath]; !ok {
 		t.Errorf("RegisterProjectInMap() missing project entry in %s", string(raw))
+	}
+	wsPos := strings.Index(string(raw), "\""+projectPath+"\"")
+	firstPos := strings.Index(string(raw), "\""+first+"\"")
+	if wsPos < 0 || firstPos < 0 || wsPos > firstPos {
+		t.Errorf("RegisterProjectInMap() recent key not moved to top, got:\n%s", string(raw))
 	}
 }
