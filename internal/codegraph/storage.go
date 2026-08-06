@@ -136,38 +136,22 @@ func (s *Storage) prepareStatements() {
 		JOIN files fs ON n1.file_id = fs.id
 		JOIN files ft ON n2.file_id = ft.id
 	`))
-	s.setStmt("getRelatedOutgoing", mustPrepare(s.db, `
-		SELECT f.path, n.name, n.type, e.relation, 'outgoing'
-		FROM edges e
-		JOIN nodes n ON e.target_id = n.id
-		JOIN files f ON n.file_id = f.id
-		WHERE e.source_id IN (SELECT id FROM nodes WHERE file_id = ?)
-		LIMIT ?
-	`))
-	s.setStmt("getRelatedIncoming", mustPrepare(s.db, `
-		SELECT f.path, n.name, n.type, e.relation, 'incoming'
-		FROM edges e
-		JOIN nodes n ON e.source_id = n.id
-		JOIN files f ON n.file_id = f.id
-		WHERE e.target_id IN (SELECT id FROM nodes WHERE file_id = ?)
-		LIMIT ?
-	`))
 	s.setStmt("getNeighborCallers", mustPrepare(s.db, `
-		SELECT DISTINCT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
+		SELECT DISTINCT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content, e.relation
 		FROM edges e
 		JOIN nodes n ON e.source_id = n.id
 		JOIN files f ON n.file_id = f.id
 		WHERE e.target_id = ?
-		ORDER BY n.start_line
+		ORDER BY f.path
 		LIMIT ?
 	`))
 	s.setStmt("getNeighborCallees", mustPrepare(s.db, `
-		SELECT DISTINCT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
+		SELECT DISTINCT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content, e.relation
 		FROM edges e
 		JOIN nodes n ON e.target_id = n.id
 		JOIN files f ON n.file_id = f.id
 		WHERE e.source_id = ?
-		ORDER BY n.start_line
+		ORDER BY f.path
 		LIMIT ?
 	`))
 	s.setStmt("findNodesByName", mustPrepare(s.db, `
@@ -436,7 +420,7 @@ func (s *Storage) DeleteEdgesForFile(fileID int64) error {
 func (s *Storage) SearchFTS(query string) ([]NodeSearchResult, error) {
 	sanitized := sanitizeFtsQuery(query)
 	rows, err := s.db.Query(`
-		SELECT n.id, n.name, n.type, f.path, n.start_line, n.end_line
+		SELECT n.id, n.name, n.qualified_name, n.type, f.path, n.start_line, n.end_line
 		FROM nodes_fts fts
 		JOIN nodes n ON fts.rowid = n.id
 		JOIN files f ON n.file_id = f.id
@@ -452,7 +436,7 @@ func (s *Storage) SearchFTS(query string) ([]NodeSearchResult, error) {
 	var results []NodeSearchResult
 	for rows.Next() {
 		var r NodeSearchResult
-		if err := rows.Scan(&r.ID, &r.Name, &r.Type, &r.Path, &r.StartLine, &r.EndLine); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.QualifiedName, &r.Type, &r.Path, &r.StartLine, &r.EndLine); err != nil {
 			continue
 		}
 		results = append(results, r)
@@ -564,23 +548,25 @@ type NodeRecord struct {
 	StartLine     int
 	EndLine       int
 	Content       string
+	Relation      string
 }
 
 // NodeSearchResult is a lightweight search result.
 type NodeSearchResult struct {
-	ID        int64
-	Name      string
-	Type      string
-	Path      string
-	StartLine int
-	EndLine   int
+	ID            int64  `json:"id"`
+	Name          string `json:"name"`
+	QualifiedName string `json:"qualified_name"`
+	Type          string `json:"type"`
+	Path          string `json:"path"`
+	StartLine     int    `json:"start_line"`
+	EndLine       int    `json:"end_line"`
 }
 
 func scanNodes(rows *sql.Rows) ([]NodeRecord, error) {
 	var nodes []NodeRecord
 	for rows.Next() {
 		var n NodeRecord
-		if err := rows.Scan(&n.ID, &n.FileID, &n.Type, &n.Name, &n.Language, &n.Path, &n.QualifiedName, &n.Signature, &n.Docstring, &n.StartLine, &n.EndLine, &n.Content); err != nil {
+		if err := rows.Scan(&n.ID, &n.FileID, &n.Type, &n.Name, &n.Language, &n.Path, &n.QualifiedName, &n.Signature, &n.Docstring, &n.StartLine, &n.EndLine, &n.Content, &n.Relation); err != nil {
 			continue
 		}
 		nodes = append(nodes, n)
@@ -673,14 +659,54 @@ func (s *Storage) GetRelatedForFile(filePath string, limit int) ([]RelatedRecord
 		return nil, nil
 	}
 
-	rows, err := s.db.Query(`
-		SELECT f.path, n.name, n.type, e.relation, 'outgoing'
+	rows, err := s.db.Query(`SELECT id FROM nodes WHERE file_id = ?`, fileID)
+	if err != nil {
+		return nil, err
+	}
+	var nodeIDs []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err == nil {
+			nodeIDs = append(nodeIDs, id)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(nodeIDs) == 0 {
+		return nil, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(nodeIDs)), ",")
+	query := fmt.Sprintf(`
+		SELECT DISTINCT
+			e.relation,
+			f.path AS related_path,
+			f.language AS related_language,
+			n.name AS symbol_name,
+			n.type AS symbol_type,
+			CASE WHEN e.source_id IN (%[1]s) THEN 'outgoing' ELSE 'incoming' END AS direction
 		FROM edges e
-		JOIN nodes n ON e.target_id = n.id
+		JOIN nodes n ON (
+			(e.source_id IN (%[1]s) AND e.target_id = n.id) OR
+			(e.target_id IN (%[1]s) AND e.source_id = n.id)
+		)
 		JOIN files f ON n.file_id = f.id
-		WHERE e.source_id IN (SELECT id FROM nodes WHERE file_id = ?)
+		WHERE f.id != ?
+		ORDER BY e.relation, direction, f.path
 		LIMIT ?
-	`, fileID, limit)
+	`, placeholders)
+
+	params := make([]any, 0, len(nodeIDs)*3+2)
+	for i := 0; i < 3; i++ {
+		for _, id := range nodeIDs {
+			params = append(params, id)
+		}
+	}
+	params = append(params, fileID, limit)
+
+	rows, err = s.db.Query(query, params...)
 	if err != nil {
 		return nil, err
 	}
@@ -689,33 +715,13 @@ func (s *Storage) GetRelatedForFile(filePath string, limit int) ([]RelatedRecord
 	var results []RelatedRecord
 	for rows.Next() {
 		var r RelatedRecord
-		if err := rows.Scan(&r.RelatedPath, &r.SymbolName, &r.SymbolType, &r.Relation, &r.Direction); err == nil {
-			r.RelatedLanguage = detectLanguageFromPath(r.RelatedPath)
+		if err := rows.Scan(&r.Relation, &r.RelatedPath, &r.RelatedLanguage, &r.SymbolName, &r.SymbolType, &r.Direction); err == nil {
 			results = append(results, r)
 		}
 	}
-
-	rows, err = s.db.Query(`
-		SELECT f.path, n.name, n.type, e.relation, 'incoming'
-		FROM edges e
-		JOIN nodes n ON e.source_id = n.id
-		JOIN files f ON n.file_id = f.id
-		WHERE e.target_id IN (SELECT id FROM nodes WHERE file_id = ?)
-		LIMIT ?
-	`, fileID, limit)
-	if err != nil {
+	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var r RelatedRecord
-		if err := rows.Scan(&r.RelatedPath, &r.SymbolName, &r.SymbolType, &r.Relation, &r.Direction); err == nil {
-			r.RelatedLanguage = detectLanguageFromPath(r.RelatedPath)
-			results = append(results, r)
-		}
-	}
-
 	return results, nil
 }
 
@@ -1062,7 +1068,7 @@ func (s *Storage) SearchSymbols(query string, limit int) []NodeSearchResult {
 	var results []NodeSearchResult
 	for rows.Next() {
 		var r NodeSearchResult
-		if err := rows.Scan(&r.ID, &r.Name, &r.Type, &r.Path, &r.StartLine, &r.EndLine); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.QualifiedName, &r.Type, &r.Path, &r.StartLine, &r.EndLine); err != nil {
 			continue
 		}
 		results = append(results, r)

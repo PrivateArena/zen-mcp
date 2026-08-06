@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 // CodeGraph is the main code graph engine.
@@ -316,7 +317,7 @@ func parseManifestContent(content, filename string) ([]ParsedNode, []ParsedRelat
 // Search searches for symbols by name with optional limit.
 func (cg *CodeGraph) Search(query string, limit int) ([]NodeSearchResult, error) {
 	rows, err := cg.storage.db.Query(`
-		SELECT n.id, n.name, n.type, f.path, n.start_line, n.end_line
+		SELECT n.id, n.name, n.qualified_name, n.type, f.path, n.start_line, n.end_line
 		FROM nodes_fts fts
 		JOIN nodes n ON fts.rowid = n.id
 		JOIN files f ON n.file_id = f.id
@@ -332,7 +333,7 @@ func (cg *CodeGraph) Search(query string, limit int) ([]NodeSearchResult, error)
 	var results []NodeSearchResult
 	for rows.Next() {
 		var r NodeSearchResult
-		if err := rows.Scan(&r.ID, &r.Name, &r.Type, &r.Path, &r.StartLine, &r.EndLine); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.QualifiedName, &r.Type, &r.Path, &r.StartLine, &r.EndLine); err != nil {
 			continue
 		}
 		results = append(results, r)
@@ -865,17 +866,65 @@ func (cg *CodeGraph) Impact(symbolName string) (string, error) {
 
 // Status returns indexing status.
 func (cg *CodeGraph) Status() (map[string]any, error) {
-	files := cg.storage.GetAllFiles()
+	dotZenDir := filepath.Join(cg.rootDir, ".zenmcp")
+	dbPath := filepath.Join(dotZenDir, "codegraph.db")
 
-	langCounts := map[string]int{}
-	for _, fr := range files {
-		langCounts[fr.Language]++
+	lastModified := "Unknown"
+	if fi, err := os.Stat(dbPath); err == nil {
+		lastModified = fi.ModTime().UTC().Format(time.RFC3339)
+	}
+
+	counts := cg.storage.GetStats()
+	nearby := cg.findNearbyIndices(2)
+
+	advice := "If the index was generated recently, do NOT re-index unless code has significantly changed to save token/compute. Use 'search' or 'mermaid' directly."
+	if len(nearby) > 0 {
+		advice = fmt.Sprintf("Found %d other indices in subfolders. Use 'workspace' to switch context if needed. If the current index was generated recently, do NOT re-index unless code has significantly changed.", len(nearby))
 	}
 
 	return map[string]any{
-		"files_indexed": len(files),
-		"languages":     langCounts,
+		"workingDir":     cg.rootDir,
+		"dbPath":         dbPath,
+		"lastIndexed":    lastModified,
+		"counts":         counts,
+		"nearbyIndices":  nearby,
+		"advice":         advice,
 	}, nil
+}
+
+func (cg *CodeGraph) findNearbyIndices(depth int) []string {
+	if depth <= 0 {
+		depth = 2
+	}
+	var indices []string
+	var scan func(dir string, currentDepth int)
+	scan = func(dir string, currentDepth int) {
+		if currentDepth > depth {
+			return
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			if name == "node_modules" || strings.HasPrefix(name, ".") {
+				continue
+			}
+			subDir := filepath.Join(dir, name)
+			dbPath := filepath.Join(subDir, ".zenmcp", "codegraph.db")
+			if _, err := os.Stat(dbPath); err == nil {
+				indices = append(indices, subDir)
+			} else {
+				scan(subDir, currentDepth+1)
+			}
+		}
+	}
+	scan(cg.rootDir, 1)
+	return indices
 }
 
 func derefString(s *string) string {
@@ -890,31 +939,6 @@ func truncate(s string, maxLen int) string {
 		return s[:maxLen]
 	}
 	return s
-}
-
-func detectLanguageFromPath(relPath string) string {
-	ext := strings.ToLower(filepath.Ext(relPath))
-	switch ext {
-	case ".ts", ".tsx", ".js", ".jsx", ".mjs":
-		return "typescript"
-	case ".go":
-		return "go"
-	case ".py":
-		return "python"
-	case ".rs":
-		return "rust"
-	case ".java":
-		return "java"
-	case ".c", ".h":
-		return "c"
-	case ".cpp", ".hpp":
-		return "cpp"
-	case ".rb":
-		return "ruby"
-	case ".lua":
-		return "lua"
-	}
-	return "unknown"
 }
 
 // stringsBuilder is a simple string builder wrapper

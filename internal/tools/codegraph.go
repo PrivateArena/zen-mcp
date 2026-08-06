@@ -88,17 +88,17 @@ func discoverGraphRoots(workspaceRoot string) []string {
 }
 
 func getSessionByWorkspace(workspace string) (*layeredGraphSession, error) {
-	if s, ok := graphRegistry.Load(workspace); ok {
-		session := s.(*layeredGraphSession)
-		if session.workspaceRoot == workspace {
-			return session, nil
-		}
-		ClearSessionGraph(session)
-	}
-
 	root := workspace
 	if r := resolveWorkspaceFromDeps("", workspace); r != "" {
 		root = r
+	}
+
+	if s, ok := graphRegistry.Load(workspace); ok {
+		session := s.(*layeredGraphSession)
+		if session.workspaceRoot == root {
+			return session, nil
+		}
+		ClearSessionGraph(session)
 	}
 
 	watcherEnabled := false
@@ -120,7 +120,7 @@ func getSessionByWorkspace(workspace string) (*layeredGraphSession, error) {
 		if err != nil {
 			continue
 		}
-		label := r
+		label := "ROOT"
 		if r != root {
 			rel, _ := filepath.Rel(root, r)
 			label = rel
@@ -292,11 +292,11 @@ func actionIndex(session *layeredGraphSession, isolate int) (string, error) {
 	for _, target := range targets {
 		_, _ = target.graph.Index()
 		stats, _ := target.graph.Status()
-		filesIndexed := 0
-		if v, ok := stats["files_indexed"].(int); ok {
-			filesIndexed = v
+		fileCount := 0
+		if counts, ok := stats["counts"].(map[string]int); ok {
+			fileCount = counts["fileCount"]
 		}
-		parts = append(parts, fmt.Sprintf("Scope [%s]: %d total files.", target.label, filesIndexed))
+		parts = append(parts, fmt.Sprintf("Scope [%s]: %d total files.", target.label, fileCount))
 	}
 	return strings.Join(parts, "\n"), nil
 }
@@ -333,7 +333,8 @@ func actionNeighbors(session *layeredGraphSession, isolate int, query string, li
 		if err != nil {
 			continue
 		}
-		results = append(results, layeredResult{label: target.label, data: fmt.Sprintf("%v", neighbors)})
+		data, _ := json.Marshal(neighbors)
+		results = append(results, layeredResult{label: target.label, data: string(data)})
 	}
 	if len(results) == 0 {
 		return "", fmt.Errorf(`No neighbors found for "%s" in any of the active scopes.`, query)
@@ -353,7 +354,8 @@ func actionUsage(session *layeredGraphSession, isolate int, query string) (strin
 			continue
 		}
 		if len(usages) > 0 {
-			results = append(results, layeredResult{label: target.label, data: fmt.Sprintf("%v", usages)})
+			data, _ := json.Marshal(usages)
+			results = append(results, layeredResult{label: target.label, data: string(data)})
 		}
 	}
 	if len(results) == 0 {
@@ -468,12 +470,21 @@ func actionRelated(session *layeredGraphSession, isolate int, query string, limi
 		}
 		if len(related) > 0 {
 			grouped := make(map[string][]codegraph.RelatedRecord)
+			var order []string
 			for _, r := range related {
+				if _, ok := grouped[r.RelatedPath]; !ok {
+					order = append(order, r.RelatedPath)
+				}
 				grouped[r.RelatedPath] = append(grouped[r.RelatedPath], r)
 			}
 			var lines []string
-			for path, rels := range grouped {
-				lines = append(lines, fmt.Sprintf("[%s] (%s)", path, rels[0].RelatedLanguage))
+			for _, path := range order {
+				rels := grouped[path]
+				lang := rels[0].RelatedLanguage
+				if lang == "" {
+					lang = "unknown"
+				}
+				lines = append(lines, fmt.Sprintf("[%s] (%s)", path, lang))
 				for _, r := range rels {
 					arrow := "→"
 					if r.Direction == "incoming" {
@@ -483,7 +494,7 @@ func actionRelated(session *layeredGraphSession, isolate int, query string, limi
 				}
 				lines = append(lines, "")
 			}
-			results = append(results, layeredResult{label: target.label, data: strings.Join(lines, "\n")})
+			results = append(results, layeredResult{label: target.label, data: strings.TrimSpace(strings.Join(lines, "\n"))})
 		}
 	}
 	if len(results) == 0 {
@@ -523,7 +534,8 @@ func actionSearch(session *layeredGraphSession, isolate int, query string, limit
 	}
 	for _, target := range targets {
 		graphResults, _ := target.graph.Search(query, l)
-		results = append(results, layeredResult{label: target.label, data: fmt.Sprintf("%v", graphResults)})
+		data, _ := json.Marshal(graphResults)
+		results = append(results, layeredResult{label: target.label, data: string(data)})
 	}
 	return formatLayered(results, isolate != 0), nil
 }
@@ -536,7 +548,8 @@ func actionStatus(session *layeredGraphSession, isolate int) (string, error) {
 	results := make([]layeredResult, 0, len(targets))
 	for _, target := range targets {
 		stats, _ := target.graph.Status()
-		results = append(results, layeredResult{label: target.label, data: fmt.Sprintf("%v", stats)})
+		data, _ := json.Marshal(stats)
+		results = append(results, layeredResult{label: target.label, data: string(data)})
 	}
 	text := formatLayered(results, isolate != 0)
 	if isolate == 0 && len(session.entries) > 1 {
@@ -594,7 +607,11 @@ func actionMermaid(session *layeredGraphSession, isolate int, query string, limi
 	}
 	for _, target := range targets {
 		diagram, _ := target.graph.GenerateMermaid(query, l)
-		parts = append(parts, fmt.Sprintf("### Scope: %s\n```mermaid\n%s\n```", target.label, diagram))
+		note := ""
+		if query == "" {
+			note = `# Tip: add a query like "src/auth" to scope to a directory.` + "\n\n"
+		}
+		parts = append(parts, fmt.Sprintf("### Scope: %s\n```mermaid\n%s%s\n```", target.label, note, diagram))
 	}
 	return strings.Join(parts, "\n\n"), nil
 }
@@ -610,14 +627,9 @@ func actionMarkdown(session *layeredGraphSession, isolate int, query string) (st
 
 	showFileList := true
 	fullDumpAll := false
-	configPath := filepath.Join(mcpcfg.ProjectRoot, "config.json")
-	if data, err := os.ReadFile(configPath); err == nil {
-		var cfg map[string]any
-		if json.Unmarshal(data, &cfg) == nil {
-			showFileList = cfg["codegraph_markdown_files"] != false
-			fullDumpAll = cfg["codegraph_markdown_fulldump"] == true
-		}
-	}
+	cfg := mcpcfg.Get()
+	showFileList = cfg.CodegraphMarkdownFiles
+	fullDumpAll = cfg.CodegraphMarkdownFulldump
 
 	fullDumpPaths := make(map[string]bool)
 	if query != "" {
@@ -627,18 +639,18 @@ func actionMarkdown(session *layeredGraphSession, isolate int, query string) (st
 		}
 	}
 
+	target := targets[0]
+	diskFiles, _ := target.graph.ScanDiskFiles()
+
 	doFullDump := len(fullDumpPaths) > 0 || fullDumpAll
 	dumpModeText := ""
 	if len(fullDumpPaths) > 0 {
-		dumpModeText = fmt.Sprintf("Full content for %d file(s), skeletons for %d file(s)", len(fullDumpPaths), 0)
+		dumpModeText = fmt.Sprintf("Full content for %d file(s), skeletons for %d file(s)", len(fullDumpPaths), len(diskFiles)-len(fullDumpPaths))
 	} else if fullDumpAll {
 		dumpModeText = "Full content for all files (fulldump)"
 	} else {
 		dumpModeText = "Skeletons for all files"
 	}
-
-	target := targets[0]
-	diskFiles, _ := target.graph.ScanDiskFiles()
 
 	var mdParts []string
 	mdParts = append(mdParts, fmt.Sprintf("# CodeGraph Markdown Dump — %s", target.label))
@@ -680,7 +692,10 @@ func actionMarkdown(session *layeredGraphSession, isolate int, query string) (st
 		}
 	}
 
-	dumpDir := filepath.Join(mcpcfg.ProjectRoot, ".zenmcp", "codegraph", "dump")
+	dumpDir := cfg.CodegraphDumpDir
+	if dumpDir == "" {
+		dumpDir = "/tmp/zen-mcp/codegraph/dump"
+	}
 	os.MkdirAll(dumpDir, 0755)
 	now := time.Now()
 	timestamp := fmt.Sprintf("%04d%02d%02d-%02d%02d%02d", now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second())
@@ -754,8 +769,8 @@ func actionDeadcode(session *layeredGraphSession, isolate int, query string, lim
 	results := make([]layeredResult, 0, len(parts))
 	for i, p := range parts {
 		label := ""
-		if i < len(session.entries) {
-			label = session.entries[i].label
+		if i < len(targets) {
+			label = targets[i].label
 		} else {
 			label = fmt.Sprintf("scope%d", i+1)
 		}
@@ -934,6 +949,13 @@ func actionImpact(session *layeredGraphSession, isolate int, query string) (stri
 				for i := range changedFiles {
 					changedFiles[i] = strings.TrimSpace(changedFiles[i])
 				}
+				var filtered []string
+				for _, f := range changedFiles {
+					if f != "" {
+						filtered = append(filtered, f)
+					}
+				}
+				changedFiles = filtered
 			}
 		} else {
 			ref := query
@@ -951,6 +973,13 @@ func actionImpact(session *layeredGraphSession, isolate int, query string) (stri
 			for i := range changedFiles {
 				changedFiles[i] = strings.TrimSpace(changedFiles[i])
 			}
+			var filtered []string
+			for _, f := range changedFiles {
+				if f != "" {
+					filtered = append(filtered, f)
+				}
+			}
+			changedFiles = filtered
 		}
 
 		if len(changedFiles) == 0 {
@@ -1051,7 +1080,7 @@ func actionImpact(session *layeredGraphSession, isolate int, query string) (stri
 	return strings.Join(parts, "\n\n"), nil
 }
 
-func actionShortestPath(session *layeredGraphSession, isolate int, query string) (string, error) {
+func actionShortestPath(session *layeredGraphSession, isolate int, query, format string, limit *int) (string, error) {
 	parts := strings.SplitN(query, ",", 2)
 	if len(parts) < 2 {
 		return "", fmt.Errorf("query must be 'from,to' for shortestPath")
@@ -1062,7 +1091,15 @@ func actionShortestPath(session *layeredGraphSession, isolate int, query string)
 	if err != nil {
 		return "", err
 	}
-	result, _ := target.graph.FindShortestPath(from, to, 6)
+	l := 6
+	if limit != nil {
+		l = *limit
+	}
+	result, _ := target.graph.FindShortestPath(from, to, l)
+	if format == "json" {
+		data, _ := json.MarshalIndent(result, "", "  ")
+		return string(data), nil
+	}
 	if !result.Found {
 		return fmt.Sprintf("No path found from \"%s\" to \"%s\".", from, to), nil
 	}
@@ -1129,6 +1166,7 @@ func HandleCodegraphAction(ctx context.Context, workspace string, deps Deps, req
 		return nil
 	}
 	query := getStr("query")
+	format := getStr("format")
 	limit := getNum("limit")
 	isolate := 0
 	if v, ok := args["isolate"].(float64); ok {
@@ -1193,7 +1231,7 @@ func HandleCodegraphAction(ctx context.Context, workspace string, deps Deps, req
 		if query == "" {
 			return toolresponse.WrapErrorWithContext(ctx, "codegraph", fmt.Errorf("query (source,target) required for shortestPath action"), start)
 		}
-		return run(func() (string, error) { return actionShortestPath(session, isolate, query) })
+		return run(func() (string, error) { return actionShortestPath(session, isolate, query, format, limit) })
 	case "findCycles":
 		return run(func() (string, error) { return actionFindCycles(session, isolate) })
 	case "impact":
@@ -1220,9 +1258,9 @@ func defCodegraph(workspace string, deps Deps) ToolDef {
 				"deadcode", "shortestPath", "findCycles", "markdown", "impact",
 			}),
 			"query":    strProp("Search query or symbol name"),
+			"format":   strEnumProp("Output format: text (default) or json", []string{"text", "json"}),
 			"limit":    numProp("Result limit"),
 			"isolate":  numProp("Graph isolate level (0 = root)"),
-			"semantic": boolProp("Use semantic search"),
 		}, []string{"action"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return HandleCodegraphAction(ctx, workspace, deps, req), nil
