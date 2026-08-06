@@ -2,6 +2,7 @@ package codegraph
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -63,7 +64,8 @@ func (s *Storage) setStmt(key string, stmt *sql.Stmt) {
 }
 
 func (s *Storage) prepareStatements() {
-	s.setStmt("upsertFile", s.db.Prepare(`
+	var err error
+	s.setStmt("upsertFile", mustPrepare(s.db, `
 		INSERT INTO files (path, hash, mtime, language, is_test)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(path) DO UPDATE SET
@@ -72,37 +74,37 @@ func (s *Storage) prepareStatements() {
 			language = excluded.language,
 			is_test = excluded.is_test
 	`))
-	s.setStmt("getFileByPath", s.db.Prepare(`SELECT id, path, hash, mtime, language, is_test FROM files WHERE path = ?`))
-	s.setStmt("insertNode", s.db.Prepare(`
+	s.setStmt("getFileByPath", mustPrepare(s.db, `SELECT id, path, hash, mtime, language, is_test FROM files WHERE path = ?`))
+	s.setStmt("insertNode", mustPrepare(s.db, `
 		INSERT INTO nodes (file_id, type, name, language, qualified_name, signature, docstring, start_line, end_line, content)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`))
-	s.setStmt("clearNodesForFile", s.db.Prepare(`DELETE FROM nodes WHERE file_id = ?`))
-	s.setStmt("deleteFile", s.db.Prepare(`DELETE FROM files WHERE id = ?`))
-	s.setStmt("insertEdge", s.db.Prepare(`
+	s.setStmt("clearNodesForFile", mustPrepare(s.db, `DELETE FROM nodes WHERE file_id = ?`))
+	s.setStmt("deleteFile", mustPrepare(s.db, `DELETE FROM files WHERE id = ?`))
+	s.setStmt("insertEdge", mustPrepare(s.db, `
 		INSERT INTO edges (source_id, target_id, relation, metadata, confidence)
 		VALUES (?, ?, ?, ?, ?)
 	`))
-	s.setStmt("getNodesForFile", s.db.Prepare(`SELECT id, file_id, type, name, language, qualified_name, signature, docstring, start_line, end_line, content FROM nodes WHERE file_id = ?`))
-	s.setStmt("getFileById", s.db.Prepare(`SELECT id, path, hash, mtime, language, is_test FROM files WHERE id = ?`))
-	s.setStmt("getNodeById", s.db.Prepare(`SELECT id, file_id, type, name, language, qualified_name, signature, docstring, start_line, end_line, content FROM nodes WHERE id = ?`))
-	s.setStmt("findNodeByName", s.db.Prepare(`
+	s.setStmt("getNodesForFile", mustPrepare(s.db, `SELECT id, file_id, type, name, language, qualified_name, signature, docstring, start_line, end_line, content FROM nodes WHERE file_id = ?`))
+	s.setStmt("getFileById", mustPrepare(s.db, `SELECT id, path, hash, mtime, language, is_test FROM files WHERE id = ?`))
+	s.setStmt("getNodeById", mustPrepare(s.db, `SELECT id, file_id, type, name, language, qualified_name, signature, docstring, start_line, end_line, content FROM nodes WHERE id = ?`))
+	s.setStmt("findNodeByName", mustPrepare(s.db, `
 		SELECT id, file_id, type, name, language, qualified_name, signature, docstring, start_line, end_line, content
 		FROM nodes
 		WHERE qualified_name = ? OR name = ?
 		ORDER BY (qualified_name = ?) DESC
 		LIMIT 1
 	`))
-	s.setStmt("findNodeByTypeAndName", s.db.Prepare(`
+	s.setStmt("findNodeByTypeAndName", mustPrepare(s.db, `
 		SELECT id, file_id, type, name, language, qualified_name, signature, docstring, start_line, end_line, content
 		FROM nodes
 		WHERE type = ? AND (name = ? OR qualified_name = ?)
 		LIMIT 1
 	`))
-	s.setStmt("listFilesByLang", s.db.Prepare(`SELECT id, path, hash, mtime, language, is_test FROM files WHERE language = ? ORDER BY path`))
-	s.setStmt("listFilesAll", s.db.Prepare(`SELECT id, path, hash, mtime, language, is_test FROM files ORDER BY path`))
-	s.setStmt("listFilesAllLimit", s.db.Prepare(`SELECT id, path, hash, mtime, language, is_test FROM files ORDER BY path LIMIT ?`))
-	s.setStmt("searchFts", s.db.Prepare(`
+	s.setStmt("listFilesByLang", mustPrepare(s.db, `SELECT id, path, hash, mtime, language, is_test FROM files WHERE language = ? ORDER BY path`))
+	s.setStmt("listFilesAll", mustPrepare(s.db, `SELECT id, path, hash, mtime, language, is_test FROM files ORDER BY path`))
+	s.setStmt("listFilesAllLimit", mustPrepare(s.db, `SELECT id, path, hash, mtime, language, is_test FROM files ORDER BY path LIMIT ?`))
+	s.setStmt("searchFts", mustPrepare(s.db, `
 		SELECT n.id, n.name, n.type, f.path, n.start_line, n.end_line
 		FROM nodes_fts fts
 		JOIN nodes n ON fts.rowid = n.id
@@ -111,7 +113,7 @@ func (s *Storage) prepareStatements() {
 		ORDER BY rank
 		LIMIT ?
 	`))
-	s.setStmt("findDeadSymbols", s.db.Prepare(`
+	s.setStmt("findDeadSymbols", mustPrepare(s.db, `
 		SELECT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
 		FROM nodes n
 		JOIN files f ON n.file_id = f.id
@@ -119,7 +121,7 @@ func (s *Storage) prepareStatements() {
 		  AND NOT EXISTS (SELECT 1 FROM edges WHERE target_id = n.id)
 		LIMIT ?
 	`))
-	s.setStmt("findOrphanFiles", s.db.Prepare(`
+	s.setStmt("findOrphanFiles", mustPrepare(s.db, `
 		SELECT f.path, f.language
 		FROM files f
 		WHERE NOT EXISTS (
@@ -128,7 +130,7 @@ func (s *Storage) prepareStatements() {
 			WHERE n.file_id = f.id
 		)
 	`))
-	s.setStmt("findFileCycles", s.db.Prepare(`
+	s.setStmt("findFileCycles", mustPrepare(s.db, `
 		SELECT DISTINCT fs.path AS source_path, ft.path AS target_path
 		FROM edges e1
 		JOIN nodes n1 ON e1.source_id = n1.id AND n1.type = 'module'
@@ -136,7 +138,7 @@ func (s *Storage) prepareStatements() {
 		JOIN files fs ON n1.file_id = fs.id
 		JOIN files ft ON n2.file_id = ft.id
 	`))
-	s.setStmt("getRelatedOutgoing", s.db.Prepare(`
+	s.setStmt("getRelatedOutgoing", mustPrepare(s.db, `
 		SELECT f.path, n.name, n.type, e.relation, 'outgoing'
 		FROM edges e
 		JOIN nodes n ON e.target_id = n.id
@@ -144,7 +146,7 @@ func (s *Storage) prepareStatements() {
 		WHERE e.source_id IN (SELECT id FROM nodes WHERE file_id = ?)
 		LIMIT ?
 	`))
-	s.setStmt("getRelatedIncoming", s.db.Prepare(`
+	s.setStmt("getRelatedIncoming", mustPrepare(s.db, `
 		SELECT f.path, n.name, n.type, e.relation, 'incoming'
 		FROM edges e
 		JOIN nodes n ON e.source_id = n.id
@@ -152,7 +154,7 @@ func (s *Storage) prepareStatements() {
 		WHERE e.target_id IN (SELECT id FROM nodes WHERE file_id = ?)
 		LIMIT ?
 	`))
-	s.setStmt("getNeighborCallers", s.db.Prepare(`
+	s.setStmt("getNeighborCallers", mustPrepare(s.db, `
 		SELECT DISTINCT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
 		FROM edges e
 		JOIN nodes n ON e.source_id = n.id
@@ -161,7 +163,7 @@ func (s *Storage) prepareStatements() {
 		ORDER BY n.start_line
 		LIMIT ?
 	`))
-	s.setStmt("getNeighborCallees", s.db.Prepare(`
+	s.setStmt("getNeighborCallees", mustPrepare(s.db, `
 		SELECT DISTINCT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
 		FROM edges e
 		JOIN nodes n ON e.target_id = n.id
@@ -170,19 +172,28 @@ func (s *Storage) prepareStatements() {
 		ORDER BY n.start_line
 		LIMIT ?
 	`))
-	s.setStmt("findNodesByName", s.db.Prepare(`
+	s.setStmt("findNodesByName", mustPrepare(s.db, `
 		SELECT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
 		FROM nodes n
 		JOIN files f ON n.file_id = f.id
 		WHERE n.name = ? OR n.qualified_name = ?
 	`))
-	s.setStmt("getNodesByName", s.db.Prepare(`
+	s.setStmt("getNodesByName", mustPrepare(s.db, `
 		SELECT id, file_id, type, name, language, path, qualified_name, signature, docstring, start_line, end_line, content
 		FROM nodes
 		WHERE name = ? OR qualified_name = ?
 	`))
-	s.setStmt("setMetadata", s.db.Prepare(`INSERT INTO metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`))
-	s.setStmt("getMetadata", s.db.Prepare(`SELECT value FROM metadata WHERE key = ?`))
+	s.setStmt("setMetadata", mustPrepare(s.db, `INSERT INTO metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`))
+	s.setStmt("getMetadata", mustPrepare(s.db, `SELECT value FROM metadata WHERE key = ?`))
+	_ = err
+}
+
+func mustPrepare(db *sql.DB, query string) *sql.Stmt {
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		panic(fmt.Sprintf("failed to prepare statement: %v", err))
+	}
+	return stmt
 }
 
 func (s *Storage) initSchema() error {
@@ -930,33 +941,19 @@ func (s *Storage) GetAllEdges(pathFilter string, limit int) []EdgeRecord {
 	defer s.mu.Unlock()
 
 	query := `
-		SELECT s.name as source_name, t.name as target_name, e.relation
+		SELECT e.source_id, e.target_id, e.relation, e.metadata, e.confidence
 		FROM edges e
-		JOIN nodes s ON e.source_id = s.id
-		JOIN nodes t ON e.target_id = t.id
-		JOIN files fs ON s.file_id = fs.id
-		JOIN files ft ON t.file_id = ft.id
 	`
-	var rows *sql.Rows
-	var err error
-
+	args := []any{}
 	if pathFilter != "" {
-		query += ` WHERE fs.path LIKE ? OR ft.path LIKE ?`
-		if limit > 0 {
-			query += ` LIMIT ?`
-			rows, err = s.db.Query(query, "%"+pathFilter+"%", "%"+pathFilter+"%", limit)
-		} else {
-			rows, err = s.db.Query(query, "%"+pathFilter+"%", "%"+pathFilter+"%")
-		}
-	} else {
-		if limit > 0 {
-			query += ` LIMIT ?`
-			rows, err = s.db.Query(query, limit)
-		} else {
-			rows, err = s.db.Query(query)
-		}
+		query += ` WHERE e.source_id IN (SELECT id FROM nodes WHERE file_id IN (SELECT id FROM files WHERE path LIKE ?))`
+		args = append(args, "%"+pathFilter+"%")
 	}
-
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil
 	}
@@ -965,7 +962,7 @@ func (s *Storage) GetAllEdges(pathFilter string, limit int) []EdgeRecord {
 	var results []EdgeRecord
 	for rows.Next() {
 		var e EdgeRecord
-		if err := rows.Scan(&e.SourceName, &e.TargetName, &e.Relation); err == nil {
+		if err := rows.Scan(&e.SourceID, &e.TargetID, &e.Relation, &e.Metadata, &e.Confidence); err == nil {
 			results = append(results, e)
 		}
 	}

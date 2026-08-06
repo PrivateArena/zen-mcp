@@ -3,6 +3,7 @@ package codegraph
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -13,35 +14,32 @@ import (
 
 // Scanner walks a workspace and determines which files need indexing.
 type Scanner struct {
-	storage *Storage
-	rootDir string
-	parser  *Parser
-	mu      sync.Mutex
+	storage        *Storage
+	rootDir        string
+	parser         *Parser
+	mu             sync.Mutex
+	ignorePatterns []string
+	aliasMap       map[string]string
+	aliasBaseUrl   string
 }
 
 // NewScanner creates a new scanner.
 func NewScanner(storage *Storage, rootDir string) *Scanner {
 	s := &Scanner{
-		storage: storage,
-		rootDir: rootDir,
-		parser:  GetParser(),
+		storage:      storage,
+		rootDir:      rootDir,
+		parser:       GetParser(),
+		aliasMap:     make(map[string]string),
+		aliasBaseUrl: ".",
 	}
+	s.loadIgnorePatterns()
+	s.LoadTsConfigAliases()
 	return s
 }
 
 // SetParser sets the parser reference for extension detection.
 func (s *Scanner) SetParser(p *Parser) {
 	s.parser = p
-}
-
-// FileRecord matches the TS FileRecord shape.
-type FileRecord struct {
-	ID       int64
-	Path     string
-	Hash     string
-	MTime    int64
-	Language string
-	IsTest   bool
 }
 
 const maxFileSize = 500 * 1024
@@ -186,4 +184,178 @@ func isTest(relPath string, lang string) bool {
 	default:
 		return strings.Contains(lower, ".test.") || strings.Contains(lower, ".spec.") || strings.HasPrefix(filepath.Base(lower), "test_")
 	}
+}
+
+func (s *Scanner) loadIgnorePatterns() {
+	s.ignorePatterns = []string{".git", "node_modules", ".venv", "venv", "dist", ".zen", ".zenmcp", "__pycache__", ".next", ".nuxt", ".output"}
+
+	// Global ignore
+	globalIgnorePath := filepath.Join(s.rootDir, ".codegraphignore")
+	if data, err := os.ReadFile(globalIgnorePath); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" && !strings.HasPrefix(line, "#") {
+				s.ignorePatterns = append(s.ignorePatterns, line)
+			}
+		}
+	}
+
+	// Project-local .gitignore
+	gitignorePath := filepath.Join(s.rootDir, ".gitignore")
+	if data, err := os.ReadFile(gitignorePath); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" && !strings.HasPrefix(line, "#") {
+				s.ignorePatterns = append(s.ignorePatterns, line)
+			}
+		}
+	}
+}
+
+// IsIgnored checks if a path should be ignored.
+func (s *Scanner) IsIgnored(relPath string, isDirectory bool) bool {
+	if relPath == "" {
+		return false
+	}
+	normalizedPath := relPath
+	if isDirectory && !strings.HasSuffix(normalizedPath, "/") {
+		normalizedPath += "/"
+	}
+	for _, pattern := range s.ignorePatterns {
+		if matched := matchIgnorePattern(normalizedPath, pattern); matched {
+			return true
+		}
+	}
+	return false
+}
+
+func matchIgnorePattern(path, pattern string) bool {
+	if pattern == "" {
+		return false
+	}
+	if strings.HasPrefix(pattern, "/") {
+		return strings.HasPrefix(path, pattern[1:])
+	}
+	parts := strings.Split(path, "/")
+	for i := range parts {
+		if parts[i] == pattern || strings.HasSuffix(parts[i], pattern) {
+			return true
+		}
+	}
+	return strings.Contains(path, pattern)
+}
+
+// IsSupported checks if a file extension is supported.
+func (s *Scanner) IsSupported(file string) bool {
+	lower := strings.ToLower(file)
+	excluded := []string{".min.js", ".min.ts", ".min.mjs", ".bundle.js", ".bundle.ts", ".bundle.mjs"}
+	for _, sfx := range excluded {
+		if strings.HasSuffix(lower, sfx) {
+			return false
+		}
+	}
+	ext := filepath.Ext(file)
+	if ext == "" {
+		return false
+	}
+	if s.parser != nil {
+		supported := s.parser.GetSupportedExtensions()
+		for _, e := range supported {
+			if strings.EqualFold(e, ext) {
+				return true
+			}
+		}
+	}
+	return isSupported(file)
+}
+
+// GetFileDetails returns content, hash, mtime, language, and is_test for a file.
+func (s *Scanner) GetFileDetails(relPath string) (content string, hash string, mtime int64, language string, isTest bool, err error) {
+	fullPath := filepath.Join(s.rootDir, relPath)
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		return "", "", 0, "", false, err
+	}
+	if info.Size() > maxFileSize {
+		return "", "", 0, "", false, fmt.Errorf("file exceeds 500KB limit")
+	}
+
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", "", 0, "", false, err
+	}
+	content = string(data)
+	hashBytes := sha256.Sum256(data)
+	hash = hex.EncodeToString(hashBytes[:])
+	mtime = info.ModTime().UnixMilli()
+	language = s.detectLanguage(relPath)
+	isTest = s.isTest(relPath, language)
+	return content, hash, mtime, language, isTest, nil
+}
+
+func (s *Scanner) detectLanguage(relPath string) string {
+	if s.parser != nil {
+		ext := "." + strings.ToLower(filepath.Ext(relPath))
+		lang := s.parser.GetExtensionLanguage(ext)
+		if lang != "" {
+			return lang
+		}
+	}
+	return detectLanguage(relPath)
+}
+
+func (s *Scanner) isTest(relPath string, language string) bool {
+	return isTest(relPath, language)
+}
+
+// LoadTsConfigAliases loads tsconfig.json path aliases.
+func (s *Scanner) LoadTsConfigAliases() {
+	s.aliasMap = make(map[string]string)
+	s.aliasBaseUrl = "."
+	tsconfigPath := filepath.Join(s.rootDir, "tsconfig.json")
+	if _, err := os.Stat(tsconfigPath); err != nil {
+		return
+	}
+	data, err := os.ReadFile(tsconfigPath)
+	if err != nil {
+		return
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return
+	}
+	compilerOptions, ok := raw["compilerOptions"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	paths, ok := compilerOptions["paths"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	baseUrl, _ := compilerOptions["baseUrl"].(string)
+	s.aliasBaseUrl = baseUrl
+	if s.aliasBaseUrl == "" {
+		s.aliasBaseUrl = "."
+	}
+	for alias, targetVal := range paths {
+		targets, ok := targetVal.([]interface{})
+		if !ok || len(targets) == 0 {
+			continue
+		}
+		target, _ := targets[0].(string)
+		prefix := strings.TrimSuffix(alias, "*")
+		resolved := strings.TrimSuffix(target, "*")
+		s.aliasMap[prefix] = resolved
+	}
+}
+
+// ResolveAlias resolves a TS import specifier against tsconfig path aliases.
+func (s *Scanner) ResolveAlias(specifier string) string {
+	for prefix, target := range s.aliasMap {
+		if strings.HasPrefix(specifier, prefix) {
+			rest := strings.TrimPrefix(specifier, prefix)
+			return filepath.Join(s.aliasBaseUrl, target+rest)
+		}
+	}
+	return ""
 }

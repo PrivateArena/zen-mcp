@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -78,8 +80,8 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 		}
 
 		// Clear old nodes/edges for this file
-		_ = cg.storage.DeleteNodesForFile(fileID)
-		_ = cg.storage.DeleteEdgesForFile(fileID)
+		cg.storage.DeleteNodesForFile(fileID)
+		cg.storage.DeleteEdgesForFile(fileID)
 
 		// Parse and insert nodes
 		nodes, relations, err := cg.parser.Parse(filepath.Ext(fr.Path), content)
@@ -95,6 +97,8 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 			nodes[i].Content = truncate(nodes[i].Content, 1000)
 		}
 
+		// Build node records for batch insert
+		nodeRecords := make([]NodeRecord, 0, len(nodes))
 		nodeIDMap := make(map[string]int64)
 		for i := range nodes {
 			nr := NodeRecord{
@@ -109,33 +113,204 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 				EndLine:       nodes[i].EndLine,
 				Content:       nodes[i].Content,
 			}
-			id, err := cg.storage.InsertNode(nr)
+			nodeRecords = append(nodeRecords, nr)
+		}
+
+		// Batch insert nodes
+		if len(nodeRecords) > 0 {
+			_, err := cg.storage.InsertNodes(nodeRecords)
 			if err != nil {
 				continue
 			}
-			nodeIDMap[nodes[i].Name+":"+derefString(nodes[i].QualifiedName)] = id
 		}
 
+		// Re-fetch IDs for relation building
+		insertedNodes, _ := cg.storage.GetNodesForFile(fileID)
+		for i := range insertedNodes {
+			nodeIDMap[insertedNodes[i].Name+":"+insertedNodes[i].QualifiedName] = insertedNodes[i].ID
+		}
+
+		// Collect relations for batch insert
+		var edgeRecords []EdgeRecord
 		for _, rel := range relations {
 			sourceKey := rel.SourceName
 			targetKey := rel.TargetName
-			// Try to find matching nodes
 			sourceNodes, _ := cg.storage.FindNodesByName(sourceKey)
 			targetNodes, _ := cg.storage.FindNodesByName(targetKey)
 
 			if len(sourceNodes) > 0 && len(targetNodes) > 0 {
 				for _, sn := range sourceNodes {
 					for _, tn := range targetNodes {
-						_ = cg.storage.InsertEdge(sn.ID, tn.ID, rel.Relation, rel.Metadata)
+						edgeRecords = append(edgeRecords, EdgeRecord{
+							SourceID:   sn.ID,
+							TargetID:   tn.ID,
+							Relation:   rel.Relation,
+							Metadata:   rel.Metadata,
+							Confidence: "EXTRACTED",
+						})
 					}
 				}
 			}
 		}
 
+		if len(edgeRecords) > 0 {
+			cg.storage.InsertEdges(edgeRecords)
+		}
+
 		result.Indexed++
 	}
 
+	// Phase 1.5: Parse manifest files
+	cg.parseManifests()
+
+	// Phase 2: Batch generate embeddings for all gathered nodes
+	// (Skipped in Go - embeddings are handled by TS daemon)
+
 	return result, nil
+}
+
+// parseManifests parses manifest files (package.json, go.mod, Cargo.toml, pom.xml)
+func (cg *CodeGraph) parseManifests() ([]NodeRecord, []ParsedRelation) {
+	var nodes []NodeRecord
+	var relations []ParsedRelation
+
+	manifestFiles := []string{"package.json", "go.mod", "Cargo.toml", "pom.xml"}
+	for _, manifest := range manifestFiles {
+		fullPath := filepath.Join(cg.rootDir, manifest)
+		if _, err := os.Stat(fullPath); err != nil {
+			continue
+		}
+
+		data, err := os.ReadFile(fullPath)
+		if err != nil {
+			continue
+		}
+
+		fileNodes, fileRelations := parseManifestContent(string(data), manifest)
+		for _, n := range fileNodes {
+			nodes = append(nodes, NodeRecord{
+				Type:          n.Type,
+				Name:          n.Name,
+				Language:      "manifest",
+				QualifiedName: derefString(n.QualifiedName),
+				Signature:     n.Signature,
+				StartLine:     n.StartLine,
+				EndLine:       n.EndLine,
+				Content:       n.Content,
+			})
+		}
+		relations = append(relations, fileRelations...)
+	}
+
+	return nodes, relations
+}
+
+func parseManifestContent(content, filename string) ([]ParsedNode, []ParsedRelation) {
+	var nodes []ParsedNode
+	var relations []ParsedRelation
+
+	switch filename {
+	case "package.json":
+		var pkg struct {
+			Dependencies    map[string]string `json:"dependencies"`
+			DevDependencies map[string]string `json:"devDependencies"`
+		}
+		if err := json.Unmarshal([]byte(content), &pkg); err != nil {
+			return nodes, relations
+		}
+		deps := pkg.Dependencies
+		if deps == nil {
+			deps = make(map[string]string)
+		}
+		for k, v := range pkg.DevDependencies {
+			deps[k] = v
+		}
+		for pkgName, ver := range deps {
+			qn := "npm:" + pkgName
+			nodes = append(nodes, ParsedNode{
+				Type:          "EXTERNAL",
+				Name:          pkgName,
+				QualifiedName: &qn,
+				Signature:     pkgName + "@" + ver,
+				StartLine:     1,
+				EndLine:       1,
+				Content:       "npm package: " + pkgName,
+			})
+		}
+
+	case "go.mod":
+		re := regexp.MustCompile(`^\s*require\s+(.+?)(?:\s+(.+?))?$`)
+		for _, line := range strings.Split(content, "\n") {
+			matches := re.FindStringSubmatch(line)
+			if len(matches) > 1 {
+				mod := strings.TrimSpace(matches[1])
+				mod = strings.TrimSuffix(mod, "/v2")
+				mod = strings.TrimSuffix(mod, "/v3")
+				qn := "go:" + mod
+				nodes = append(nodes, ParsedNode{
+					Type:          "EXTERNAL",
+					Name:          mod,
+					QualifiedName: &qn,
+					Signature:     mod + " " + strings.TrimSpace(matches[2]),
+					StartLine:     1,
+					EndLine:       1,
+					Content:       "go module: " + mod,
+				})
+			}
+		}
+
+	case "Cargo.toml":
+		depSection := content
+		if idx := strings.Index(content, "[dependencies]"); idx >= 0 {
+			depSection = content[idx:]
+		}
+		if idx := strings.Index(depSection, "["); idx > 0 {
+			depSection = depSection[:idx]
+		}
+		for _, line := range strings.Split(depSection, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "[") {
+				continue
+			}
+			parts := strings.Fields(line)
+			if len(parts) >= 1 {
+				crate := strings.TrimSpace(parts[0])
+				qn := "cargo:" + crate
+				nodes = append(nodes, ParsedNode{
+					Type:          "EXTERNAL",
+					Name:          crate,
+					QualifiedName: &qn,
+					Signature:     "crate: " + crate,
+					StartLine:     1,
+					EndLine:       1,
+					Content:       "cargo crate: " + crate,
+				})
+			}
+		}
+
+	case "pom.xml":
+		re := regexp.MustCompile(`<dependency>[\s\S]*?<groupId>(.+?)</groupId>[\s\S]*?<artifactId>(.+?)</artifactId>`)
+		matches := re.FindAllStringSubmatch(content, -1)
+		for _, m := range matches {
+			if len(m) >= 3 {
+				groupId := strings.TrimSpace(m[1])
+				artifactId := strings.TrimSpace(m[2])
+				gav := groupId + ":" + artifactId
+				qn := "maven:" + gav
+				nodes = append(nodes, ParsedNode{
+					Type:          "EXTERNAL",
+					Name:          artifactId,
+					QualifiedName: &qn,
+					Signature:     gav,
+					StartLine:     1,
+					EndLine:       1,
+					Content:       "maven artifact: " + gav,
+				})
+			}
+		}
+	}
+
+	return nodes, relations
 }
 
 // Search searches for symbols by name with optional limit.
@@ -165,22 +340,189 @@ func (cg *CodeGraph) Search(query string, limit int) ([]NodeSearchResult, error)
 	return results, nil
 }
 
-// GetRepositoryMap returns a JSON string of the repository map.
-func (cg *CodeGraph) GetRepositoryMap(limit int) (string, error) {
-	files, err := cg.storage.ListFiles("", limit)
+// GetRepositoryMap returns a JSON string of the repository map matching TS format.
+func (cg *CodeGraph) GetRepositoryMap(maxItems int) (string, error) {
+	if maxItems <= 0 {
+		maxItems = 10
+	}
+
+	// Languages
+	langRows, err := cg.storage.db.Query(`SELECT language, COUNT(*) as count FROM files GROUP BY language ORDER BY count DESC`)
 	if err != nil {
 		return "", err
 	}
+	defer langRows.Close()
 
-	type repoFile struct {
-		Path     string `json:"path"`
-		Language string `json:"language"`
+	languages := make(map[string]int)
+	for langRows.Next() {
+		var lang string
+		var count int
+		if err := langRows.Scan(&lang, &count); err == nil {
+			languages[lang] = count
+		}
 	}
-	repoFiles := make([]repoFile, 0, len(files))
-	for _, fr := range files {
-		repoFiles = append(repoFiles, repoFile{Path: fr.Path, Language: fr.Language})
+
+	// Top Directories
+	pathRows, err := cg.storage.db.Query(`SELECT path FROM files`)
+	if err != nil {
+		return "", err
 	}
-	data, err := json.Marshal(repoFiles)
+	defer pathRows.Close()
+
+	var allPaths []string
+	for pathRows.Next() {
+		var p string
+		if err := pathRows.Scan(&p); err == nil {
+			allPaths = append(allPaths, p)
+		}
+	}
+
+	dirCounts := make(map[string]int)
+	for _, p := range allPaths {
+		parts := strings.Split(p, "/")
+		if len(parts) > 1 {
+			dir := strings.Join(parts[:len(parts)-1], "/") + "/"
+			dirCounts[dir]++
+		}
+	}
+
+	type dirEntry struct {
+		dir   string
+		count int
+	}
+	var dirs []dirEntry
+	for d, c := range dirCounts {
+		dirs = append(dirs, dirEntry{d, c})
+	}
+	sort.Slice(dirs, func(i, j int) bool {
+		return dirs[i].count > dirs[j].count
+	})
+	majorPaths := make([]string, 0, maxItems)
+	for i := 0; i < len(dirs) && i < maxItems; i++ {
+		majorPaths = append(majorPaths, dirs[i].dir)
+	}
+
+	// Hotspots
+	hotspotRows, err := cg.storage.db.Query(`
+		SELECT s.qualified_name, s.name, s.type, f.path, s.start_line,
+			   (COALESCE(ein.cnt, 0) + COALESCE(eout.cnt, 0)) as degree
+		FROM nodes s
+		JOIN files f ON s.file_id = f.id
+		LEFT JOIN (SELECT target_id, COUNT(*) as cnt FROM edges GROUP BY target_id) ein ON s.id = ein.target_id
+		LEFT JOIN (SELECT source_id, COUNT(*) as cnt FROM edges GROUP BY source_id) eout ON s.id = eout.source_id
+		WHERE s.type != 'module'
+		ORDER BY degree DESC
+		LIMIT ?
+	`, maxItems)
+	if err != nil {
+		return "", err
+	}
+	defer hotspotRows.Close()
+
+	type hotspot struct {
+		Name   string `json:"name"`
+		Type   string `json:"type"`
+		File   string `json:"file"`
+		Degree int    `json:"degree"`
+	}
+	var hotspots []hotspot
+	for hotspotRows.Next() {
+		var h hotspot
+		if err := hotspotRows.Scan(&h.Name, &h.Type, &h.File, &h.Degree); err == nil {
+			hotspots = append(hotspots, h)
+		}
+	}
+
+	// File Hotspots
+	fileHotspotRows, err := cg.storage.db.Query(`
+		SELECT f.path, COUNT(e.id) as incoming_references
+		FROM files f
+		JOIN nodes n ON n.file_id = f.id
+		JOIN edges e ON e.target_id = n.id
+		GROUP BY f.id
+		ORDER BY incoming_references DESC
+		LIMIT ?
+	`, maxItems)
+	if err != nil {
+		return "", err
+	}
+	defer fileHotspotRows.Close()
+
+	type fileHotspot struct {
+		Path       string `json:"path"`
+		References int    `json:"references"`
+	}
+	var hotspotFiles []fileHotspot
+	for fileHotspotRows.Next() {
+		var fh fileHotspot
+		if err := fileHotspotRows.Scan(&fh.Path, &fh.References); err == nil {
+			hotspotFiles = append(hotspotFiles, fh)
+		}
+	}
+
+	// Heavy Files
+	heavyRows, err := cg.storage.db.Query(`
+		SELECT f.path, MAX(n.end_line) as line_count
+		FROM files f
+		JOIN nodes n ON n.file_id = f.id
+		GROUP BY f.id
+		ORDER BY line_count DESC
+		LIMIT ?
+	`, maxItems)
+	if err != nil {
+		return "", err
+	}
+	defer heavyRows.Close()
+
+	type heavyFile struct {
+		Path  string `json:"path"`
+		Lines int    `json:"lines"`
+	}
+	var heavyFiles []heavyFile
+	for heavyRows.Next() {
+		var hf heavyFile
+		if err := heavyRows.Scan(&hf.Path, &hf.Lines); err == nil {
+			heavyFiles = append(heavyFiles, hf)
+		}
+	}
+
+	// Complex Files
+	complexRows, err := cg.storage.db.Query(`
+		SELECT f.path, COUNT(n.id) as symbol_count
+		FROM files f
+		JOIN nodes n ON n.file_id = f.id
+		WHERE n.type != 'module'
+		GROUP BY f.id
+		ORDER BY symbol_count DESC
+		LIMIT ?
+	`, maxItems)
+	if err != nil {
+		return "", err
+	}
+	defer complexRows.Close()
+
+	type complexFile struct {
+		Path    string `json:"path"`
+		Symbols int    `json:"symbols"`
+	}
+	var complexFiles []complexFile
+	for complexRows.Next() {
+		var cf complexFile
+		if err := complexRows.Scan(&cf.Path, &cf.Symbols); err == nil {
+			complexFiles = append(complexFiles, cf)
+		}
+	}
+
+	result := map[string]interface{}{
+		"languages":    languages,
+		"majorPaths":   majorPaths,
+		"hotspots":     hotspots,
+		"hotspotFiles": hotspotFiles,
+		"heavyFiles":   heavyFiles,
+		"complexFiles": complexFiles,
+	}
+
+	data, err := json.Marshal(result)
 	if err != nil {
 		return "", err
 	}
@@ -254,8 +596,11 @@ func (cg *CodeGraph) Skeletons() (string, error) {
 	var sb stringsBuilder
 	sb.WriteString("# Code Graph Skeletons\n\n")
 
-	for range files {
-		nodes, _ := cg.storage.FindNodesByName("")
+	for _, fr := range files {
+		nodes, err := cg.storage.GetNodesForFile(fr.ID)
+		if err != nil {
+			continue
+		}
 		for _, n := range nodes {
 			sb.WriteString(fmt.Sprintf("## %s %s at %s:%d\n", n.Type, n.Name, n.QualifiedName, n.StartLine))
 			if n.Signature != "" {
@@ -424,55 +769,10 @@ func (cg *CodeGraph) FindDeadCode(query string, limit int) (*DeadcodeResult, err
 		filePaths = append(filePaths, f.Path)
 	}
 
-	// Find nodes with no incoming edges (simplified deadcode detection)
-	// Exclude 'module' and 'EXTERNAL' types — they are structural, not dead code.
-	rows, err := cg.storage.db.Query(`
-		SELECT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
-		FROM nodes n
-		JOIN files f ON n.file_id = f.id
-		WHERE n.type NOT IN ('module', 'EXTERNAL')
-		  AND NOT EXISTS (
-			  SELECT 1 FROM edges WHERE target_id = n.id
-		  )
-		LIMIT ?
-	`, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+	// Find dead symbols using storage method
+	result := cg.storage.FindDeadCode(query, limit)
 
-	var symbols []NodeRecord
-	for rows.Next() {
-		var n NodeRecord
-		if err := rows.Scan(&n.ID, &n.FileID, &n.Type, &n.Name, &n.Language, &n.Path, &n.QualifiedName, &n.Signature, &n.Docstring, &n.StartLine, &n.EndLine, &n.Content); err == nil {
-			symbols = append(symbols, n)
-		}
-	}
-
-	// Find orphan files (files with no nodes)
-	rows, err = cg.storage.db.Query(`
-		SELECT f.id, f.path, f.hash, f.mtime, f.language, f.is_test
-		FROM files f
-		LEFT JOIN nodes n ON f.id = n.file_id
-		WHERE n.id IS NULL
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var orphanFiles []FileRecord
-	for rows.Next() {
-		var fr FileRecord
-		if err := rows.Scan(&fr.ID, &fr.Path, &fr.Hash, &fr.MTime, &fr.Language, &fr.IsTest); err == nil {
-			orphanFiles = append(orphanFiles, fr)
-		}
-	}
-
-	return &DeadcodeResult{
-		Symbols:     symbols,
-		OrphanFiles: orphanFiles,
-	}, nil
+	return result, nil
 }
 
 // Deadcode returns potentially unused symbols.
