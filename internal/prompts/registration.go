@@ -36,11 +36,7 @@ func RegisterPrompts(srv *mcpserver.MCPServer, workspace string) {
 			for k, v := range req.Params.Arguments {
 				safeArgs[k] = v
 			}
-			freshP, _ := GetPromptDefinition(p.Name)
-			if freshP.Name == "" {
-				freshP = p
-			}
-			text, err := ResolvePrompt(freshP, safeArgs, workspace)
+			text, err := ResolvePrompt(p, safeArgs, workspace)
 			if err != nil {
 				log.Printf("[DEBUG] prompts/get name=%s args=%v status=ERROR err=%v", p.Name, safeArgs, err)
 				return nil, err

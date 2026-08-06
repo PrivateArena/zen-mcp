@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -338,3 +340,514 @@ func TestReadBodyOnce(t *testing.T) {
 		t.Fatalf("initialize after body rewind failed: %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestServerCacheReusesSameInstance(t *testing.T) {
+	cache := &serverCache{servers: make(map[string]*mcpserver.MCPServer)}
+	factory := func(id string) *mcpserver.MCPServer {
+		return mcpserver.NewMCPServer("test", "1.0")
+	}
+
+	a := cache.getOrCreate("ws-a", factory, nil)
+	b := cache.getOrCreate("ws-a", factory, nil)
+	if a != b {
+		t.Fatal("expected same server instance for same logicalID")
+	}
+}
+
+func TestServerCacheCreatesSeparateInstances(t *testing.T) {
+	cache := &serverCache{servers: make(map[string]*mcpserver.MCPServer)}
+	factory := func(id string) *mcpserver.MCPServer {
+		return mcpserver.NewMCPServer("test-"+id, "1.0")
+	}
+
+	a := cache.getOrCreate("ws-a", factory, nil)
+	b := cache.getOrCreate("ws-b", factory, nil)
+	if a == b {
+		t.Fatal("expected different server instances for different logicalIDs")
+	}
+}
+
+func TestServerCacheConcurrentAccess(t *testing.T) {
+	cache := &serverCache{servers: make(map[string]*mcpserver.MCPServer)}
+	factory := func(id string) *mcpserver.MCPServer {
+		return mcpserver.NewMCPServer("test-concurrent", "1.0")
+	}
+
+	const goroutines = 50
+	const repeats = 20
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < repeats; j++ {
+				srv := cache.getOrCreate("shared-ws", factory, nil)
+				if srv == nil {
+					t.Error("nil server returned")
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestServerCacheFactoryCalledOncePerLogicalID(t *testing.T) {
+	cache := &serverCache{servers: make(map[string]*mcpserver.MCPServer)}
+	count := 0
+	factory := func(id string) *mcpserver.MCPServer {
+		count++
+		return mcpserver.NewMCPServer("test-count-"+id, "1.0")
+	}
+
+	for i := 0; i < 5; i++ {
+		cache.getOrCreate("ws-once", factory, nil)
+	}
+	if count != 1 {
+		t.Fatalf("factory called %d times, expected 1", count)
+	}
+}
+
+func TestServerCacheConcurrentDifferentIDs(t *testing.T) {
+	cache := &serverCache{servers: make(map[string]*mcpserver.MCPServer)}
+	factory := func(id string) *mcpserver.MCPServer {
+		return mcpserver.NewMCPServer("test-"+id, "1.0")
+	}
+
+	const goroutines = 20
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		id := fmt.Sprintf("ws-%d", i)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 10; j++ {
+				cache.getOrCreate(id, factory, nil)
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestPostMCPUsesCachedServer(t *testing.T) {
+	_, mux := testDeps()
+
+	req := func(body []byte) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, r)
+		return rec
+	}
+
+	first := req(mcpInitializeRequest(1))
+	if first.Code != http.StatusOK {
+		t.Fatalf("initialize failed: %d: %s", first.Code, first.Body.String())
+	}
+
+	second := req([]byte(`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`))
+	if second.Code != http.StatusOK {
+		t.Fatalf("tools/list failed: %d: %s", second.Code, second.Body.String())
+	}
+
+	var msg map[string]any
+	_ = json.Unmarshal(second.Body.Bytes(), &msg)
+	result, ok := msg["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("no result: %v", msg)
+	}
+	tools, ok := result["tools"].([]any)
+	if !ok || len(tools) == 0 {
+		t.Fatalf("no tools listed: %v", result)
+	}
+}
+
+func TestPostMCPLongRunningRequestDoesNotBlockNewRequests(t *testing.T) {
+	longCallStarted := make(chan struct{})
+	longCallFinished := make(chan struct{})
+
+	deps := RouteDeps{
+		CreateMCPServer: func(id string) *mcpserver.MCPServer {
+			s := mcpserver.NewMCPServer("zen-tools", "2.4.1",
+				mcpserver.WithToolCapabilities(true),
+				mcpserver.WithResourceCapabilities(false, false),
+				mcpserver.WithPromptCapabilities(false),
+			)
+			s.AddTool(mcp.NewTool("long-call", mcp.WithString("duration")), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				durationMs := 1500
+				if args, ok := req.GetArguments()["duration"].(float64); ok {
+					durationMs = int(args)
+				}
+				select {
+				case longCallStarted <- struct{}{}:
+				default:
+				}
+				time.Sleep(time.Duration(durationMs) * time.Millisecond)
+				select {
+				case longCallFinished <- struct{}{}:
+				default:
+				}
+				return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "long-done"}}}, nil
+			})
+			s.AddTool(mcp.NewTool("quick", mcp.WithString("text")), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				text, _ := req.GetArguments()["text"].(string)
+				if text == "" {
+					text = "ok"
+				}
+				return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: text}}}, nil
+			})
+			return s
+		},
+		Registry:              toolregistry.Create(),
+		Shared:                shared.NewStore(),
+		PendingCollaborations: map[string]func(string){},
+		StartTime:             time.Now(),
+		Tag:                   "test",
+	}
+	mux := http.NewServeMux()
+	SetupRoutes(mux, deps)
+
+	doReq := func(body []byte) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, r)
+		return rec
+	}
+
+	initRec := doReq(mcpInitializeRequest(1))
+	if initRec.Code != http.StatusOK {
+		t.Fatalf("initialize failed: %d: %s", initRec.Code, initRec.Body.String())
+	}
+
+	longBody := []byte(`{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"long-call","arguments":{"duration":1500}}}`)
+	go func() {
+		doReq(longBody)
+	}()
+
+	select {
+	case <-longCallStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("long-call did not start")
+	}
+
+	type subTest struct {
+		name string
+		run  func(t *testing.T)
+	}
+	tests := []subTest{
+		{
+			name: "another client initialize",
+			run: func(t *testing.T) {
+				rec := doReq(mcpInitializeRequest(2))
+				if rec.Code != http.StatusOK {
+					t.Errorf("second initialize failed: %d: %s", rec.Code, rec.Body.String())
+				}
+			},
+		},
+		{
+			name: "another client tools/list",
+			run: func(t *testing.T) {
+				rec := doReq([]byte(`{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}`))
+				if rec.Code != http.StatusOK {
+					t.Errorf("tools/list during long call failed: %d: %s", rec.Code, rec.Body.String())
+				}
+			},
+		},
+		{
+			name: "another client tool call",
+			run: func(t *testing.T) {
+				rec := doReq([]byte(`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"quick","arguments":{"text":"hello"}}}`))
+				if rec.Code != http.StatusOK {
+					t.Errorf("quick tool call during long call failed: %d: %s", rec.Code, rec.Body.String())
+				}
+			},
+		},
+		{
+			name: "ping during long call",
+			run: func(t *testing.T) {
+				rec := doReq([]byte(`{"jsonrpc":"2.0","id":5,"method":"ping","params":{}}`))
+				if rec.Code != http.StatusOK {
+					t.Errorf("ping during long call failed: %d: %s", rec.Code, rec.Body.String())
+				}
+			},
+		},
+	}
+
+	var clientWg sync.WaitGroup
+	clientWg.Add(len(tests))
+	errors := make(chan struct{}, len(tests))
+
+	for _, tc := range tests {
+		tc := tc
+		go func() {
+			defer clientWg.Done()
+			finished := make(chan struct{})
+			go func() {
+				defer close(finished)
+				tc.run(t)
+			}()
+
+			select {
+			case <-finished:
+			case <-time.After(3 * time.Second):
+				t.Errorf("%s: request timed out", tc.name)
+				select {
+				case errors <- struct{}{}:
+				default:
+				}
+			}
+		}()
+	}
+
+	clientWg.Wait()
+	close(errors)
+
+	if len(errors) > 0 {
+		t.Fatalf("%d concurrent requests failed during long call", len(errors))
+	}
+
+	select {
+	case <-longCallFinished:
+	case <-time.After(3 * time.Second):
+		t.Fatal("long-call did not finish")
+	}
+}
+
+func TestPostMCPExtremeConcurrency200Clients(t *testing.T) {
+	factoryCalls := 0
+	deps := RouteDeps{
+		CreateMCPServer: func(id string) *mcpserver.MCPServer {
+			factoryCalls++
+			s := mcpserver.NewMCPServer("zen-tools", "2.4.1",
+				mcpserver.WithToolCapabilities(true),
+				mcpserver.WithResourceCapabilities(false, false),
+				mcpserver.WithPromptCapabilities(false),
+			)
+			s.AddTool(mcp.NewTool("quick", mcp.WithString("text")), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "ok"}}}, nil
+			})
+			return s
+		},
+		Registry:              toolregistry.Create(),
+		Shared:                shared.NewStore(),
+		PendingCollaborations: map[string]func(string){},
+		StartTime:             time.Now(),
+		Tag:                   "test",
+	}
+	mux := http.NewServeMux()
+	SetupRoutes(mux, deps)
+
+	const clients = 200
+	var wg sync.WaitGroup
+	wg.Add(clients)
+	errors := make(chan struct{}, clients)
+
+	doReq := func(id int) {
+		defer wg.Done()
+		var body []byte
+		switch id % 3 {
+		case 0:
+			body = []byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{}}}`, id))
+		case 1:
+			body = []byte(`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`)
+		case 2:
+			body = []byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":"quick","arguments":{"text":"hello"}}}`, id))
+		}
+		r := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, r)
+		if rec.Code != http.StatusOK {
+			select {
+			case errors <- struct{}{}:
+			default:
+			}
+		}
+	}
+
+	for i := 0; i < clients; i++ {
+		go doReq(i)
+	}
+	wg.Wait()
+	close(errors)
+
+	if len(errors) > 0 {
+		t.Fatalf("%d requests failed under 200-client concurrency", len(errors))
+	}
+	if factoryCalls != 1 {
+		t.Fatalf("factory called %d times, expected 1 under 200-client concurrency", factoryCalls)
+	}
+}
+
+func TestPostMCP500ConcurrentToolsList(t *testing.T) {
+	factoryCalls := 0
+	deps := RouteDeps{
+		CreateMCPServer: func(id string) *mcpserver.MCPServer {
+			factoryCalls++
+			return mcpserver.NewMCPServer("zen-tools", "2.4.1",
+				mcpserver.WithToolCapabilities(true),
+				mcpserver.WithResourceCapabilities(false, false),
+				mcpserver.WithPromptCapabilities(false),
+			)
+		},
+		Registry:              toolregistry.Create(),
+		Shared:                shared.NewStore(),
+		PendingCollaborations: map[string]func(string){},
+		StartTime:             time.Now(),
+		Tag:                   "test",
+	}
+	mux := http.NewServeMux()
+	SetupRoutes(mux, deps)
+
+	const clients = 500
+	var wg sync.WaitGroup
+	wg.Add(clients)
+	errors := make(chan struct{}, clients)
+
+	for i := 0; i < clients; i++ {
+		go func(id int) {
+			defer wg.Done()
+			body := []byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"tools/list","params":{}}`, id))
+			r := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(body))
+			r.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, r)
+			if rec.Code != http.StatusOK {
+				select {
+				case errors <- struct{}{}:
+				default:
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errors)
+
+	if len(errors) > 0 {
+		t.Fatalf("%d requests failed under 500-client tools/list concurrency", len(errors))
+	}
+	if factoryCalls != 1 {
+		t.Fatalf("factory called %d times, expected 1 under 500-client concurrency", factoryCalls)
+	}
+}
+
+func TestPostMCPLongCallWith200ConcurrentClients(t *testing.T) {
+	longCallStarted := make(chan struct{})
+	longCallFinished := make(chan struct{})
+
+	factoryCalls := 0
+	deps := RouteDeps{
+		CreateMCPServer: func(id string) *mcpserver.MCPServer {
+			factoryCalls++
+			s := mcpserver.NewMCPServer("zen-tools", "2.4.1",
+				mcpserver.WithToolCapabilities(true),
+				mcpserver.WithResourceCapabilities(false, false),
+				mcpserver.WithPromptCapabilities(false),
+			)
+			s.AddTool(mcp.NewTool("long-call", mcp.WithString("duration")), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				durationMs := 5000
+				if args, ok := req.GetArguments()["duration"].(float64); ok {
+					durationMs = int(args)
+				}
+				select {
+				case longCallStarted <- struct{}{}:
+				default:
+				}
+				time.Sleep(time.Duration(durationMs) * time.Millisecond)
+				select {
+				case longCallFinished <- struct{}{}:
+				default:
+				}
+				return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "long-done"}}}, nil
+			})
+			s.AddTool(mcp.NewTool("quick", mcp.WithString("text")), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				text, _ := req.GetArguments()["text"].(string)
+				if text == "" {
+					text = "ok"
+				}
+				return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: text}}}, nil
+			})
+			return s
+		},
+		Registry:              toolregistry.Create(),
+		Shared:                shared.NewStore(),
+		PendingCollaborations: map[string]func(string){},
+		StartTime:             time.Now(),
+		Tag:                   "test",
+	}
+	mux := http.NewServeMux()
+	SetupRoutes(mux, deps)
+
+	doReq := func(body []byte) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, r)
+		return rec
+	}
+
+	initRec := doReq(mcpInitializeRequest(1))
+	if initRec.Code != http.StatusOK {
+		t.Fatalf("initialize failed: %d: %s", initRec.Code, initRec.Body.String())
+	}
+
+	longBody := []byte(`{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"long-call","arguments":{"duration":5000}}}`)
+	go func() {
+		doReq(longBody)
+	}()
+
+	select {
+	case <-longCallStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("long-call did not start")
+	}
+
+	const clients = 200
+	var wg sync.WaitGroup
+	wg.Add(clients)
+	errors := make(chan struct{}, clients)
+
+	for i := 0; i < clients; i++ {
+		go func(id int) {
+			defer wg.Done()
+			var body []byte
+			switch id % 4 {
+			case 0:
+				body = []byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{}}}`, id))
+			case 1:
+				body = []byte(`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`)
+			case 2:
+				body = []byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":"quick","arguments":{"text":"hello"}}}`, id))
+			case 3:
+				body = []byte(`{"jsonrpc":"2.0","id":5,"method":"ping","params":{}}`)
+			}
+			r := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(body))
+			r.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, r)
+			if rec.Code != http.StatusOK {
+				select {
+				case errors <- struct{}{}:
+				default:
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errors)
+
+	if len(errors) > 0 {
+		t.Fatalf("%d requests failed during 5s long-call with 200 concurrent clients", len(errors))
+	}
+
+	select {
+	case <-longCallFinished:
+	case <-time.After(6 * time.Second):
+		t.Fatal("long-call did not finish")
+	}
+
+	if factoryCalls != 1 {
+		t.Fatalf("factory called %d times, expected 1", factoryCalls)
+	}
+}
+

@@ -11,12 +11,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
 	"github.com/jang/zen-mcp/internal/shared"
 	"github.com/jang/zen-mcp/internal/toolregistry"
+	"github.com/jang/zen-mcp/internal/toolstate"
 )
 
 const (
@@ -31,6 +33,33 @@ type RouteDeps struct {
 	PendingCollaborations map[string]func(string)
 	StartTime             time.Time
 	Tag                   string
+	ServerCache           *serverCache
+}
+
+type serverCache struct {
+	mu      sync.RWMutex
+	servers map[string]*mcpserver.MCPServer
+}
+
+func (c *serverCache) getOrCreate(logicalID string, factory func(string) *mcpserver.MCPServer, registry *toolregistry.ToolRegistry) *mcpserver.MCPServer {
+	c.mu.RLock()
+	if srv, ok := c.servers[logicalID]; ok {
+		c.mu.RUnlock()
+		return srv
+	}
+	c.mu.RUnlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if srv, ok := c.servers[logicalID]; ok {
+		return srv
+	}
+	srv := factory(logicalID)
+	if registry != nil {
+		toolstate.ApplyToolStates("", registry)
+	}
+	c.servers[logicalID] = srv
+	return srv
 }
 
 // SetupRoutes registers the 12 stateless HTTP routes (Go 1.22 ServeMux).
@@ -40,6 +69,11 @@ func SetupRoutes(mux *http.ServeMux, deps RouteDeps) {
 	}
 	if deps.StartTime.IsZero() {
 		deps.StartTime = time.Now()
+	}
+	if deps.ServerCache == nil {
+		deps.ServerCache = &serverCache{
+			servers: make(map[string]*mcpserver.MCPServer),
+		}
 	}
 
 	mux.HandleFunc("GET /sse", func(w http.ResponseWriter, _ *http.Request) {
@@ -136,26 +170,13 @@ func SetupRoutes(mux *http.ServeMux, deps RouteDeps) {
 }
 
 func (d RouteDeps) postMCP(w http.ResponseWriter, r *http.Request) {
-	reqStart := time.Now()
 	workspace := autoDetectWorkspace(r, d.Shared)
 	logicalID := workspace
 	if logicalID == "" {
 		logicalID = "default"
 	}
-	method := jsonBodyMethod(r)
 
-	srv, err := AcquireServer(d.Tag, logicalID, d.CreateMCPServer, d.Registry)
-	if err != nil {
-		writeMCPInternalError(w, err)
-		return
-	}
-	defer func() {
-		ReleaseServer(d.Tag, logicalID, srv)
-		total := time.Since(reqStart)
-		if total > 30*time.Second {
-			log.Printf("[MCP] SLOW request completed after %dms (method %s, workspace %s)", total.Milliseconds(), method, logicalID)
-		}
-	}()
+	srv := d.ServerCache.getOrCreate(logicalID, d.CreateMCPServer, d.Registry)
 
 	handler := mcpserver.NewStreamableHTTPServer(srv, mcpserver.WithStateLess(true))
 	ctx := WithPoolServer(r.Context(), srv)

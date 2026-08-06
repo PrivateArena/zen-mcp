@@ -3,7 +3,6 @@ package prompts
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -143,28 +142,38 @@ func LoadSkills() ([]Skill, error) {
 
 // LoadSkillContent loads the content of a skill by ID with reference resolution.
 func LoadSkillContent(skillID string) (string, error) {
-	skill, err := skills.FindSkillByID(skillID)
+	skillsDir := skills.SkillsDir()
+	
+	var path string
+	var title string
+	
+	candidate := filepath.Join(skillsDir, skillID+".md")
+	if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+		path = candidate
+	} else {
+		candidate = filepath.Join(skillsDir, skillID, "SKILL.md")
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			path = candidate
+		}
+	}
+	
+	if path == "" {
+		return "", fmt.Errorf("skill %q not found", skillID)
+	}
+
+	content, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
 
-	content, err := os.ReadFile(skill.Path)
-	if err != nil {
-		return "", err
+	fm := skills.ParseFrontmatter(string(content))
+	title = fm["name"]
+	if title == "" {
+		title = skillID
 	}
 
-	skillDir := filepath.Dir(skill.Path)
+	skillDir := filepath.Dir(path)
 	resolved := skills.ResolveSkillContent(string(content), skillDir, skillID)
 
-	return fmt.Sprintf("# Skill: %s\n\n%s", skill.Title, resolved.Enriched), nil
-}
-
-func execGit(args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = mcpcfg.ProjectRoot
-	out, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return string(out), nil
+	return fmt.Sprintf("# Skill: %s\n\n%s", title, resolved.Enriched), nil
 }
