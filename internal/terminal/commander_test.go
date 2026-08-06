@@ -11,16 +11,16 @@ var errBoom = errors.New("boom")
 
 func TestRegisterAndDispatch(t *testing.T) {
 	var called []string
-	Register("echo", func(args []string, sessionID string) error {
-		called = append(called, sessionID, strings.Join(args, " "))
+	Register("echo", func(args []string) error {
+		called = append(called, strings.Join(args, " "))
 		return nil
 	})
 	defer unregister("echo")
 
 	var prompt bytes.Buffer
-	runCommander(strings.NewReader("echo hello world\n"), "s1", &prompt)
+	runCommander(strings.NewReader("echo hello world\n"), &prompt)
 
-	if len(called) != 2 || called[0] != "s1" || called[1] != "hello world" {
+	if len(called) != 1 || called[0] != "hello world" {
 		t.Errorf("handler not called correctly: %v", called)
 	}
 	if prompt.String() != "> > " {
@@ -35,7 +35,7 @@ func TestUnknownCommand(t *testing.T) {
 	defer func() { LogOut = old }()
 
 	var prompt bytes.Buffer
-	runCommander(strings.NewReader("nosuchcmd arg\n"), "s1", &prompt)
+	runCommander(strings.NewReader("nosuchcmd arg\n"), &prompt)
 
 	if !strings.Contains(logOut.String(), "Unknown command: nosuchcmd") {
 		t.Errorf("missing unknown-command log: %q", logOut.String())
@@ -43,7 +43,7 @@ func TestUnknownCommand(t *testing.T) {
 }
 
 func TestHandlerErrorLogged(t *testing.T) {
-	Register("fail", func(_ []string, _ string) error {
+	Register("fail", func(_ []string) error {
 		return errBoom
 	})
 	defer unregister("fail")
@@ -54,7 +54,7 @@ func TestHandlerErrorLogged(t *testing.T) {
 	defer func() { LogOut = old }()
 
 	var prompt bytes.Buffer
-	runCommander(strings.NewReader("fail\n"), "s1", &prompt)
+	runCommander(strings.NewReader("fail\n"), &prompt)
 
 	if !strings.Contains(logOut.String(), "ERROR: boom") {
 		t.Errorf("missing error log: %q", logOut.String())
@@ -66,7 +66,7 @@ func TestHandlerErrorLogged(t *testing.T) {
 
 func TestExitStops(t *testing.T) {
 	var prompt bytes.Buffer
-	runCommander(strings.NewReader("hello\nhelp\nexit\n"), "s1", &prompt)
+	runCommander(strings.NewReader("hello\nhelp\nexit\n"), &prompt)
 	// No panic means exit/quit handled; help is registered.
 	if !strings.Contains(prompt.String(), "> ") {
 		t.Error("prompt expected")
@@ -80,7 +80,7 @@ func TestHelpRegistered(t *testing.T) {
 	defer func() { LogOut = old }()
 
 	var prompt bytes.Buffer
-	runCommander(strings.NewReader("help\n"), "s1", &prompt)
+	runCommander(strings.NewReader("help\n"), &prompt)
 	if !strings.Contains(logOut.String(), "Available commands:") {
 		t.Errorf("help output missing: %q", logOut.String())
 	}
@@ -88,14 +88,14 @@ func TestHelpRegistered(t *testing.T) {
 
 func TestBlankLinesSkipped(t *testing.T) {
 	var called bool
-	Register("ping", func(_ []string, _ string) error {
+	Register("ping", func(_ []string) error {
 		called = true
 		return nil
 	})
 	defer unregister("ping")
 
 	var prompt bytes.Buffer
-	runCommander(strings.NewReader("\n  \nping\n"), "s1", &prompt)
+	runCommander(strings.NewReader("\n  \nping\n"), &prompt)
 	if !called {
 		t.Error("ping should have been dispatched after blank lines")
 	}

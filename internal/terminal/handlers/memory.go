@@ -11,32 +11,32 @@ import (
 )
 
 func init() {
-	terminal.Register("bl", func(args []string, sessionID string) error {
+	terminal.Register("bl", func(args []string) error {
 		res := terminal.ExecuteTool("memory", map[string]any{"action": "load"})
 		terminal.Logf("RESULT:\n%s", res)
 		return nil
 	})
 
-	terminal.Register("load", func(args []string, sessionID string) error {
+	terminal.Register("load", func(args []string) error {
 		res := terminal.ExecuteTool("memory", map[string]any{"action": "load"})
 		terminal.Logf("RESULT:\n%s", res)
 		return nil
 	})
 
-	terminal.Register("history", func(args []string, sessionID string) error {
+	terminal.Register("history", func(args []string) error {
 		res := terminal.ExecuteTool("memory", map[string]any{"action": "load"})
 		terminal.Logf("RESULT:\n%s", res)
 		return nil
 	})
 
-	terminal.Register("bs", func(args []string, sessionID string) error {
+	terminal.Register("bs", func(args []string) error {
 		q := strings.TrimSpace(strings.Join(args, " "))
 		if q == "" {
 			terminal.Logf("ERROR: Missing query")
 			return nil
 		}
 		terminal.Logf("BRAIN SEARCH: \"%s\"", q)
-		wRoot := terminal.Ws(sessionID)
+		wRoot := terminal.Ws()
 		dataDir := filepath.Join(wRoot, ".zenmcp")
 		dbPath := filepath.Join(dataDir, "context.db")
 		results := projectmemory.SearchIndexedMemory(dbPath, q, 10)
@@ -50,14 +50,14 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("history-search", func(args []string, sessionID string) error {
+	terminal.Register("history-search", func(args []string) error {
 		q := strings.TrimSpace(strings.Join(args, " "))
 		if q == "" {
 			terminal.Logf("ERROR: Missing query")
 			return nil
 		}
 		terminal.Logf("BRAIN SEARCH: \"%s\"", q)
-		wRoot := terminal.Ws(sessionID)
+		wRoot := terminal.Ws()
 		dataDir := filepath.Join(wRoot, ".zenmcp")
 		dbPath := filepath.Join(dataDir, "context.db")
 		results := projectmemory.SearchIndexedMemory(dbPath, q, 10)
@@ -71,14 +71,14 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("be", func(args []string, sessionID string) error {
+	terminal.Register("be", func(args []string) error {
 		q := strings.TrimSpace(strings.Join(args, " "))
 		if q == "" {
 			terminal.Logf("ERROR: Missing query. Usage: be <query>")
 			return nil
 		}
 		terminal.Logf("BRAIN EXTRACT: \"%s\"", q)
-		wRoot := terminal.Ws(sessionID)
+		wRoot := terminal.Ws()
 		timelinePath := filepath.Join(wRoot, ".zenmcp", "brain_timeline.jsonl")
 		if _, err := os.Stat(timelinePath); os.IsNotExist(err) {
 			terminal.Logf("ERROR: No brain_timeline.jsonl found in workspace")
@@ -136,14 +136,14 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("brain-extract", func(args []string, sessionID string) error {
+	terminal.Register("brain-extract", func(args []string) error {
 		q := strings.TrimSpace(strings.Join(args, " "))
 		if q == "" {
 			terminal.Logf("ERROR: Missing query. Usage: be <query>")
 			return nil
 		}
 		terminal.Logf("BRAIN EXTRACT: \"%s\"", q)
-		wRoot := terminal.Ws(sessionID)
+		wRoot := terminal.Ws()
 		timelinePath := filepath.Join(wRoot, ".zenmcp", "brain_timeline.jsonl")
 		if _, err := os.Stat(timelinePath); os.IsNotExist(err) {
 			terminal.Logf("ERROR: No brain_timeline.jsonl found in workspace")
@@ -201,47 +201,47 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("loadi", func(args []string, sessionID string) error {
-		wRoot := terminal.Ws(sessionID)
+	terminal.Register("loadi", func(args []string) error {
+		wRoot := terminal.Ws()
 		res := terminal.ExecuteTool("memory_isolate", map[string]any{"action": "load", "workspace": wRoot})
 		terminal.Logf("RESULT:\n%s", res)
 		return nil
 	})
 
-	terminal.Register("loads", func(args []string, sessionID string) error {
-		wRoot := terminal.Ws(sessionID)
+	terminal.Register("loads", func(args []string) error {
+		wRoot := terminal.Ws()
 		res := terminal.ExecuteTool("memory_shared", map[string]any{"action": "load", "workspace": wRoot})
 		terminal.Logf("RESULT:\n%s", res)
 		return nil
 	})
 
-	terminal.Register("savei", func(args []string, sessionID string) error {
+	terminal.Register("savei", func(args []string) error {
 		if len(args) == 0 {
 			terminal.Logf("ERROR: Missing title. Usage: savei <title> [notes...]")
 			return nil
 		}
 		title := args[0]
 		notes := strings.Join(args[1:], " ")
-		wRoot := terminal.Ws(sessionID)
+		wRoot := terminal.Ws()
 		res := terminal.ExecuteTool("memory_isolate", map[string]any{"action": "save", "workspace": wRoot, "session_title": title, "session_notes": notes})
 		terminal.Logf("RESULT:\n%s", res)
 		return nil
 	})
 
-	terminal.Register("saves", func(args []string, sessionID string) error {
+	terminal.Register("saves", func(args []string) error {
 		if len(args) == 0 {
 			terminal.Logf("ERROR: Missing title. Usage: saves <title> [notes...]")
 			return nil
 		}
 		title := args[0]
 		notes := strings.Join(args[1:], " ")
-		wRoot := terminal.Ws(sessionID)
+		wRoot := terminal.Ws()
 		res := terminal.ExecuteTool("memory_shared", map[string]any{"action": "save", "workspace": wRoot, "session_title": title, "session_notes": notes})
 		terminal.Logf("RESULT:\n%s", res)
 		return nil
 	})
 
-	terminal.Register("scope", func(args []string, sessionID string) error {
+	terminal.Register("scope", func(args []string) error {
 		name := ""
 		if len(args) > 0 {
 			name = args[0]
@@ -250,14 +250,14 @@ func init() {
 			terminal.Logf("ERROR: Missing scope name")
 			return nil
 		}
-		wRoot := terminal.Ws(sessionID)
+		wRoot := terminal.Ws()
 		res := terminal.ExecuteTool("memory", map[string]any{"action": "scope", "workspace": wRoot, "scope": name})
 		terminal.Logf("RESULT:\n%s", res)
 		return nil
 	})
 
-	terminal.Register("scopes", func(args []string, sessionID string) error {
-		wRoot := terminal.Ws(sessionID)
+	terminal.Register("scopes", func(args []string) error {
+		wRoot := terminal.Ws()
 		res := terminal.ExecuteTool("memory", map[string]any{"action": "scope", "workspace": wRoot})
 		terminal.Logf("RESULT:\n%s", res)
 		return nil

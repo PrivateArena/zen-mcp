@@ -40,9 +40,9 @@ var stopWords = map[string]bool{
 
 // CheckAndVirtualizeOutput ports checkAndVirtualizeOutput: when a tool's text
 // output exceeds 24KB, index it into virtual_store and return a compact JSON
-// handle for the context tool. workspaceRoot and sessionID are injected by the
-// caller (toolresponse) from the current shared state.
-func CheckAndVirtualizeOutput(toolName, text, workspaceRoot, sessionID string) string {
+// handle for the context tool. workspaceRoot is injected by the caller
+// (toolresponse) from the current shared state.
+func CheckAndVirtualizeOutput(toolName, text, workspaceRoot string) string {
 	byteLength := len([]byte(text))
 	if byteLength <= virtualizeLimit {
 		return text
@@ -61,13 +61,9 @@ func CheckAndVirtualizeOutput(toolName, text, workspaceRoot, sessionID string) s
 		}
 		workspaceRoot = cwd
 	}
-	if sessionID == "" {
-		sessionID = "default_session"
-	}
 
 	dbPath := filepath.Join(workspaceRoot, ".zenmcp", "context.db")
 	virtID := projectmemory.IndexVirtualContext(dbPath, projectmemory.VirtualContextData{
-		SessionToken: sessionID,
 		SourceTool:   toolName,
 		Intent:       "Virtualization for " + toolName,
 		Payload:      text,

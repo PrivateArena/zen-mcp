@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jang/zen-mcp/internal/mcpcfg"
+	"github.com/jang/zen-mcp/internal/shared"
 )
 
 type fakeWS string
@@ -35,7 +36,10 @@ func setupGatekeeper(t *testing.T) (*Gatekeeper, string) {
 	c.GatekeeperInteractiveTimeout = 0
 	c.GatekeeperRemember = true
 	c.GatekeeperRememberPaths = nil
-	return New(fakeWS(ws)), ws
+
+	store := shared.NewStore()
+	store.Set("workspace-root", ws)
+	return New(store), ws
 }
 
 func TestIsLikelyFilePath(t *testing.T) {

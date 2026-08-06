@@ -17,7 +17,7 @@ import (
 )
 
 // Handler is a terminal command handler.
-type Handler func(args []string, sessionID string) error
+type Handler func(args []string) error
 
 var (
 	mu       sync.RWMutex
@@ -39,7 +39,7 @@ func GetDeps() tools.Deps {
 var LogOut io.Writer = os.Stderr
 
 func init() {
-	Register("help", func(_ []string, _ string) error {
+	Register("help", func(_ []string) error {
 		Logf("Available commands: %s", strings.Join(List(), ", "))
 		return nil
 	})
@@ -87,10 +87,10 @@ func FallbackPort(cliPort, mcpPort int, cliAvailable bool) int {
 }
 
 // Ws returns the workspace root for the given session, falling back to cwd.
-func Ws(sessionID string) string {
+func Ws() string {
 	d := GetDeps()
-	if d.Sess != nil {
-		if w := d.Sess.GetSessionWorkspaceRoot(sessionID); w != "" {
+	if d.Store != nil {
+		if w, ok := d.Store.Get("workspace-root"); ok && w != "" {
 			return w
 		}
 	}
@@ -156,7 +156,7 @@ func parseCodegraphArgs(args []string) ParsedCodegraphArgs {
 }
 
 // runCommander is the line REPL loop. Split for testability.
-func runCommander(r io.Reader, sessionID string, prompt io.Writer) {
+func runCommander(r io.Reader, prompt io.Writer) {
 	Logf("Human-in-the-Loop Active. Available: type help for commands.")
 	scanner := bufio.NewScanner(r)
 	for {
@@ -180,15 +180,15 @@ func runCommander(r io.Reader, sessionID string, prompt io.Writer) {
 			continue
 		}
 		Logf("START: %s...", cmd)
-		if err := h(parts[1:], sessionID); err != nil {
+		if err := h(parts[1:]); err != nil {
 			Logf("ERROR: %v", err)
 		}
 	}
 }
 
 // StartTerminalCommander launches the REPL in a background goroutine.
-func StartTerminalCommander(sessionID string) {
-	go runCommander(os.Stdin, sessionID, os.Stdout)
+func StartTerminalCommander() {
+	go runCommander(os.Stdin, os.Stdout)
 }
 
 // MakeFakeRequest creates a fake mcp.CallToolRequest from args.
@@ -204,7 +204,7 @@ func MakeFakeRequest(args map[string]any) mcp.CallToolRequest {
 // ExecuteTool executes a tool by name with arguments and returns the result text.
 func ExecuteTool(name string, args map[string]any) string {
 	d := GetDeps()
-	if d.Store == nil && d.Sess == nil && d.Reg == nil {
+	if d.Store == nil && d.Reg == nil {
 		return "ERROR: terminal handlers not initialized with deps"
 	}
 

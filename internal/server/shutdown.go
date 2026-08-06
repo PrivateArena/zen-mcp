@@ -9,9 +9,8 @@ import (
 
 var shutdownOnce sync.Once
 
-// SetupShutdownHandlers installs SIGINT/SIGTERM handlers that save session
-// state before exit, matching shutdown.ts. Idempotent.
-func SetupShutdownHandlers(mode string, save func() error, logf func(format string, args ...any)) {
+// SetupShutdownHandlers installs SIGINT/SIGTERM handlers. Idempotent.
+func SetupShutdownHandlers(mode string, logf func(format string, args ...any)) {
 	shutdownOnce.Do(func() {
 		label := "SSE"
 		if mode == "stdio" {
@@ -23,9 +22,6 @@ func SetupShutdownHandlers(mode string, save func() error, logf func(format stri
 			<-ch
 			if logf != nil {
 				logf("\n🛑 Graceful Shutdown (%s)...", label)
-			}
-			if save != nil {
-				_ = save()
 			}
 			os.Exit(0)
 		}()

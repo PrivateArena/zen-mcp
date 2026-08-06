@@ -21,7 +21,7 @@ func runCommand(command string, args []string, cwd string) (ok bool, stdout, std
 }
 
 func init() {
-	terminal.Register("accept", func(args []string, sessionID string) error {
+	terminal.Register("accept", func(args []string) error {
 		d := terminal.GetDeps()
 		if d.Gatekeeper == nil {
 			return fmt.Errorf("gatekeeper not initialized")
@@ -50,7 +50,7 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("yes", func(args []string, sessionID string) error {
+	terminal.Register("yes", func(args []string) error {
 		d := terminal.GetDeps()
 		if d.Gatekeeper == nil {
 			return fmt.Errorf("gatekeeper not initialized")
@@ -68,7 +68,7 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("y", func(args []string, sessionID string) error {
+	terminal.Register("y", func(args []string) error {
 		d := terminal.GetDeps()
 		if d.Gatekeeper == nil {
 			return fmt.Errorf("gatekeeper not initialized")
@@ -86,7 +86,7 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("reject", func(args []string, sessionID string) error {
+	terminal.Register("reject", func(args []string) error {
 		d := terminal.GetDeps()
 		if d.Gatekeeper == nil {
 			return fmt.Errorf("gatekeeper not initialized")
@@ -134,7 +134,7 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("no", func(args []string, sessionID string) error {
+	terminal.Register("no", func(args []string) error {
 		d := terminal.GetDeps()
 		if d.Gatekeeper == nil {
 			return fmt.Errorf("gatekeeper not initialized")
@@ -158,7 +158,7 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("n", func(args []string, sessionID string) error {
+	terminal.Register("n", func(args []string) error {
 		d := terminal.GetDeps()
 		if d.Gatekeeper == nil {
 			return fmt.Errorf("gatekeeper not initialized")
@@ -182,7 +182,7 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("pending", func(args []string, sessionID string) error {
+	terminal.Register("pending", func(args []string) error {
 		d := terminal.GetDeps()
 		if d.Gatekeeper == nil {
 			return fmt.Errorf("gatekeeper not initialized")

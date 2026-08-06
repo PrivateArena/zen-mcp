@@ -7,11 +7,11 @@ import (
 )
 
 func init() {
-	terminal.Register("sl", func(args []string, sessionID string) error {
+	terminal.Register("sl", func(args []string) error {
 		fmt.Println(terminal.ExecuteTool("skill", map[string]any{"action": "list"}))
 		return nil
 	})
-	terminal.Register("sg", func(args []string, sessionID string) error {
+	terminal.Register("sg", func(args []string) error {
 		if len(args) == 0 {
 			return fmt.Errorf("usage: sg <id>")
 		}

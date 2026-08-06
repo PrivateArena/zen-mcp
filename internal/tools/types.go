@@ -2,7 +2,6 @@ package tools
 
 import (
 	"github.com/jang/zen-mcp/internal/gatekeeper"
-	"github.com/jang/zen-mcp/internal/session"
 	"github.com/jang/zen-mcp/internal/shared"
 	"github.com/jang/zen-mcp/internal/toolregistry"
 )
@@ -11,7 +10,6 @@ import (
 // injected from cmd/zen; the tools package never constructs singletons.
 type Deps struct {
 	Store                *shared.Store
-	Sess                 *session.Manager
 	Reg                  *toolregistry.ToolRegistry
 	Gatekeeper           *gatekeeper.Gatekeeper
 	PendingCollaborations map[string]func(string)

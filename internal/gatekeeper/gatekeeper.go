@@ -12,18 +12,13 @@ import (
 
 	"github.com/jang/zen-mcp/internal/logfilter"
 	"github.com/jang/zen-mcp/internal/mcpcfg"
+	"github.com/jang/zen-mcp/internal/shared"
 )
 
 var systemRootsRegex = regexp.MustCompile(`(?i)^/(?:home|media|mnt|usr|etc|var|root|bin|sbin|lib|lib64|opt|srv|sys|proc|dev|boot|tmp|Users|Windows|Program Files|ProgramData|Program Files \(x86\))`)
 var driveLetterRegex = regexp.MustCompile(`^[a-zA-Z]:[\\/]`)
 var extensionRegex = regexp.MustCompile(`\.[a-zA-Z0-9]+$`)
 var commandTokenRegex = regexp.MustCompile("[\x60\\s|&;<>()'\"]+")
-
-// WorkspaceResolver exposes session.GetActiveWorkspaceRoot. session.Manager
-// implements it; the interface keeps gatekeeper decoupled and unit-testable.
-type WorkspaceResolver interface {
-	GetActiveWorkspaceRoot() string
-}
 
 type Decision struct {
 	Confirmed  bool
@@ -46,7 +41,7 @@ type pendingConfirmation struct {
 
 type Gatekeeper struct {
 	mu                 sync.RWMutex
-	ws                 WorkspaceResolver
+	store              *shared.Store
 	cwd                string
 	pending            map[string]*pendingConfirmation
 	pendingOrder       []string
@@ -55,16 +50,29 @@ type Gatekeeper struct {
 	lastLoadedPath     string
 }
 
-func New(ws WorkspaceResolver) *Gatekeeper {
+func New(store *shared.Store) *Gatekeeper {
 	cwd, _ := os.Getwd()
 	return &Gatekeeper{
-		ws:          ws,
-		cwd:         cwd,
-		pending:     map[string]*pendingConfirmation{},
-		nextID:      1,
-		cachedAllowedPaths: nil,
-		lastLoadedPath:     "",
+		store:              store,
+		cwd:                 cwd,
+		pending:             map[string]*pendingConfirmation{},
+		nextID:              1,
+		cachedAllowedPaths:  nil,
+		lastLoadedPath:      "",
 	}
+}
+
+func (g *Gatekeeper) GetActiveWorkspaceRoot() string {
+	if g.store != nil {
+		if ws, ok := g.store.Get("workspace-root"); ok && ws != "" {
+			return ws
+		}
+	}
+	if env := os.Getenv("MCP_WORKSPACE_ROOT"); env != "" {
+		return env
+	}
+	cwd, _ := os.Getwd()
+	return cwd
 }
 
 func IsLikelyFilePath(token string) bool {
@@ -89,8 +97,17 @@ func (g *Gatekeeper) resolvePath(input string) string {
 
 func (g *Gatekeeper) getAllowedPathsFilePath() string {
 	var activeWorkspace string
-	if g.ws != nil {
-		activeWorkspace = g.ws.GetActiveWorkspaceRoot()
+	if g.store != nil {
+		if ws, ok := g.store.Get("workspace-root"); ok && ws != "" {
+			activeWorkspace = ws
+		}
+	}
+	if activeWorkspace == "" {
+		activeWorkspace = os.Getenv("MCP_WORKSPACE_ROOT")
+	}
+	if activeWorkspace == "" {
+		cwd, _ := os.Getwd()
+		activeWorkspace = cwd
 	}
 	if activeWorkspace != "" {
 		return filepath.Join(activeWorkspace, ".zenmcp", "allowed-paths.json")
@@ -394,9 +411,7 @@ func (g *Gatekeeper) ValidatePathSafety(path, operationName string) error {
 	isRestricted := g.IsPathUnderRestrictedRoot(normalizedPath)
 
 	var activeWorkspace string
-	if g.ws != nil {
-		activeWorkspace = g.ws.GetActiveWorkspaceRoot()
-	}
+	activeWorkspace = g.GetActiveWorkspaceRoot()
 
 	isOutside := false
 	workspaceMsg := ""
@@ -486,9 +501,7 @@ func (g *Gatekeeper) ValidateCommandPayload(command, execDir string) error {
 		isRestricted := g.IsPathUnderRestrictedRoot(absoluteTargetPath)
 
 		var activeWorkspace string
-		if g.ws != nil {
-			activeWorkspace = g.ws.GetActiveWorkspaceRoot()
-		}
+		activeWorkspace = g.GetActiveWorkspaceRoot()
 		isOutside := false
 		workspaceMsg := ""
 		if activeWorkspace != "" {

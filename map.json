@@ -1,11 +1,290 @@
 {
   "/media/jang/home/Deve/zen-mcp": {
-    "lastVisited": "2026-08-05T10:54:34.662Z"
+    "lastVisited": "2026-08-05T13:35:55.355Z"
   },
-  "/tmp/opencode/ws-go-test": {
-    "lastVisited": "2026-08-05T03:47:13.119Z"
+  "/media/jang/home/Deve/web-reader-mcp-master": {
+    "description": "ZenMCP is multi-purpose MCP server designed for ZenECO system.",
+    "lastVisited": "2026-08-05T02:13:08.988Z",
+    "scopes": {
+      "test-scope-xyz": [
+        "src/index.ts",
+        "src/tools/project-memory.ts"
+      ]
+    }
   },
-  "/tmp/opencode/ws-test": {
-    "lastVisited": "2026-08-05T03:46:58.027Z"
+  "/media/jang/home/Deve/zen-cap": {
+    "description": "ZenCap is ShareX but smaller, faster, better and run on Linux.",
+    "scopes": {
+      "editor": [
+        "pkg/annotation"
+      ],
+      "automation": [
+        "pkg/automation"
+      ],
+      "snippet": [
+        "pkg/snippet",
+        "pkg/prompt"
+      ],
+      "capture": [
+        "pkg/capture"
+      ],
+      "recorder": [
+        "pkg/recorder",
+        "pkg/av"
+      ],
+      "clipboard": [
+        "pkg/clipboard"
+      ],
+      "magnifier": [
+        "pkg/magnifier"
+      ]
+    },
+    "lastVisited": "2026-08-04T15:14:10.910Z"
+  },
+  "/media/jang/home/Deve/worldproxy/zendes/zen2": {
+    "description": "ZenProxy is uBO-like adblock proxy with higher capabilities like Tagging  (from Privoxy), header filtering, download accelerating, proxying, leeching and bandwidth controlling.",
+    "lastVisited": "2026-08-04T13:34:12.782Z",
+    "scopes": {
+      "proxypool": [
+        "zen-core/engine/iptree",
+        "zen-core/networkrules/proxypool",
+        "zen-core/webserver/proxypool/dashboard"
+      ],
+      "tester": [
+        "zen-core/networkrules/decision.go",
+        "zen-core/networkrules/pipeline.go",
+        "zen-core/webserver/tester.go",
+        "zen-core/webserver/tester"
+      ],
+      "interceptor": [
+        "zen-core/networkrules/intercept_rule.go",
+        "zen-core/webserver/interceptor.go",
+        "zen-core/webserver/interceptor"
+      ],
+      "gio": [
+        "internal/gio"
+      ],
+      "tui": [
+        "internal/tui"
+      ],
+      "dns": [
+        "zen-core/engine/dns_client"
+      ],
+      "networkrules": [
+        "zen-core/networkrules"
+      ],
+      "htmlfilter": [
+        "zen-core/rewrite/html/htmlfilter"
+      ],
+      "cosmetic": [
+        "zen-core/cosmetic"
+      ],
+      "dpi": [
+        "zen-core/engine/dpi"
+      ],
+      "proxy": [
+        "zen-core/proxy"
+      ],
+      "mimic": [
+        "zen-core/engine/mimic"
+      ],
+      "trie": [
+        "zen-core/engine/pathtree",
+        "zen-core/engine/ruletree"
+      ]
+    }
+  },
+  "/media/jang/home/Deve/zen-contact": {
+    "description": "ZenContact is Kontakt, Heptewerk... sample libraries extractor and reconstructor.",
+    "lastVisited": "2026-08-04T09:51:21.901Z",
+    "scopes": {
+      "reconstruct": [
+        "pkg/reconstruct",
+        "KONTAKT_RECONSTRUCT_SKILL.md",
+        "reconstruct_profiles"
+      ]
+    }
+  },
+  "/media/jang/home/Deve/zen-board": {
+    "description": "ZenBoard is whiteboard video generator.",
+    "lastVisited": "2026-08-04T09:14:29.328Z"
+  },
+  "/media/jang/home/Deve/zenmidi": {
+    "lastVisited": "2026-08-03T10:30:40.874Z",
+    "description": "ZenDAW is Digital Audio Workstation using sfizz-CGO as core with MIDIText as music programming language.",
+    "scopes": {
+      "daw": [
+        "pkg/daw",
+        "pkg/dsp",
+        "pkg/sfizz",
+        "cmd/daw/web/src"
+      ],
+      "clipeditor": [
+        "cmd/daw/web/src/features/ClipEditor",
+        "cmd/daw/web/src/features/PianoRoll",
+        "cmd/daw/web/src/store/daw/clipActions.ts"
+      ],
+      "miditexteditor": [
+        "cmd/daw/web/src/shared/components/MIDITextEditor",
+        "cmd/daw/web/src/shared/components/ContextMenu"
+      ],
+      "sfizz": [
+        "pkg/sfizz"
+      ],
+      "musictheory": [
+        "cmd/musictheory",
+        "zenmidi/pkg/abcconv",
+        "zenmidi/pkg/abcgen",
+        "zenmidi/pkg/analysis",
+        "zenmidi/pkg/miditext",
+        "zenmidi/pkg/remix",
+        "zenmidi/pkg/remix/rhythm",
+        "zenmidi/pkg/sfzscan",
+        "zenmidi/pkg/transcribe",
+        "zenmidi/pkg/transcript"
+      ],
+      "visualizer": [
+        "main.go",
+        "pkg/api",
+        "pkg/render",
+        "pkg/score",
+        "pkg/tui"
+      ]
+    }
+  },
+  "/media/jang/home/Deve/worldproxy/zendes/zen-webserver": {
+    "description": "ZenServer is multi-purpose webserver that hosts the ZenECO system (ZenNote whiteboard note taking app, ZenRAG) and can multiply itself.",
+    "lastVisited": "2026-08-03T09:12:20.886Z",
+    "scopes": {
+      "note": [
+        "www/web/themes/note",
+        "www/web/pages/note-article.html",
+        "www/web/pages/note-home.html",
+        "www/web/pages/note-whiteboard.html",
+        "www/note.yaml"
+      ],
+      "news": [
+        "www/news.yaml",
+        "www/web/themes/news"
+      ]
+    }
+  },
+  "/media/jang/home/Deve/worldproxy/zendes/zen2/build/bin/config/data/userscripts": {
+    "lastVisited": "2026-06-06T02:33:32.084Z"
+  },
+  "/media/jang/home/PortableApp/firefox/profile/chrome": {
+    "description": "Firefox Bridge and userChrome.js script to control Firefox using HTTP REST API, cannot be blocked.",
+    "lastVisited": "2026-08-01T14:33:07.467Z",
+    "scopes": {
+      "bridge": [
+        "JS/bridge",
+        "JS/bridge.uc.js",
+        "MCP_BRIDGE_API.md"
+      ],
+      "crawl": [
+        "JS/bridge/crawl"
+      ],
+      "ai": [
+        "JS/bridge/ai"
+      ]
+    }
+  },
+  "/media/jang/home/Deve/zen-leech3": {
+    "description": "ZenLeech is universal content leecher.",
+    "lastVisited": "2026-07-05T13:53:01.753Z"
+  },
+  "/media/jang/home/Deve/zen-tts": {
+    "description": "Universal TTS local server.",
+    "lastVisited": "2026-07-29T10:13:04.141Z"
+  },
+  "/media/jang/home/Deve/zen-bashrc": {
+    "description": "bashrc builder.",
+    "lastVisited": "2026-07-26T02:45:01.741Z"
+  },
+  "/media/jang/home/Deve/zen-clone": {
+    "description": "ZenClone is Frontend for rclone.",
+    "lastVisited": "2026-07-30T16:09:15.299Z"
+  },
+  "/media/jang/home/Deve/zen-separator": {
+    "description": "ZenSep is voice remover/seperator application.",
+    "lastVisited": "2026-07-05T14:07:26.699Z"
+  },
+  "/media/jang/home/Deve/zen-lights": {
+    "description": "ZenLights is collection of a lot of local AIs.",
+    "lastVisited": "2026-08-01T11:42:24.606Z",
+    "scopes": {
+      "paint": [
+        "assets",
+        "internal/paint",
+        "PAINT_SERVER_API.md"
+      ],
+      "ocr": [
+        "internal/ocr",
+        "OCR_SERVER_API.md"
+      ],
+      "translate": [
+        "internal/translate",
+        "TRANSLATE_SERVER_API.md"
+      ],
+      "summarize": [
+        "internal/summarize",
+        "SUMMARIZE_SERVER_API.md"
+      ]
+    }
+  },
+  "/media/jang/home/Deve/zen-man": {
+    "description": "ZenMan is simple but elegant file manager with tab group, workspace and search index engine.",
+    "lastVisited": "2026-07-17T16:43:09.888Z"
+  },
+  "/media/jang/home/Deve/zen-dsp": {
+    "description": "ZenDSP is simple DSP that is small and lean.",
+    "lastVisited": "2026-07-28T02:10:02.785Z"
+  },
+  "/media/jang/home/Deve/zen-duo": {
+    "description": "ZenDuo is DuoLingo clone for knowledge transfering to next generation kids.",
+    "lastVisited": "2026-07-05T14:15:30.826Z"
+  },
+  "/media/jang/home/Deve/zen-news": {
+    "description": "ZenNews is feed reader and summarizer.",
+    "lastVisited": "2026-08-01T07:55:49.548Z"
+  },
+  "/media/jang/home/Deve/zen-game": {
+    "lastVisited": "2026-07-05T22:34:43.003Z"
+  },
+  "/media/jang/home/Deve/zen-typo": {
+    "lastVisited": "2026-07-05T22:37:31.561Z"
+  },
+  "/media/jang/home/Deve/sfizz-zenmidi": {
+    "description": "SfizzCGO for ZenMIDI DAW.",
+    "lastVisited": "2026-07-30T03:01:35.576Z"
+  },
+  "/media/jang/home/Deve/zen-key": {
+    "description": "ZenKey is Zen-style auto-hide and use very little space on screen virtual keyboard for Linux.",
+    "lastVisited": "2026-07-14T03:39:30.115Z"
+  },
+  "/media/jang/home/Deve/zen-tm": {
+    "lastVisited": "2026-07-08T04:32:48.633Z"
+  },
+  "/media/jang/home/Deve/zen-cycle": {
+    "description": "ZenCycle is multi-account manager and switcher ultilising symlink.",
+    "lastVisited": "2026-07-30T13:59:11.372Z"
+  },
+  "/media/jang/home/PortableApp/betterbird/addons/thunderbird-mcp-main": {
+    "lastVisited": "2026-07-25T12:15:07.163Z"
+  },
+  "/media/jang/home/Deve/zen-dsp2": {
+    "lastVisited": "2026-07-28T06:27:12.935Z"
+  },
+  "/media/jang/home/Deve/zen-stt": {
+    "lastVisited": "2026-07-30T16:06:04.344Z"
+  },
+  "/media/jang/home/Deve/zen-dragon/": {
+    "lastVisited": "2026-08-01T11:57:18.187Z"
+  },
+  "/media/jang/home/Deve/zen-dragon": {
+    "lastVisited": "2026-08-01T13:01:15.716Z"
+  },
+  "/media/jang/home/Deve/zen-shortish": {
+    "lastVisited": "2026-08-01T14:17:08.542Z"
   }
 }

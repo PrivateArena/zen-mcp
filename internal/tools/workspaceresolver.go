@@ -1,9 +1,13 @@
-package session
+package tools
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/jang/zen-mcp/internal/mcpcfg"
 )
 
 type pathCandidate struct {
@@ -22,30 +26,47 @@ type PathResolver struct {
 	cwd        string
 }
 
-func NewPathResolver(aliasMap map[string]string) *PathResolver {
-	return newPathResolver(aliasMap, mustGetwd())
-}
-
-func newPathResolver(aliasMap map[string]string, cwd string) *PathResolver {
+func NewPathResolver(aliasMap map[string]string, cwd string) *PathResolver {
 	return &PathResolver{aliasMap: aliasMap, candidates: map[string]candidateEntry{}, cwd: cwd}
 }
 
-func (p *PathResolver) AddCandidate(path string, score int) {
-	prev, ok := p.candidates[path]
-	if !ok || score > prev.score {
-		p.candidates[path] = candidateEntry{score: score, exists: exists(path)}
+func LoadAliasMap() map[string]string {
+	data, err := os.ReadFile(mcpcfg.MapFilePath())
+	if err != nil {
+		return map[string]string{}
 	}
+	aliasMap := map[string]string{}
+	for _, fullPath := range orderedMapKeys(data) {
+		aliasMap[fullPath] = fullPath
+		base := filepath.Base(fullPath)
+		if base != "" {
+			aliasMap[base] = fullPath
+		}
+	}
+	return aliasMap
 }
 
-func (p *PathResolver) tokenize(input string) []string {
-	parts := strings.FieldsFunc(strings.ToLower(input), func(r rune) bool {
-		switch r {
-		case '-', '_', '/', '\\':
-			return true
+func orderedMapKeys(data []byte) []string {
+	dec := json.NewDecoder(strings.NewReader(string(data)))
+	tok, err := dec.Token()
+	if err != nil || tok != json.Delim('{') {
+		return nil
+	}
+	var keys []string
+	for dec.More() {
+		key, err := dec.Token()
+		if err != nil {
+			break
 		}
-		return false
-	})
-	return parts
+		if k, ok := key.(string); ok {
+			keys = append(keys, k)
+		}
+		var v any
+		if err := dec.Decode(&v); err != nil {
+			break
+		}
+	}
+	return keys
 }
 
 func (p *PathResolver) Resolve(input string) (string, bool) {
@@ -108,4 +129,20 @@ func (p *PathResolver) Resolve(input string) (string, bool) {
 		return resolvedFromCwd, true
 	}
 	return "", false
+}
+
+func (p *PathResolver) tokenize(input string) []string {
+	parts := strings.FieldsFunc(strings.ToLower(input), func(r rune) bool {
+		switch r {
+		case '-', '_', '/', '\\':
+			return true
+		}
+		return false
+	})
+	return parts
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

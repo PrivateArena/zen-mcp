@@ -5,20 +5,6 @@ import (
 	"testing"
 )
 
-type fakeProvider struct {
-	lastID string
-	roots  map[string]string
-}
-
-func (f fakeProvider) GetLastActiveSessionId() string { return f.lastID }
-
-func (f fakeProvider) GetSessionWorkspaceRoot(id string) string {
-	if f.roots == nil {
-		return ""
-	}
-	return f.roots[id]
-}
-
 func cwd(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
@@ -81,40 +67,23 @@ func TestResolveWorkspacePriority(t *testing.T) {
 		input       string
 		registration string
 		store       func() *Store
-		provider    WorkspaceProvider
 		env         string
 		want        string
 	}{
 		{
 			name:  "1-explicit-input-wins",
 			input: "/explicit",
-			provider: fakeProvider{lastID: "s1", roots: map[string]string{
-				"s1": "/session-ws",
-			}},
-			want: "/explicit",
+			want:  "/explicit",
 		},
 		{
 			name:         "2-registration-next",
 			input:        "",
 			registration: "/reg-ws",
-			provider:     fakeProvider{lastID: "s1", roots: map[string]string{"s1": "/session-ws"}},
 			want:         "/reg-ws",
 		},
 		{
-			name:  "3-active-session-workspace",
+			name:  "3-shared-workspace-root",
 			input: "",
-			provider: fakeProvider{lastID: "s1", roots: map[string]string{
-				"s1": "/session-ws",
-			}},
-			store: func() *Store { return NewStore() },
-			want:  "/session-ws",
-		},
-		{
-			name:  "4-shared-workspace-root",
-			input: "",
-			provider: fakeProvider{lastID: "s1", roots: map[string]string{
-				"s1": "", // session workspace missing
-			}},
 			store: func() *Store {
 				st := NewStore()
 				st.Set("workspace-root", "/shared-ws")
@@ -123,17 +92,15 @@ func TestResolveWorkspacePriority(t *testing.T) {
 			want: "/shared-ws",
 		},
 		{
-			name:     "5-env-workspace-root",
+			name:     "4-env-workspace-root",
 			input:    "",
-			provider: fakeProvider{lastID: "s1", roots: map[string]string{"s1": ""}},
 			store:    func() *Store { return NewStore() },
 			env:      "/env-ws",
 			want:     "/env-ws",
 		},
 		{
-			name:     "6-cwd-fallback",
+			name:     "5-cwd-fallback",
 			input:    "",
-			provider: fakeProvider{lastID: "", roots: nil},
 			store:    func() *Store { return NewStore() },
 			want:     cwd,
 		},
@@ -146,7 +113,7 @@ func TestResolveWorkspacePriority(t *testing.T) {
 			if tc.store != nil {
 				st = tc.store()
 			}
-			got := ResolveWorkspace(tc.input, tc.registration, st, tc.provider)
+			got := ResolveWorkspace(tc.input, tc.registration, st)
 			if got != tc.want {
 				t.Errorf("ResolveWorkspace = %q, want %q", got, tc.want)
 			}

@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	terminal.Register("refactor-copy", func(args []string, sessionID string) error {
+	terminal.Register("refactor-copy", func(args []string) error {
 		if len(args) == 0 {
 			return fmt.Errorf("usage: refactor-copy <target> [mode] [--dry-run] [isolate=N] --sources <json>")
 		}
@@ -61,7 +61,7 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("refactor-delete", func(args []string, sessionID string) error {
+	terminal.Register("refactor-delete", func(args []string) error {
 		targetsJSON := "[]"
 		dryRun := false
 		isolate := 0
@@ -103,7 +103,7 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("refactor-rollback", func(args []string, sessionID string) error {
+	terminal.Register("refactor-rollback", func(args []string) error {
 		if len(args) == 0 {
 			return fmt.Errorf("usage: refactor-rollback <file> [isolate=N]")
 		}

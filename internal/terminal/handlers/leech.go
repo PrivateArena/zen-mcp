@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	terminal.Register("leech", func(args []string, sessionID string) error {
+	terminal.Register("leech", func(args []string) error {
 		fmt.Println("Leech mode...")
 		return nil
 	})

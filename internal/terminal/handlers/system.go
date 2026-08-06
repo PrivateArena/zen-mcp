@@ -15,21 +15,20 @@ import (
 var startTime = time.Now()
 
 func init() {
-	terminal.Register("status", func(args []string, sessionID string) error {
+	terminal.Register("status", func(args []string) error {
 		var mem runtime.MemStats
 		runtime.ReadMemStats(&mem)
-		terminal.Logf("STATUS:\n - Uptime: %ds\n - Memory: %dMB (RSS)\n - Session: %s\n - Workspace: %s\n - Log Level: %s\n - Platform: %s (%s)",
+		terminal.Logf("STATUS:\n - Uptime: %ds\n - Memory: %dMB (RSS)\n - Workspace: %s\n - Log Level: %s\n - Platform: %s (%s)",
 			int(time.Since(startTime).Seconds()),
 			mem.Alloc/1024/1024,
-			sessionID,
-			terminal.Ws(sessionID),
+			terminal.Ws(),
 			"debug",
 			runtime.GOOS,
 			runtime.Version())
 		return nil
 	})
 
-	terminal.Register("log-level", func(args []string, sessionID string) error {
+	terminal.Register("log-level", func(args []string) error {
 		if len(args) == 0 {
 			terminal.Logf("Current Log Level: %s", "debug")
 			return nil
@@ -51,7 +50,7 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("loglevel", func(args []string, sessionID string) error {
+	terminal.Register("loglevel", func(args []string) error {
 		if len(args) == 0 {
 			terminal.Logf("Current Log Level: %s", "debug")
 			return nil
@@ -73,55 +72,55 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("exit", func(args []string, sessionID string) error {
+	terminal.Register("exit", func(args []string) error {
 		terminal.Logf("Shutting down terminal commander.")
 		return nil
 	})
 
-	terminal.Register("quit", func(args []string, sessionID string) error {
+	terminal.Register("quit", func(args []string) error {
 		terminal.Logf("Shutting down terminal commander.")
 		return nil
 	})
 
-	terminal.Register("abort", func(args []string, sessionID string) error {
+	terminal.Register("abort", func(args []string) error {
 		processes.AbortAll()
 		terminal.Logf("Aborted command(s).")
 		return nil
 	})
 
-	terminal.Register("ls", func(args []string, sessionID string) error {
-		terminal.Logf("ACTIVE WORKSPACE: %s", terminal.Ws(sessionID))
+	terminal.Register("ls", func(args []string) error {
+		terminal.Logf("ACTIVE WORKSPACE: %s", terminal.Ws())
 		return nil
 	})
 
-	terminal.Register("sessions", func(args []string, sessionID string) error {
-		terminal.Logf("ACTIVE WORKSPACE: %s", terminal.Ws(sessionID))
+	terminal.Register("sessions", func(args []string) error {
+		terminal.Logf("ACTIVE WORKSPACE: %s", terminal.Ws())
 		return nil
 	})
 
-	terminal.Register("telemetry", func(args []string, sessionID string) error {
+	terminal.Register("telemetry", func(args []string) error {
 		terminal.Logf(telemetry.QueryTelemetry(args))
 		return nil
 	})
 
-	terminal.Register("cs", func(args []string, sessionID string) error {
+	terminal.Register("cs", func(args []string) error {
 		res := terminal.ExecuteTool("codegraph", map[string]any{"action": "status"})
 		terminal.Logf("RESULT:\n%s", res)
 		return nil
 	})
 
-	terminal.Register("mcp-catalog", func(args []string, sessionID string) error {
+	terminal.Register("mcp-catalog", func(args []string) error {
 		terminal.Logf("\nMCP Tools Catalog:\n")
 		terminal.Logf(prompts.BuildToolCatalog())
 		return nil
 	})
 
-	terminal.Register("mcp-cost", func(args []string, sessionID string) error {
+	terminal.Register("mcp-cost", func(args []string) error {
 		terminal.Logf("\n%s", buildToolCost())
 		return nil
 	})
 
-	terminal.Register("export-cli", func(args []string, sessionID string) error {
+	terminal.Register("export-cli", func(args []string) error {
 		sub := ""
 		if len(args) > 0 {
 			sub = args[0]

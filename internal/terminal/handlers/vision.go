@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	terminal.Register("uv", func(args []string, sessionID string) error {
+	terminal.Register("uv", func(args []string) error {
 		if len(args) < 2 {
 			return fmt.Errorf("usage: uv <path> <message>")
 		}

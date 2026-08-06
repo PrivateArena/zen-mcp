@@ -16,7 +16,6 @@ import (
 	"github.com/jang/zen-mcp/internal/logfilter"
 	"github.com/jang/zen-mcp/internal/mcpcfg"
 	"github.com/jang/zen-mcp/internal/server"
-	"github.com/jang/zen-mcp/internal/session"
 	"github.com/jang/zen-mcp/internal/shared"
 	"github.com/jang/zen-mcp/internal/shell/tokenoptimizer"
 	"github.com/jang/zen-mcp/internal/toolregistry"
@@ -88,14 +87,10 @@ func main() {
 	defer stopWatch()
 
 	store := shared.NewStore()
-	sessMgr := session.New(store)
-	if err := sessMgr.Load(); err != nil {
-		logfilter.Debugf("[MCP] Failed to load session state: %v", err)
-	}
 
 	toolresponse.SetVirtualizer(func(tool, text string) (string, error) {
 		ws, _ := store.Get("workspace-root")
-		return tokenoptimizer.CheckAndVirtualizeOutput(tool, text, ws, ""), nil
+		return tokenoptimizer.CheckAndVirtualizeOutput(tool, text, ws), nil
 	})
 
 	mode := "sse"
@@ -103,7 +98,7 @@ func main() {
 		mode = "stdio"
 	}
 	os.Setenv("MCP_TRANSPORT", mode)
-	server.SetupShutdownHandlers(mode, sessMgr.Save, func(format string, args ...any) {
+	server.SetupShutdownHandlers(mode, func(format string, args ...any) {
 		logfilter.Info(fmt.Sprintf(format, args...))
 	})
 
@@ -112,10 +107,10 @@ func main() {
 		return
 	}
 
-	runHTTPServers(startTime, cfg, store, sessMgr)
+	runHTTPServers(startTime, cfg, store)
 }
 
-func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.Store, sessMgr *session.Manager) {
+func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.Store) {
 	mcpPort := cfg.McpPort
 	cliPort := cfg.CliPort
 	if p := os.Getenv("PORT"); p != "" {
@@ -132,11 +127,11 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 	filteredReg := toolregistry.Create()
 	unfilteredReg := toolregistry.Create()
 
-	gk := gatekeeper.New(sessMgr)
+	gk := gatekeeper.New(store)
 	pendingCollabs := map[string]func(string){}
 	deps := tools.Deps{
 		Store:                store,
-		Sess:                 sessMgr,
+		Reg:                  filteredReg,
 		Gatekeeper:           gk,
 		PendingCollaborations: pendingCollabs,
 	}
@@ -219,7 +214,7 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 
 	logfilter.Info(fmt.Sprintf("[MCP] Terminal commander started. Export port: %d.", exportPort))
 	terminal.SetDeps(deps)
-	terminal.StartTerminalCommander("default")
+	terminal.StartTerminalCommander()
 
 	select {}
 }

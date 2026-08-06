@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	terminal.Register("prompt", func(args []string, sessionID string) error {
+	terminal.Register("prompt", func(args []string) error {
 		if len(args) == 0 {
 			return fmt.Errorf("usage: prompt <name> [args...]")
 		}
@@ -53,7 +53,7 @@ func init() {
 		}
 		terminal.Logf("PREVIEW: %s%s", name, previewSuffix)
 
-		wRoot := terminal.Ws(sessionID)
+		wRoot := terminal.Ws()
 		text, err := prompts.ResolvePrompt(def, promptArgs, wRoot)
 		if err != nil {
 			terminal.Logf("ERROR: %v", err)
@@ -63,11 +63,11 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("generate-commands", func(args []string, sessionID string) error {
+	terminal.Register("generate-commands", func(args []string) error {
 		return generateCommands()
 	})
 
-	terminal.Register("export-commands", func(args []string, sessionID string) error {
+	terminal.Register("export-commands", func(args []string) error {
 		return generateCommands()
 	})
 }

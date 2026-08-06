@@ -10,16 +10,16 @@ import (
 )
 
 func init() {
-	terminal.Register("root", func(args []string, sessionID string) error {
-		return cd(args, sessionID, true)
+	terminal.Register("root", func(args []string) error {
+		return cd(args, true)
 	})
 
-	terminal.Register("cd", func(args []string, sessionID string) error {
-		return cd(args, sessionID, false)
+	terminal.Register("cd", func(args []string) error {
+		return cd(args, false)
 	})
 }
 
-func cd(args []string, sessionID string, isRoot bool) error {
+func cd(args []string, isRoot bool) error {
 	force := false
 	pathArg := ""
 	for _, a := range args {
@@ -37,8 +37,8 @@ func cd(args []string, sessionID string, isRoot bool) error {
 	}
 
 	d := terminal.GetDeps()
-	if d.Sess == nil {
-		return fmt.Errorf("session not initialized")
+	if d.Store == nil {
+		return fmt.Errorf("store not initialized")
 	}
 
 	if force {
@@ -50,13 +50,13 @@ func cd(args []string, sessionID string, isRoot bool) error {
 		if _, err := os.Stat(finalPath); os.IsNotExist(err) {
 			return fmt.Errorf("%s does not exist", finalPath)
 		}
-		d.Sess.SetSessionWorkspaceRoot(sessionID, finalPath)
+		d.Store.Set("workspace-root", finalPath)
 		terminal.Logf("OK: Workspace root -> %s", finalPath)
 		terminal.Logf("Reload config.json to apply to future sessions")
 		return nil
 	}
 
-	current := terminal.Ws(sessionID)
+	current := terminal.Ws()
 	target := pathArg
 	if !filepath.IsAbs(target) {
 		cwd, _ := os.Getwd()
@@ -67,7 +67,7 @@ func cd(args []string, sessionID string, isRoot bool) error {
 			terminal.Logf("ERROR: %s does not exist. Workspace root unchanged: %s", target, current)
 			return nil
 		}
-		d.Sess.SetSessionWorkspaceRoot(sessionID, target)
+		d.Store.Set("workspace-root", target)
 		terminal.Logf("OK: Workspace root -> %s", target)
 	} else {
 		terminal.Logf("OK: Workspace root -> %s", current)

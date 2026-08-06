@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	terminal.Register("shell", func(args []string, sessionID string) error {
+	terminal.Register("shell", func(args []string) error {
 		if len(args) == 0 {
 			return fmt.Errorf("usage: shell <cmd>")
 		}

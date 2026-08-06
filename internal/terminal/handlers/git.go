@@ -31,13 +31,13 @@ func runGitCommand(workdir string, args ...string) (string, error) {
 }
 
 func init() {
-	terminal.Register("git-tmp", func(args []string, sessionID string) error {
+	terminal.Register("git-tmp", func(args []string) error {
 		terminal.Logf("Mirroring current repo to junk GitHub org for review...")
 		terminal.Logf("(git-tmp requires gh CLI integration; see TS implementation)")
 		return nil
 	})
 
-	terminal.Register("git-twipe", func(args []string, sessionID string) error {
+	terminal.Register("git-twipe", func(args []string) error {
 		if len(args) == 0 {
 			return fmt.Errorf("usage: git-twipe <id>")
 		}
@@ -56,7 +56,7 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("commit-review", func(args []string, sessionID string) error {
+	terminal.Register("commit-review", func(args []string) error {
 		if len(args) == 0 {
 			return fmt.Errorf("usage: commit-review <commitA> [commitB]")
 		}
@@ -66,7 +66,7 @@ func init() {
 			commitB = args[1]
 		}
 
-		wRoot := terminal.Ws(sessionID)
+		wRoot := terminal.Ws()
 		terminal.Logf("COMMIT-REVIEW: %s %s", commitA, commitB)
 
 		var files []string

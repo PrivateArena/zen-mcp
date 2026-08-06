@@ -14,7 +14,6 @@ import (
 	"github.com/jang/zen-mcp/internal/toolresponse"
 	"github.com/jang/zen-mcp/internal/toolstate"
 )
-
 func defWorkspace(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "workspace",
@@ -43,7 +42,8 @@ func HandleWorkspaceAction(ctx context.Context, path, workspace string, deps Dep
 		prevPath = v
 	}
 
-	newRoot, ok := deps.Sess.ResolveWorkspacePath(path)
+	resolver := NewPathResolver(LoadAliasMap(), "")
+	newRoot, ok := resolver.Resolve(path)
 	if !ok {
 		return toolresponse.WrapErrorWithContext(ctx, "workspace", &workspaceErr{msg: "path is required"}, start)
 	}

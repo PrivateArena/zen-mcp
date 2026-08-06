@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	terminal.Register("br", func(args []string, sessionID string) error {
+	terminal.Register("br", func(args []string) error {
 		if len(args) == 0 {
 			terminal.Logf("ERROR: Missing browser action. Usage: br <action> [args...]")
 			terminal.Logf("Available: containers, active, restart, refresh, logs, chrome, nav <url>, read [url], content [selector], text, chat <message>, screenshot, tabs [query], eval <code>, request <url> [method], search <query>, map")
@@ -102,14 +102,14 @@ func init() {
 		return nil
 	})
 
-	terminal.Register("request", func(args []string, sessionID string) error {
-		return handleBrowserRequest(args, sessionID)
+	terminal.Register("request", func(args []string) error {
+		return handleBrowserRequest(args)
 	})
-	terminal.Register("browser-request", func(args []string, sessionID string) error {
-		return handleBrowserRequest(args, sessionID)
+	terminal.Register("browser-request", func(args []string) error {
+		return handleBrowserRequest(args)
 	})
 
-	terminal.Register("commit-review", func(args []string, sessionID string) error {
+	terminal.Register("commit-review", func(args []string) error {
 		if len(args) == 0 {
 			return fmt.Errorf("usage: commit-review <commitA> [commitB]")
 		}
@@ -124,7 +124,7 @@ func init() {
 	})
 }
 
-func handleBrowserRequest(args []string, sessionID string) error {
+func handleBrowserRequest(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: request <url> [method] [body] [headersJson]")
 	}
