@@ -146,3 +146,168 @@ func DelegateToWebAgent(params AgentChatParams) string {
 		}
 	}
 }
+
+func TestDeadcodeFlagsUnusedFunction(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	src := `package foo
+
+func Used() {}
+func Unused() {}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "calc.go"), []byte(src), 0644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	cg, err := NewCodeGraph(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCodeGraph: %v", err)
+	}
+	defer cg.Close()
+
+	if _, err := cg.Index(); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	symbols, err := cg.Deadcode()
+	if err != nil {
+		t.Fatalf("Deadcode: %v", err)
+	}
+
+	foundUnused := false
+	foundUsed := false
+	for _, s := range symbols {
+		if s.Name == "Unused" {
+			foundUnused = true
+		}
+		if s.Name == "Used" {
+			foundUsed = true
+		}
+	}
+	if !foundUnused {
+		t.Fatalf("expected Unused to be deadcode")
+	}
+	if foundUsed {
+		t.Fatalf("Used should not be deadcode")
+	}
+}
+
+func TestDeadcodeDoesNotFlagStructUsedAsField(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	src := `package foo
+
+type Inner struct {
+	Value int
+}
+
+type Outer struct {
+	Inner Inner
+}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "types.go"), []byte(src), 0644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	cg, err := NewCodeGraph(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCodeGraph: %v", err)
+	}
+	defer cg.Close()
+
+	if _, err := cg.Index(); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	symbols, err := cg.Deadcode()
+	if err != nil {
+		t.Fatalf("Deadcode: %v", err)
+	}
+
+	for _, s := range symbols {
+		if s.Name == "Inner" || s.Name == "Outer" {
+			t.Fatalf("%s used as field type should not be deadcode, got: %s %s at %s:%d", s.Name, s.Type, s.Name, s.Path, s.StartLine)
+		}
+	}
+}
+
+func TestDeadcodeDoesNotFlagInterfaceUsedInSignature(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	src := `package foo
+
+type Storage interface {
+	Get(key string) string
+}
+
+func GetData(s Storage) string {
+	return s.Get("key")
+}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "storage.go"), []byte(src), 0644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	cg, err := NewCodeGraph(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCodeGraph: %v", err)
+	}
+	defer cg.Close()
+
+	if _, err := cg.Index(); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	symbols, err := cg.Deadcode()
+	if err != nil {
+		t.Fatalf("Deadcode: %v", err)
+	}
+
+	for _, s := range symbols {
+		if s.Name == "Storage" {
+			t.Fatalf("interface used as parameter should not be deadcode, got: %s %s at %s:%d", s.Type, s.Name, s.Path, s.StartLine)
+		}
+	}
+}
+
+func TestDeadcodeDoesNotFlagTypeUsedAcrossFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	typeSrc := `package foo
+
+type ChatParams struct {
+	Provider string
+}
+`
+	usageSrc := `package foo
+
+func Send(params ChatParams) {}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "types.go"), []byte(typeSrc), 0644); err != nil {
+		t.Fatalf("write type fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "send.go"), []byte(usageSrc), 0644); err != nil {
+		t.Fatalf("write usage fixture: %v", err)
+	}
+
+	cg, err := NewCodeGraph(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCodeGraph: %v", err)
+	}
+	defer cg.Close()
+
+	if _, err := cg.Index(); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	symbols, err := cg.Deadcode()
+	if err != nil {
+		t.Fatalf("Deadcode: %v", err)
+	}
+
+	for _, s := range symbols {
+		if s.Name == "ChatParams" {
+			t.Fatalf("type used across files should not be deadcode, got: %s %s at %s:%d", s.Type, s.Name, s.Path, s.StartLine)
+		}
+	}
+}

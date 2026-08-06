@@ -1068,15 +1068,31 @@ func (s *Storage) FindDeadCode(query string, limit int) *DeadcodeResult {
 		limit = 200
 	}
 
-	// Find dead symbols (no incoming edges, excluding module and EXTERNAL)
-	rows, err := s.db.Query(`
+	symbolQuery := `
 		SELECT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
 		FROM nodes n
 		JOIN files f ON n.file_id = f.id
 		WHERE n.type NOT IN ('module', 'EXTERNAL')
 		  AND NOT EXISTS (SELECT 1 FROM edges WHERE target_id = n.id)
+	`
+	args := []any{}
+
+	if query != "" {
+		symbolQuery += ` AND (f.path LIKE ? OR n.name LIKE ?)`
+		args = append(args, "%"+query+"%", "%"+query+"%")
+	}
+
+	symbolQuery += `
+		AND NOT EXISTS (
+			SELECT 1 FROM nodes n2
+			WHERE n2.id != n.id
+			  AND n2.content LIKE '%' || n.name || '%'
+		)
 		LIMIT ?
-	`, limit)
+	`
+	args = append(args, limit)
+
+	rows, err := s.db.Query(symbolQuery, args...)
 	if err != nil {
 		return &DeadcodeResult{Symbols: nil, OrphanFiles: nil}
 	}
