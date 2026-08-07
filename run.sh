@@ -93,8 +93,13 @@ if [[ ! -f config.json ]]; then
   exit 1
 fi
 
-echo "👀 Watching for changes (Ctrl+C to stop) — poll ${POLL_MS}ms, debounce ${DELAY_MS}ms" >&3
-echo "   include_ext: ${INCLUDE_EXT[*]} | exclude_dir: ${EXCLUDE_DIR[*]}" >&3
+printf '%s\n' \
+  "👀 Watching for changes (Ctrl+C to stop) — poll ${POLL_MS}ms, debounce ${DELAY_MS}ms" \
+  "   include_ext : ${INCLUDE_EXT[*]}" \
+  "   exclude_dir : ${EXCLUDE_DIR[*]}" \
+  "   exclude_file: ${EXCLUDE_FILE[*]}" \
+  "   exclude_regex: ${EXCLUDE_REGEX[*]}" \
+  >&3
 
 cleanup() {
   stop_server
