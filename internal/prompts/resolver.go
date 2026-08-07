@@ -38,6 +38,15 @@ func ResolvePrompt(p PromptDefinition, args map[string]string, workspace string)
 		}
 	}
 
+	// Handle memory context
+	if isTrue(p.EnableMemoryContext) {
+		combinedArgs := strings.Join(argsValues(args), " ")
+		if strings.TrimSpace(combinedArgs) != "" {
+			// In a full implementation, this would call resolveMemoryContext
+			// For now, we skip memory context injection
+		}
+	}
+
 	// Handle skill triggers
 	if isTrue(p.EnableSkillTrigger) || isTrue(p.EnableSkillName) {
 		combinedArgs := strings.Join(argsValues(args), " ")

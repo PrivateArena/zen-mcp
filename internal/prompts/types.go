@@ -14,6 +14,7 @@ type PromptDefinition struct {
 	Arguments           []PromptArgument `yaml:"arguments"`
 	Template            string           `yaml:"template"`
 	EnabledSkills       []string         `yaml:"enabledSkills"`
+	EnableMemoryContext *bool            `yaml:"enableMemoryContext"`
 	EnableSkillTrigger  *bool            `yaml:"enableSkillTrigger"`
 	EnableSkillName     *bool            `yaml:"enableSkillName"`
 	SuggestSkills       *bool            `yaml:"suggestSkills"`
