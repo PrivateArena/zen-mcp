@@ -11,6 +11,7 @@
   "host": "127.0.0.1",
   "mcpTimeoutMs": 2400000,
   "tool_suggestion_style": "lite",
+  "tool_suggestions_enabled": false,
   "log_level": "info",
   "codegraph_watcher": false,
   "codegraph_mermaid_alpha": true,

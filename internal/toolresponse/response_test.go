@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -144,6 +146,22 @@ func setupMCPConfig(t *testing.T) {
 	}
 }
 
+func setupMCPConfigWithBody(t *testing.T, body string) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	old := mcpcfg.ProjectRoot
+	mcpcfg.ProjectRoot = dir
+	t.Cleanup(func() {
+		mcpcfg.ProjectRoot = old
+	})
+	if err := mcpcfg.Load(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestWrapSuccess(t *testing.T) {
 	setupMCPConfig(t)
 	ctx := WithToolContext(context.Background(), ToolContext{ToolName: "raw-capture", Params: map[string]any{"action": "screenshot"}})
@@ -175,5 +193,24 @@ func TestWrapError(t *testing.T) {
 	}
 	if res.IsError {
 		t.Error("IsError should stay false (matches TS)")
+	}
+}
+
+func TestWrapErrorSuggestionsDisabledIsBarebone(t *testing.T) {
+	setupMCPConfigWithBody(t, `{"tool_suggestions_enabled":false}`)
+	ctx := WithToolContext(context.Background(), ToolContext{ToolName: "browser", Params: map[string]any{"action": "navigate"}})
+	res := WrapErrorWithContext(ctx, "browser", errors.New("boom failure"), time.Now())
+	text := res.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "❌ browser failed") {
+		t.Errorf("error header missing: %s", text)
+	}
+	if !strings.Contains(text, "Action: navigate") {
+		t.Errorf("action line missing: %s", text)
+	}
+	if !strings.Contains(text, "Error: boom failure") {
+		t.Errorf("error message missing: %s", text)
+	}
+	if strings.Contains(text, "📌 **Tool:") || strings.Contains(text, "Example Usage") || strings.Contains(text, "Parameters for action") {
+		t.Errorf("suggestion block should be suppressed when disabled: %s", text)
 	}
 }

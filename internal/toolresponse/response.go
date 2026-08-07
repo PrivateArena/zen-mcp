@@ -319,7 +319,7 @@ func wrapErrorCtx(ctx context.Context, tool string, err error, start time.Time) 
 	schema := GetToolSchema(tool)
 	stackTrace := errorStack(err)
 
-	showSuggestion := mcpcfg.Get().ToolSuggestionStyle != "lite"
+	showSuggestion := mcpcfg.Get().ToolSuggestionsEnabled && mcpcfg.Get().ToolSuggestionStyle != "lite"
 	suggestion := ""
 	if showSuggestion {
 		suggestion = toolsuggestions.FormatSuggestion(tool, errorMessage, action, schema)

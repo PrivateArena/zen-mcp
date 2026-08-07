@@ -9,6 +9,7 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/jang/zen-mcp/internal/logfilter"
+	"github.com/jang/zen-mcp/internal/mcpcfg"
 	"github.com/jang/zen-mcp/internal/toolregistry"
 	"github.com/jang/zen-mcp/internal/toolresponse"
 	"github.com/jang/zen-mcp/internal/toolsuggestions"
@@ -42,7 +43,7 @@ func WrapHandlerWithTimeout(name string, inner toolregistry.Handler, getTimeout 
 
 		ctx = toolresponse.WithToolContext(ctx, toolresponse.ToolContext{ToolName: name, Params: params})
 
-		if action != "" {
+		if action != "" && mcpcfg.Get().ToolSuggestionsEnabled {
 			res := toolsuggestions.ValidateToolCall(name, action, params, toolresponse.GetToolSchema(name))
 			if !res.Valid {
 				msg := res.Suggestion

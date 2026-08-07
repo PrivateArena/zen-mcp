@@ -114,6 +114,7 @@ type ZenConfig struct {
 	CodegraphMarkdownFulldump    bool                       `json:"codegraph_markdown_fulldump"`
 	CodegraphWatcher             bool                       `json:"codegraph_watcher,omitempty"`
 	CodegraphWatcherDebounceMs   int                        `json:"codegraph_watcher_debounce_ms,omitempty"`
+	ToolSuggestionsEnabled       bool                       `json:"tool_suggestions_enabled"`
 	ToolSuggestionStyle          string                     `json:"tool_suggestion_style"`
 	LogLevel                     string                     `json:"log_level"`
 	GatekeeperEnabled            bool                       `json:"gatekeeper_enabled"`
@@ -179,6 +180,7 @@ func defaultConfig() ZenConfig {
 		CodegraphMermaidAlpha:        false,
 		CodegraphMarkdownFiles:       true,
 		CodegraphMarkdownFulldump:    false,
+		ToolSuggestionsEnabled:       true,
 		ToolSuggestionStyle:          "full",
 		LogLevel:                     "debug",
 		GatekeeperEnabled:            true,

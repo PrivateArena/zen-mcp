@@ -93,6 +93,7 @@ func TestLoadMergesDefaultsAndUserConfig(t *testing.T) {
 		{"mcpTimeoutMs", c.McpTimeoutMs, 2400000},
 		{"logLevel", c.LogLevel, "info"},
 		{"suggestionStyle", c.ToolSuggestionStyle, "lite"},
+		{"suggestionsEnabledDefault", c.ToolSuggestionsEnabled, true},
 		{"chatFileThresholdKb", c.ChatFileThresholdKb, 5},
 		{"gatekeeperInteractive", c.GatekeeperInteractive, false},
 		{"gatekeeperAuto", c.GatekeeperInteractiveAuto, "accept"},
@@ -155,6 +156,26 @@ func TestLoadBrokenConfigFallsBackToDefaults(t *testing.T) {
 	}
 	if c := Get(); c.McpPort != 3001 {
 		t.Errorf("should keep defaults, got McpPort=%d", c.McpPort)
+	}
+}
+
+func TestToolSuggestionsEnabledDisableMerge(t *testing.T) {
+	withConfig(t, `{"tool_suggestions_enabled":false}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c := Get(); c.ToolSuggestionsEnabled {
+		t.Error("tool_suggestions_enabled should be false when explicitly disabled")
+	}
+}
+
+func TestToolSuggestionsEnabledDefaultTrue(t *testing.T) {
+	withConfig(t, `{"mcpPort":3001}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c := Get(); !c.ToolSuggestionsEnabled {
+		t.Error("tool_suggestions_enabled should default to true")
 	}
 }
 
