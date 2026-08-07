@@ -61,6 +61,92 @@ func TestReconstructStateEmpty(t *testing.T) {
 	}
 }
 
+func TestLatestEvent(t *testing.T) {
+	dir := t.TempDir()
+	memName := "brain"
+
+	if _, ok := LatestEvent(dir, memName); ok {
+		t.Error("LatestEvent(missing file) = ok, want !ok")
+	}
+
+	e1 := BrainEvent{SchemaVersion: 3, Timestamp: "2024-01-01T00:00:00.000Z", SessionTitle: "T1", Objective: "O1", SessionNotes: "N1"}
+	if err := AppendEvent(dir, memName, e1); err != nil {
+		t.Fatalf("AppendEvent(e1) error = %v", err)
+	}
+	e2 := BrainEvent{SchemaVersion: 3, Timestamp: "2024-01-02T00:00:00.000Z", SessionTitle: "T2", Objective: "O2", SessionNotes: "N2"}
+	if err := AppendEvent(dir, memName, e2); err != nil {
+		t.Fatalf("AppendEvent(e2) error = %v", err)
+	}
+
+	ev, ok := LatestEvent(dir, memName)
+	if !ok {
+		t.Fatal("LatestEvent() = !ok, want ok")
+	}
+	if ev.SessionTitle != "T2" || ev.Objective != "O2" {
+		t.Errorf("LatestEvent() = %+v, want latest event T2/O2", ev)
+	}
+}
+
+func TestLatestEventSkipsBlankAndCorruptTrailingLines(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "brain_timeline.jsonl")
+	content := "{\"schema_version\":3,\"timestamp\":\"2024-01-01T00:00:00.000Z\",\"session_title\":\"Valid\",\"objective\":\"ok\",\"session_notes\":\"n\"}\n\nnot-json\n\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write timeline error = %v", err)
+	}
+
+	ev, ok := LatestEvent(dir, "brain")
+	if !ok {
+		t.Fatal("LatestEvent() = !ok, want ok")
+	}
+	if ev.SessionTitle != "Valid" {
+		t.Errorf("LatestEvent() = %+v, want the valid event", ev)
+	}
+}
+
+func TestLatestEventOnlyBlankLines(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "brain_timeline.jsonl")
+	if err := os.WriteFile(path, []byte("\n\n\n"), 0o644); err != nil {
+		t.Fatalf("write timeline error = %v", err)
+	}
+	if _, ok := LatestEvent(dir, "brain"); ok {
+		t.Error("LatestEvent(blank lines) = ok, want !ok")
+	}
+}
+
+func TestLatestEventNoTrailingNewline(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "brain_timeline.jsonl")
+	content := "{\"schema_version\":3,\"timestamp\":\"2024-01-01T00:00:00.000Z\",\"session_title\":\"T\",\"objective\":\"O\",\"session_notes\":\"N\"}"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write timeline error = %v", err)
+	}
+	ev, ok := LatestEvent(dir, "brain")
+	if !ok {
+		t.Fatal("LatestEvent(single line no newline) = !ok, want ok")
+	}
+	if ev.SessionTitle != "T" {
+		t.Errorf("LatestEvent() = %+v, want T", ev)
+	}
+}
+
+func TestEventToMarkdown(t *testing.T) {
+	ev := BrainEvent{SchemaVersion: 3, Timestamp: "2024-01-02T00:00:00.000Z", SessionTitle: "T2", Objective: "O2", SessionNotes: "## Progress\n- Done"}
+	got := EventToMarkdown(ev)
+	for _, want := range []string{"## Session — 2024-01-02T00:00:00.000Z", "**Session Title:** T2", "**Objective:** O2", "## Progress\n- Done"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("EventToMarkdown() missing %q, got:\n%s", want, got)
+		}
+	}
+}
+
+func TestEventToMarkdownEmpty(t *testing.T) {
+	if got := EventToMarkdown(BrainEvent{}); got != "" {
+		t.Errorf("EventToMarkdown(empty) = %q, want empty", got)
+	}
+}
+
 func TestJSONToMarkdown(t *testing.T) {
 	raw := `{"schema_version":3,"timestamp":"2024-01-01T00:00:00.000Z","session_title":"Port memory","objective":"be handler","session_notes":"## Progress\n- Done\n- Pending"}`
 	got := JSONToMarkdown(raw)

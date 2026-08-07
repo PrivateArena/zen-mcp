@@ -209,6 +209,76 @@ func schemaVersionOf(raw map[string]any) int {
 	return 0
 }
 
+// LatestEvent reads the most recent valid event from the timeline log by
+// scanning backwards from the end of the file, so large histories stay cheap
+// to load on every prompt resolution. Unparseable trailing lines are skipped.
+func LatestEvent(dataDir, memoryName string) (BrainEvent, bool) {
+	timelinePath := filepath.Join(dataDir, memoryName+"_timeline.jsonl")
+	f, err := os.Open(timelinePath)
+	if err != nil {
+		return BrainEvent{}, false
+	}
+	defer f.Close()
+
+	stat, err := f.Stat()
+	if err != nil || stat.Size() == 0 {
+		return BrainEvent{}, false
+	}
+
+	const chunkSize = 64 * 1024
+	size := stat.Size()
+	chunk := size
+	if chunk > chunkSize {
+		chunk = chunkSize
+	}
+	buf := make([]byte, chunk)
+	if _, err := f.ReadAt(buf, size-chunk); err != nil {
+		return BrainEvent{}, false
+	}
+
+	start := size - chunk
+	s := string(buf)
+	if start > 0 {
+		if idx := strings.IndexByte(s, '\n'); idx >= 0 {
+			s = s[idx+1:]
+		}
+	}
+	lines := strings.Split(s, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		var raw map[string]any
+		if err := json.Unmarshal([]byte(line), &raw); err != nil {
+			continue
+		}
+		return MigrateToV3(raw), true
+	}
+	return BrainEvent{}, false
+}
+
+// EventToMarkdown renders a single BrainEvent as markdown for prompt
+// injection. Returns "" when the event carries no substantive content (a bare
+// timestamp alone is treated as empty).
+func EventToMarkdown(ev BrainEvent) string {
+	if ev.SessionTitle == "" && ev.Objective == "" && ev.SessionNotes == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## Session — " + ev.Timestamp)
+	if ev.SessionTitle != "" {
+		b.WriteString("\n\n**Session Title:** " + ev.SessionTitle)
+	}
+	if ev.Objective != "" {
+		b.WriteString("\n\n**Objective:** " + ev.Objective)
+	}
+	if ev.SessionNotes != "" {
+		b.WriteString("\n\n" + ev.SessionNotes)
+	}
+	return b.String()
+}
+
 // AppendEvent ports appendEvent: appends one JSONL line to the timeline log.
 func AppendEvent(dataDir, memoryName string, event BrainEvent) error {
 	timelinePath := filepath.Join(dataDir, memoryName+"_timeline.jsonl")
