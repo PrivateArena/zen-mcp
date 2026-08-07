@@ -108,10 +108,11 @@ func marshalOrderedMap(entries []mapEntry) []byte {
 		b.WriteString("  ")
 		b.Write(keyJSON)
 		b.WriteString(": ")
-		lines := strings.Split(strings.TrimRight(string(e.value), "\n"), "\n")
+		val := normalizeJSONValue(e.value)
+		lines := strings.Split(strings.TrimRight(val, "\n"), "\n")
 		for j, ln := range lines {
 			if j > 0 {
-				b.WriteString("    ")
+				b.WriteString("  ")
 			}
 			b.WriteString(ln)
 			if j < len(lines)-1 {
@@ -126,6 +127,19 @@ func marshalOrderedMap(entries []mapEntry) []byte {
 	}
 	b.WriteString("}")
 	return []byte(b.String())
+}
+
+// normalizeJSONValue re-indents a raw value from any prior layout, preventing
+// indentation from compounding across rewrite cycles.
+func normalizeJSONValue(raw []byte) string {
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, raw, "", "  "); err != nil {
+		buf.Reset()
+		if err := json.Compact(&buf, raw); err != nil {
+			return string(raw)
+		}
+	}
+	return buf.String()
 }
 
 func stringifyPanic(r any) string {

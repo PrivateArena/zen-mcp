@@ -120,4 +120,11 @@ func TestRegisterProjectInMap(t *testing.T) {
 	if wsPos < 0 || firstPos < 0 || wsPos > firstPos {
 		t.Errorf("RegisterProjectInMap() recent key not moved to top, got:\n%s", string(raw))
 	}
+	wsTS := data[projectPath].(map[string]any)["lastVisited"].(string)
+	firstTS := data[first].(map[string]any)["lastVisited"].(string)
+	want := "{\n  \"" + projectPath + "\": {\n    \"lastVisited\": \"" + wsTS +
+		"\"\n  },\n  \"" + first + "\": {\n    \"lastVisited\": \"" + firstTS + "\"\n  }\n}"
+	if string(raw) != want {
+		t.Errorf("RegisterProjectInMap() output not canonically indented, got:\n%s\nwant:\n%s", string(raw), want)
+	}
 }
