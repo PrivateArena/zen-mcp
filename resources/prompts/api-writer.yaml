@@ -40,7 +40,6 @@
       - Per-action: one-line description, param table (if any params beyond shared ones), one minimal example
     - A trailing "Selector/Auth Priority" or equivalent quick-reference table only if the domain has a real resilience/priority ordering worth capturing (e.g. auth methods, retry strategy) — omit if not applicable
     - Open questions / unconfirmed items, if any, as a short bullet list at the end
-  enableMemoryContext: true
   enabledSkills:
     - codebase-research
   suggestSkills: true

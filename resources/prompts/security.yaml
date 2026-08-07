@@ -24,7 +24,6 @@
     **MANDATORY FINAL STEP — Save Session Memory**:
     Before closing this task, call `memory({ action: 'save', name: 'brain', session_title: '<one-line summary of what was audited>', objective: '<what assets we set out to secure>', what_is_done: '<concrete security vulnerabilities identified this session>', episodic: [{ text: '<exploit vector analyzed>', outcome: '<risk rating and finding>' }], semantic: { facts: [{ key: '<vulnerability or risk key>', value: '<impact or remediation strategy>' }], preferences: [] })`.
     This save is **non-negotiable** — it ensures any future agent or compacted session can resume without losing context. Do NOT summarize the context field; write it thoroughly.
-  enableMemoryContext: true
   enabledSkills:
     - codebase-research
     - chat-research

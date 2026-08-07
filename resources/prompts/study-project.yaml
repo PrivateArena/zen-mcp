@@ -40,7 +40,6 @@
     **MANDATORY FINAL STEP — Save Session Memory**:
     Before closing this task, call `memory({ action: 'save', name: 'brain', session_title: '<one-line summary of the study>', objective: '<what we set out to compare>', what_is_done: '<concrete outcomes: file written, gaps identified>', episodic: [{ text: '<event description>', outcome: '<concrete result>' }], semantic: { facts: [{ key: '<gap or decision key>', value: '<rationale or value>' }], preferences: [] })`.
     This save is **non-negotiable** — it ensures any future agent or compacted session can resume without losing context. Do NOT summarize the context field; write it thoroughly.
-  enableMemoryContext: true
   enabledSkills:
     - codebase-research
     - chat-research

@@ -50,7 +50,6 @@
     - Key decisions with alternatives considered and rejection rationale (per constraint 4)
     - Red-team critique summary from browser.chat, with each point marked "folded in", "resolved via follow-up interview", or "rejected: <reason>"
     - Open questions (per constraint 7 — should be rare, and each should state why it couldn't be resolved)
-  enableMemoryContext: true
   enabledSkills:
     - codebase-research
     - chat-research

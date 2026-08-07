@@ -39,7 +39,6 @@
     - Mocking decisions: what was mocked and why it's a true external boundary
     - Red-team critique summary from browser.chat, with each point marked "folded in" or "rejected: <reason>"
     - Coverage gaps knowingly left open (e.g. behavior not testable without infra access), if any
-  enableMemoryContext: true
   enabledSkills:
     - codebase-research
     - chat-research
