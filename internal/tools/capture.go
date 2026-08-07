@@ -11,8 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
-	"github.com/jang/zen-mcp/internal/toolresponse"
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/toolresponse"
+
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 

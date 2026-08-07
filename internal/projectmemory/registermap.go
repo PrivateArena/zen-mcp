@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jang/zen-mcp/internal/logfilter"
-	"github.com/jang/zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/logfilter"
+	"zen-mcp/internal/mcpcfg"
 )
 
 // RegisterProjectInMap ports registerProjectInMap: records a project in the

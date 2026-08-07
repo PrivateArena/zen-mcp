@@ -9,8 +9,8 @@ import (
 
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
-	"github.com/jang/zen-mcp/internal/toolregistry"
-	"github.com/jang/zen-mcp/internal/toolstate"
+	"zen-mcp/internal/toolregistry"
+	"zen-mcp/internal/toolstate"
 )
 
 const (

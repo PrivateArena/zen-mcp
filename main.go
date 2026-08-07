@@ -12,17 +12,17 @@ import (
 
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
-	"github.com/jang/zen-mcp/internal/gatekeeper"
-	"github.com/jang/zen-mcp/internal/logfilter"
-	"github.com/jang/zen-mcp/internal/mcpcfg"
-	"github.com/jang/zen-mcp/internal/server"
-	"github.com/jang/zen-mcp/internal/shared"
-	"github.com/jang/zen-mcp/internal/shell/tokenoptimizer"
-	"github.com/jang/zen-mcp/internal/terminal"
-	_ "github.com/jang/zen-mcp/internal/terminal/handlers"
-	"github.com/jang/zen-mcp/internal/toolregistry"
-	"github.com/jang/zen-mcp/internal/toolresponse"
-	"github.com/jang/zen-mcp/internal/tools"
+	"zen-mcp/internal/gatekeeper"
+	"zen-mcp/internal/logfilter"
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/server"
+	"zen-mcp/internal/shared"
+	"zen-mcp/internal/shell/tokenoptimizer"
+	"zen-mcp/internal/terminal"
+	_ "zen-mcp/internal/terminal/handlers"
+	"zen-mcp/internal/toolregistry"
+	"zen-mcp/internal/toolresponse"
+	"zen-mcp/internal/tools"
 )
 
 func newMcpServer(id string, reg *toolregistry.ToolRegistry, deps tools.Deps) *mcpserver.MCPServer {

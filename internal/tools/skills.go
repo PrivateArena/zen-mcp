@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jang/zen-mcp/internal/skills"
-	"github.com/jang/zen-mcp/internal/toolresponse"
+	"zen-mcp/internal/skills"
+	"zen-mcp/internal/toolresponse"
+
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 

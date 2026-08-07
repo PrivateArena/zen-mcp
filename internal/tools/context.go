@@ -8,9 +8,9 @@ import (
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/jang/zen-mcp/internal/analysis"
-	"github.com/jang/zen-mcp/internal/projectmemory"
-	"github.com/jang/zen-mcp/internal/toolresponse"
+	"zen-mcp/internal/analysis"
+	"zen-mcp/internal/projectmemory"
+	"zen-mcp/internal/toolresponse"
 )
 
 func defContext(workspace string, deps Deps) ToolDef {

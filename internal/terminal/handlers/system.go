@@ -5,11 +5,11 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
-	"github.com/jang/zen-mcp/internal/prompts"
-	"github.com/jang/zen-mcp/internal/shell/processes"
-	"github.com/jang/zen-mcp/internal/telemetry"
-	"github.com/jang/zen-mcp/internal/terminal"
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/prompts"
+	"zen-mcp/internal/shell/processes"
+	"zen-mcp/internal/telemetry"
+	"zen-mcp/internal/terminal"
 )
 
 var startTime = time.Now()

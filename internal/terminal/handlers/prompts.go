@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
-	"github.com/jang/zen-mcp/internal/prompts"
-	"github.com/jang/zen-mcp/internal/terminal"
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/prompts"
+	"zen-mcp/internal/terminal"
 )
 
 func init() {

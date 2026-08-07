@@ -14,7 +14,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/jang/zen-mcp/internal/logfilter"
+	"zen-mcp/internal/logfilter"
 )
 
 func randHex8() string {

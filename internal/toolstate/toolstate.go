@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jang/zen-mcp/internal/logfilter"
-	"github.com/jang/zen-mcp/internal/mcpcfg"
-	"github.com/jang/zen-mcp/internal/toolregistry"
+	"zen-mcp/internal/logfilter"
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/toolregistry"
 )
 
 const (

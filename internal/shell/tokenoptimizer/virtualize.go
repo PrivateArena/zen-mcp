@@ -7,9 +7,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jang/zen-mcp/internal/analysis"
-	"github.com/jang/zen-mcp/internal/logfilter"
-	"github.com/jang/zen-mcp/internal/projectmemory"
+	"zen-mcp/internal/analysis"
+	"zen-mcp/internal/logfilter"
+	"zen-mcp/internal/projectmemory"
 )
 
 const virtualizeLimit = 24 * 1024

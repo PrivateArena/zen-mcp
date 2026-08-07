@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/mcpcfg"
 )
 
 // ErrBridgeFailure is returned when the bridge responds with HTTP >= 400.

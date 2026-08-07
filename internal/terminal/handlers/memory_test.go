@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jang/zen-mcp/internal/shared"
-	"github.com/jang/zen-mcp/internal/terminal"
-	"github.com/jang/zen-mcp/internal/tools"
+	"zen-mcp/internal/shared"
+	"zen-mcp/internal/terminal"
+	"zen-mcp/internal/tools"
 )
 
 func TestBrainExtractSavesMarkdown(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jang/zen-mcp/internal/projectmemory"
-	"github.com/jang/zen-mcp/internal/terminal"
+	"zen-mcp/internal/projectmemory"
+	"zen-mcp/internal/terminal"
 )
 
 var (

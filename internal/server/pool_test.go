@@ -8,7 +8,7 @@ import (
 
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
-	"github.com/jang/zen-mcp/internal/toolregistry"
+	"zen-mcp/internal/toolregistry"
 )
 
 func newTestFactory(counter *int, mu *sync.Mutex) Factory {

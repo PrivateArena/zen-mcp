@@ -7,8 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jang/zen-mcp/internal/toolresponse"
-	"github.com/jang/zen-mcp/internal/whiteboard"
+	"zen-mcp/internal/toolresponse"
+	"zen-mcp/internal/whiteboard"
+
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 

@@ -8,11 +8,11 @@ import (
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/jang/zen-mcp/internal/logfilter"
-	"github.com/jang/zen-mcp/internal/mcpcfg"
-	"github.com/jang/zen-mcp/internal/toolregistry"
-	"github.com/jang/zen-mcp/internal/toolresponse"
-	"github.com/jang/zen-mcp/internal/toolsuggestions"
+	"zen-mcp/internal/logfilter"
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/toolregistry"
+	"zen-mcp/internal/toolresponse"
+	"zen-mcp/internal/toolsuggestions"
 )
 
 // SummarizeParams renders call arguments for log messages, truncating to 400

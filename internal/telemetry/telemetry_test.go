@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/mcpcfg"
 )
 
 func setupTempRoot(t *testing.T) {

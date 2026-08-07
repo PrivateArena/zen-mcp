@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/mcpcfg"
 )
 
 type pathCandidate struct {

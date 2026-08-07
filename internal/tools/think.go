@@ -14,9 +14,9 @@ import (
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/jang/zen-mcp/internal/logfilter"
-	"github.com/jang/zen-mcp/internal/projectmemory"
-	"github.com/jang/zen-mcp/internal/toolresponse"
+	"zen-mcp/internal/logfilter"
+	"zen-mcp/internal/projectmemory"
+	"zen-mcp/internal/toolresponse"
 )
 
 func defThink(workspace string, _ Deps) ToolDef {

@@ -13,8 +13,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jang/zen-mcp/internal/bridge"
-	"github.com/jang/zen-mcp/internal/terminal"
+	"zen-mcp/internal/bridge"
+	"zen-mcp/internal/terminal"
 )
 
 const junkOrg = "e3b0c44298fc1c149afbf4c8996fb92427ae123"

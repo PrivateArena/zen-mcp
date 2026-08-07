@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/mcpcfg"
 )
 
 // SkillsDir returns the skills directory path.

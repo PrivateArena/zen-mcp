@@ -9,7 +9,7 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
-	"github.com/jang/zen-mcp/internal/toolregistry"
+	"zen-mcp/internal/toolregistry"
 )
 
 // registerToolCatalogResource ports index.ts tools/catalog: a static resource

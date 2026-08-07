@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jang/zen-mcp/internal/logfilter"
+	"zen-mcp/internal/logfilter"
 )
 
 // NormalizeKey ports timeline.ts normalizeKey.

@@ -1,4 +1,4 @@
-module github.com/jang/zen-mcp
+module zen-mcp
 
 go 1.24.0
 

@@ -10,9 +10,9 @@ import (
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
-	"github.com/jang/zen-mcp/internal/projectmemory"
-	"github.com/jang/zen-mcp/internal/toolresponse"
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/projectmemory"
+	"zen-mcp/internal/toolresponse"
 )
 
 func defMemory(workspace string, deps Deps) ToolDef {

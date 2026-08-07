@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jang/zen-mcp/internal/tools"
+	"zen-mcp/internal/tools"
 )
 
 // cliTool is the minimal tool metadata needed to render a wrapper script.

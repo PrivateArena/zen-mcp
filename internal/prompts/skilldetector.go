@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
-	"github.com/jang/zen-mcp/internal/skills"
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/skills"
 )
 
 // DetectedSkill represents a detected skill.

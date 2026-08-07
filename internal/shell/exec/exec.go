@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jang/zen-mcp/internal/shell/processes"
+	"zen-mcp/internal/shell/processes"
 )
 
 // Result mirrors the TS promise resolution for a shell run.

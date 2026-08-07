@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jang/zen-mcp/internal/bridge"
-	"github.com/jang/zen-mcp/internal/toolresponse"
+	"zen-mcp/internal/bridge"
+	"zen-mcp/internal/toolresponse"
+
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 

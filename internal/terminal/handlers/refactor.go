@@ -3,7 +3,7 @@ package handlers
 import (
 	"encoding/json"
 
-	"github.com/jang/zen-mcp/internal/terminal"
+	"zen-mcp/internal/terminal"
 )
 
 func init() {

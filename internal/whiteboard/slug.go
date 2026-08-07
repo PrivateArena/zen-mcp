@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/mcpcfg"
 )
 
 // SlugInfo holds the resolved whiteboard slug and title.

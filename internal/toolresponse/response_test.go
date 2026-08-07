@@ -12,7 +12,7 @@ import (
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/mcpcfg"
 )
 
 func intPtr(v int) *int { return &v }

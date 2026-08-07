@@ -3,7 +3,7 @@ package handlers
 import (
 	"fmt"
 
-	"github.com/jang/zen-mcp/internal/terminal"
+	"zen-mcp/internal/terminal"
 )
 
 func init() {

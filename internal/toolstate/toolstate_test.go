@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
-	"github.com/jang/zen-mcp/internal/toolregistry"
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/toolregistry"
 )
 
 func setupConfig(t *testing.T, enabledTools map[string]bool) {

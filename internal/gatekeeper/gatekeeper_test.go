@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
-	"github.com/jang/zen-mcp/internal/shared"
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/shared"
 )
 
 type fakeWS string

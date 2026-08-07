@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
-	"github.com/jang/zen-mcp/internal/projectmemory"
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/projectmemory"
 )
 
 // ResolvePrompt resolves a prompt template with the given arguments.

@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jang/zen-mcp/internal/logfilter"
+	"zen-mcp/internal/logfilter"
 )
 
 // Config carries the token_optimization + shell_output_blacklist config.

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jang/zen-mcp/internal/bridge"
-	"github.com/jang/zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/bridge"
+	"zen-mcp/internal/mcpcfg"
 )
 
 // AgentChatParams mirrors the TS AgentChatParams shape.

@@ -7,11 +7,11 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
-	"github.com/jang/zen-mcp/internal/prompts"
-	"github.com/jang/zen-mcp/internal/toolregistry"
-	"github.com/jang/zen-mcp/internal/toolresponse"
-	"github.com/jang/zen-mcp/internal/tools"
-	"github.com/jang/zen-mcp/internal/toolstate"
+	"zen-mcp/internal/prompts"
+	"zen-mcp/internal/toolregistry"
+	"zen-mcp/internal/toolresponse"
+	"zen-mcp/internal/tools"
+	"zen-mcp/internal/toolstate"
 )
 
 // RegisterAllTools registers the M4 tool subset onto srv for the given

@@ -12,7 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jang/zen-mcp/internal/tools"
+	"zen-mcp/internal/tools"
+
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 

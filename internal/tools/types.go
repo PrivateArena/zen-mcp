@@ -1,9 +1,9 @@
 package tools
 
 import (
-	"github.com/jang/zen-mcp/internal/gatekeeper"
-	"github.com/jang/zen-mcp/internal/shared"
-	"github.com/jang/zen-mcp/internal/toolregistry"
+	"zen-mcp/internal/gatekeeper"
+	"zen-mcp/internal/shared"
+	"zen-mcp/internal/toolregistry"
 )
 
 // Deps bundles the collaborators the M4 tool subset needs. Everything is

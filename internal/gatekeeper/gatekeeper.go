@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jang/zen-mcp/internal/logfilter"
-	"github.com/jang/zen-mcp/internal/mcpcfg"
-	"github.com/jang/zen-mcp/internal/shared"
+	"zen-mcp/internal/logfilter"
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/shared"
 )
 
 var systemRootsRegex = regexp.MustCompile(`(?i)^/(?:home|media|mnt|usr|etc|var|root|bin|sbin|lib|lib64|opt|srv|sys|proc|dev|boot|tmp|Users|Windows|Program Files|ProgramData|Program Files \(x86\))`)

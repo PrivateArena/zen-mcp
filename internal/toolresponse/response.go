@@ -12,10 +12,10 @@ import (
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/jang/zen-mcp/internal/logfilter"
-	"github.com/jang/zen-mcp/internal/mcpcfg"
-	"github.com/jang/zen-mcp/internal/telemetry"
-	"github.com/jang/zen-mcp/internal/toolsuggestions"
+	"zen-mcp/internal/logfilter"
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/telemetry"
+	"zen-mcp/internal/toolsuggestions"
 )
 
 type CommandResult struct {

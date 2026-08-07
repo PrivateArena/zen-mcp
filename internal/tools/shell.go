@@ -9,10 +9,10 @@ import (
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
-	"github.com/jang/zen-mcp/internal/shell/exec"
-	"github.com/jang/zen-mcp/internal/shell/tokenoptimizer"
-	"github.com/jang/zen-mcp/internal/toolresponse"
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/shell/exec"
+	"zen-mcp/internal/shell/tokenoptimizer"
+	"zen-mcp/internal/toolresponse"
 )
 
 func defShell(workspace string, deps Deps) ToolDef {

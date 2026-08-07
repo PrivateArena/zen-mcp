@@ -16,8 +16,8 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
-	"github.com/jang/zen-mcp/internal/shared"
-	"github.com/jang/zen-mcp/internal/toolregistry"
+	"zen-mcp/internal/shared"
+	"zen-mcp/internal/toolregistry"
 )
 
 func echoHandler(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {

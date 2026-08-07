@@ -12,10 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jang/zen-mcp/internal/bridge"
-	"github.com/jang/zen-mcp/internal/mcpcfg"
-	"github.com/jang/zen-mcp/internal/shared"
-	"github.com/jang/zen-mcp/internal/toolresponse"
+	"zen-mcp/internal/bridge"
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/shared"
+	"zen-mcp/internal/toolresponse"
+
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 

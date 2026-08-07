@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/jang/zen-mcp/internal/projectmemory"
+	"zen-mcp/internal/projectmemory"
 )
 
 // OutputAnalysis mirrors the TS OutputAnalysis shape.

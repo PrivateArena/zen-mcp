@@ -10,7 +10,7 @@ import (
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/jang/zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/mcpcfg"
 )
 
 func makePatchRequest(args map[string]any) mcp.CallToolRequest {
