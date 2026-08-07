@@ -7,6 +7,7 @@ package tokenoptimizer
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -77,35 +78,6 @@ func GetSavings(original, filtered string) int {
 	}
 	f := CountTokens(filtered)
 	return int((float64(orig-f)/float64(orig))*100 + 0.5)
-}
-
-// ---------------------------------------------------------------------------
-// Compaction helpers
-// ---------------------------------------------------------------------------
-
-func deduplicateLines(text string) string {
-	lines := strings.Split(text, "\n")
-	counts := map[string]int{}
-	var unique []string
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		if n, ok := counts[trimmed]; ok {
-			counts[trimmed] = n + 1
-		} else {
-			counts[trimmed] = 1
-			unique = append(unique, line)
-		}
-	}
-	result := strings.Join(unique, "\n")
-	for line, count := range counts {
-		if count > 1 {
-			result = strings.Replace(result, line, line+" (×"+itoa(count)+")", 1)
-		}
-	}
-	return result
 }
 
 func compactGitStatus(output string) string {
@@ -366,15 +338,15 @@ func compactGrep(output string, options Options) string {
 		if shortFile == "" {
 			shortFile = file
 		}
-		result.WriteString(shortFile + ": " + itoa(fileCounts[file]))
+		fmt.Fprint(&result, shortFile, ": ", itoa(fileCounts[file]))
 		if ms := fileMatches[file]; len(ms) > 0 {
-			result.WriteString("\n  " + strings.Join(ms, "\n  "))
+			fmt.Fprint(&result, "\n  ", strings.Join(ms, "\n  "))
 		}
 		result.WriteString("\n")
 		shown++
 	}
 	if len(fileCounts) > maxFilesToShow {
-		result.WriteString("... +" + itoa(len(fileCounts)-maxFilesToShow) + " more files\n")
+		fmt.Fprint(&result, "... +", itoa(len(fileCounts)-maxFilesToShow), " more files\n")
 	}
 	return strings.TrimSpace(result.String())
 }
@@ -455,20 +427,20 @@ func compactGoBench(output string) string {
 
 	sort.Slice(benchmarks, func(i, j int) bool { return benchmarks[i].ns < benchmarks[j].ns })
 	var result strings.Builder
-	result.WriteString("Benchmark results (" + itoa(len(benchmarks)) + " benchmarks):\n")
+	fmt.Fprint(&result, "Benchmark results (", itoa(len(benchmarks)), " benchmarks):\n")
 	for _, b := range benchmarks[:min(10, len(benchmarks))] {
 		ns := itoa(b.ns) + "ns"
 		if b.ns >= 1000 {
 			ns = formatMicros(float64(b.ns) / 1000)
 		}
-		result.WriteString("  " + b.name + ": " + ns + "/op")
+		fmt.Fprint(&result, "  ", b.name, ": ", ns, "/op")
 		if b.allocs > 0 {
-			result.WriteString(" " + itoa(b.allocs) + " allocs")
+			fmt.Fprint(&result, " ", itoa(b.allocs), " allocs")
 		}
 		result.WriteString("\n")
 	}
 	if len(benchmarks) > 10 {
-		result.WriteString("  ... +" + itoa(len(benchmarks)-10) + " more\n")
+		fmt.Fprint(&result, "  ... +", itoa(len(benchmarks)-10), " more\n")
 	}
 	return strings.TrimSpace(result.String())
 }
@@ -477,7 +449,7 @@ func formatMicros(v float64) string {
 	return strings.TrimSuffix(strings.TrimSuffix(formatFloat(v, 1), "0"), ".") + "µs"
 }
 
-func formatFloat(v float64, prec int) string {
+func formatFloat(v float64, _ int) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }

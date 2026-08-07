@@ -59,7 +59,7 @@ func RegisterAllTools(ctx context.Context, srv *mcpserver.MCPServer, reg *toolre
 	// Apply global config enabled_tools + workspace .zenmcp/config.json.
 	toolstate.ApplyToolStates(workspace, reg)
 
-	registerToolCatalogResource(srv, reg, deps)
+	registerToolCatalogResource(srv, reg)
 	prompts.RegisterPrompts(srv, workspace)
 	prompts.RegisterResources(srv)
 	return nil

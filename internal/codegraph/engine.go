@@ -883,12 +883,12 @@ func (cg *CodeGraph) Status() (map[string]any, error) {
 	}
 
 	return map[string]any{
-		"workingDir":     cg.rootDir,
-		"dbPath":         dbPath,
-		"lastIndexed":    lastModified,
-		"counts":         counts,
-		"nearbyIndices":  nearby,
-		"advice":         advice,
+		"workingDir":    cg.rootDir,
+		"dbPath":        dbPath,
+		"lastIndexed":   lastModified,
+		"counts":        counts,
+		"nearbyIndices": nearby,
+		"advice":        advice,
 	}, nil
 }
 

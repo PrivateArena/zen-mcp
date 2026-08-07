@@ -10,12 +10,11 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
 	"github.com/jang/zen-mcp/internal/toolregistry"
-	"github.com/jang/zen-mcp/internal/tools"
 )
 
 // registerToolCatalogResource ports index.ts tools/catalog: a static resource
 // (tools://catalog) whose content is the action catalog of enabled tools.
-func registerToolCatalogResource(srv *mcpserver.MCPServer, reg *toolregistry.ToolRegistry, deps tools.Deps) {
+func registerToolCatalogResource(srv *mcpserver.MCPServer, reg *toolregistry.ToolRegistry) {
 	catalogURI := "tools://catalog"
 	srv.AddResource(
 		mcp.NewResource(catalogURI, "tools/catalog",

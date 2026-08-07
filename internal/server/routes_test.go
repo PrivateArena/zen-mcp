@@ -647,11 +647,11 @@ func TestPostMCPExtremeConcurrency200Clients(t *testing.T) {
 		var body []byte
 		switch id % 3 {
 		case 0:
-			body = []byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{}}}`, id))
+			body = fmt.Appendf([]byte{}, `{"jsonrpc":"2.0","id":%d,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{}}}`, id)
 		case 1:
 			body = []byte(`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`)
 		case 2:
-			body = []byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":"quick","arguments":{"text":"hello"}}}`, id))
+			body = fmt.Appendf([]byte{}, `{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":"quick","arguments":{"text":"hello"}}}`, id)
 		}
 		r := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
@@ -707,7 +707,7 @@ func TestPostMCP500ConcurrentToolsList(t *testing.T) {
 	for i := 0; i < clients; i++ {
 		go func(id int) {
 			defer wg.Done()
-			body := []byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"tools/list","params":{}}`, id))
+			body := fmt.Appendf([]byte{}, `{"jsonrpc":"2.0","id":%d,"method":"tools/list","params":{}}`, id)
 			r := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(body))
 			r.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
@@ -813,11 +813,11 @@ func TestPostMCPLongCallWith200ConcurrentClients(t *testing.T) {
 			var body []byte
 			switch id % 4 {
 			case 0:
-				body = []byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{}}}`, id))
+				body = fmt.Appendf([]byte{}, `{"jsonrpc":"2.0","id":%d,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{}}}`, id)
 			case 1:
 				body = []byte(`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`)
 			case 2:
-				body = []byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":"quick","arguments":{"text":"hello"}}}`, id))
+				body = fmt.Appendf([]byte{}, `{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":"quick","arguments":{"text":"hello"}}}`, id)
 			case 3:
 				body = []byte(`{"jsonrpc":"2.0","id":5,"method":"ping","params":{}}`)
 			}

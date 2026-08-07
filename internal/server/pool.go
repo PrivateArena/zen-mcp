@@ -334,12 +334,12 @@ func SwapServer(cacheTag, logicalID string, factory Factory, registry *toolregis
 		p.Closing = append(p.Closing, e)
 		p.mu.Unlock()
 
-		go closeWhenIdle(p, e, key)
+		go closeWhenIdle(p, e)
 	}
 	return srv, nil
 }
 
-func closeWhenIdle(p *Pool, e *PoolEntry, key string) {
+func closeWhenIdle(p *Pool, e *PoolEntry) {
 	deadline := time.Now().Add(SwapCloseMaxWait)
 	for {
 		p.mu.Lock()

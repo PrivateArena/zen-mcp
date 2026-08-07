@@ -16,13 +16,13 @@ import (
 
 // Scanner walks a workspace and determines which files need indexing.
 type Scanner struct {
-	storage        *Storage
-	rootDir        string
-	parser         *Parser
-	mu             sync.Mutex
-	ignore         *gitignore.GitIgnore
-	aliasMap       map[string]string
-	aliasBaseUrl   string
+	storage      *Storage
+	rootDir      string
+	parser       *Parser
+	mu           sync.Mutex
+	ignore       *gitignore.GitIgnore
+	aliasMap     map[string]string
+	aliasBaseUrl string
 }
 
 // NewScanner creates a new scanner.

@@ -297,11 +297,3 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
 }
-
-func writeMCPInternalError(w http.ResponseWriter, err error) {
-	writeJSON(w, http.StatusInternalServerError, map[string]any{
-		"jsonrpc": "2.0",
-		"error":   map[string]any{"code": -32603, "message": "Internal Error: " + err.Error()},
-		"id":      nil,
-	})
-}
