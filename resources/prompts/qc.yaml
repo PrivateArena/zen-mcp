@@ -21,7 +21,7 @@
        - **Naming & consistency**: inconsistent patterns/conventions across the codebase that raise cognitive load
        - **Coupling & cohesion**: modules that know too much about each other, leaky abstractions, unclear ownership boundaries
        - **Testability**: code shapes that make testing hard (hidden state, side effects buried in logic, tight coupling to I/O)
-    3. **Second Opinion via browser.chat**: Call `browser({ action: 'chat', provider: 'claude', upload_files: [<up to 9 relevant file paths>], message: 'Quality-check these files for {{i}}. Focus on duplication, boilerplate, spaghetti logic, dead code, and any pattern likely to create long-term tech debt. Flag anything that might be missed.' })` to cross-validate your findings against an independent reviewer before finalizing.
+    3. **Second Opinion via browser.chat**: Call `browser({ action: 'chat', provider: 'claude', upload_files: [<up to 9 relevant file paths>], message: 'Quality-check these files for it. Focus on duplication, boilerplate, spaghetti logic, dead code, and any pattern likely to create long-term tech debt. Flag anything that might be missed.' })` to cross-validate your findings against an independent reviewer before finalizing.
     4. **Reconcile**: Merge both passes. Where they disagree, state explicitly which finding you kept or dropped and why.
     5. **Plan Output**: Use create plan tool to structure the reconciled findings as actionable refactor tasks, ordered by severity, favoring the smallest change that removes the debt (extract/consolidate before rewrite).
 
@@ -31,7 +31,7 @@
     3. **NO GOLD-PLATING**: Do not propose speculative abstractions or rewrites beyond what the current findings justify — the goal is debt reduction, not a rearchitecture.
 
     **DELIVERABLE**:
-    Write the full plan to `QC_<short-slug-of-{{i}}>.md` in the project root, containing:
+    Write the full plan to `QC_<short-slug-of-topic>.md` in the project root, containing:
     - One-paragraph summary of what's being quality-checked
     - Findings grouped by category (duplication, boilerplate, spaghetti, dead code, naming/consistency, coupling, testability), each with how it's handled or mitigated
     - A short "debt inventory" table: issue → location(s) → estimated effort to fix → risk if left alone

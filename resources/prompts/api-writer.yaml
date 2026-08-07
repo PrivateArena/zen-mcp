@@ -16,7 +16,7 @@
     **WORKFLOW**:
     1. **Context Gathering (read-only)**: Use available codegraph tools (files > map > mermaid > skeletons > related) to locate the actual route/handler definitions, request/response schemas, and auth logic before writing anything. Don't read files unless absolutely necessary. Verify every endpoint, param, and default against the real source — never invent a field.
     2. **Identify the contract**: base URL/host/port (or how it's configured), auth mechanism (header/token/none), content-type, and the full set of actions/endpoints with their params, defaults, and response shape.
-    3. **Draft**: Write `API_<short-slug-of-{{i}}>.md` following the exemplar structure and density below.
+    3. **Draft**: Write `API_<short-slug-of-topic>.md` following the exemplar structure and density below.
     4. **Verify**: Re-check every param name, default, and example payload against source before finalizing — a wrong param is worse than a missing one.
 
     **STRICT CONSTRAINTS**:
@@ -31,7 +31,7 @@
     **EXEMPLAR** (match this structure and density exactly — study its ratio of table/code to prose):
     `/mnt/user-data/uploads/MCP_BRIDGE_API.md`
 
-    **DELIVERABLE STRUCTURE** — Write `API_<short-slug-of-{{i}}>.md`:
+    **DELIVERABLE STRUCTURE** — Write `API_<short-slug-of-topic>.md`:
     - YAML frontmatter: `name`, `description`, framework/runtime if relevant
     - Title + one-line tagline
     - **Single** `SERVER_API_URL` reminder line + one generic curl skeleton (never repeated)

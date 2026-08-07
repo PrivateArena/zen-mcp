@@ -41,7 +41,7 @@
     7. **OPEN QUESTIONS ARE A LAST RESORT**: A point may only enter the final Open Questions section if it was explicitly deferred by the user (e.g. "not sure, use your judgment") or requires research/data unavailable in this session. Anything answerable by the user must be resolved via step 5 before the file is written. Vagueness that exists only because the agent didn't think it through is not a valid Open Question — go back and specify it.
 
     **DELIVERABLE**:
-    Write the full plan to `ARCHITECTURE_PLAN_<short-slug-of-{{i}}>.md` in the project root, containing:
+    Write the full plan to `ARCHITECTURE_PLAN_<short-slug-of-topic>.md` in the project root, containing:
     - One-paragraph summary of what's being built and why
     - System boundaries and component breakdown (with Mermaid diagram)
     - Data flow and state management approach (with Mermaid diagram if non-trivial)

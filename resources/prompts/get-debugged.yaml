@@ -10,7 +10,7 @@
     Please execute the following High-Signal Web Agent Debugging protocol:
 
     1. **Locate & Gather Context (Max 10 files)**:
-       - Identify target files mentioned in '{{i}}' or found in stack traces.
+       - Identify target files mentioned in it or found in stack traces.
        - Search the codebase (via codegraph or grep) for related imports, components, or dependent files that are relevant to this issue.
        - Gather all relevant file paths into a single list. **Do not exceed 10 files** to manage token limits effectively.
     2. **Upload & Consult Web Agent**:

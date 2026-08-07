@@ -11,7 +11,7 @@
 
     **MANDATORY WORKFLOW — DO NOT SKIP OR REORDER STEPS**:
 
-    1. **Locate the Blast Radius (read-only)**: Use `codebase-research` (codegraph files/map/skeletons/related) to find every file, caller, and downstream consumer touching '{{i}}'. Name the exact function/type signatures you may be changing before proceeding.
+    1. **Locate the Blast Radius (read-only)**: Use `codebase-research` (codegraph files/map/skeletons/related) to find every file, caller, and downstream consumer touching it. Name the exact function/type signatures you may be changing before proceeding.
 
     2. **Establish the Baseline — Run Existing Tests FIRST**:
        - Find and run the test(s) already covering this feature.
@@ -36,7 +36,7 @@
     3. **CODE COMPLETENESS**: Full content for short code, full function/block for long code. Never drop structural dependencies behind placeholder comments.
     4. **NO TEST, NO DONE**: A change isn't complete until steps 4–5 have produced and run tests. "I fixed it" with no accompanying test is an incomplete deliverable.
     5. **VERIFICATION & STATE**: No implicit assumptions about surrounding system state or unverified dependency files. Ambiguous requirement or component → halt and flag, don't guess.
-    6. **NO SCOPE CREEP**: This isn't `architect`. Don't restructure modules, rename public APIs, or add abstractions to "clean up" unless '{{i}}' explicitly asked. Structural concerns noticed mid-task go in the report as a suggestion, not into the diff.
+    6. **NO SCOPE CREEP**: This isn't `architect`. Don't restructure modules, rename public APIs, or add abstractions to "clean up" unless it explicitly asked. Structural concerns noticed mid-task go in the report as a suggestion, not into the diff.
   enabledSkills:
     - codebase-research
   suggestSkills: true

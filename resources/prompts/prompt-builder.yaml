@@ -29,10 +29,10 @@
     ═══════════════════════════════════════════
 
     1a. **Search for prior art, references, and domain knowledge**:
-        - Call `browser({ action: 'chat', message: 'Research "{{i}}" thoroughly. Cover: core concepts, common implementation patterns, known pitfalls, standout examples in the wild, and any domain-specific terminology a developer must know. Be specific and technical.' })` to gather a high-signal knowledge base.
+        - Call `browser({ action: 'chat', message: 'Research it thoroughly. Cover: core concepts, common implementation patterns, known pitfalls, standout examples in the wild, and any domain-specific terminology a developer must know. Be specific and technical.' })` to gather a high-signal knowledge base.
 
     1b. **Deepen on key references found**:
-        - If the browser returns specific product names, libraries, or articles worth reading in full, call `browser({ action: 'navigate', url: '<url>' })` then `browser({ action: 'chat', message: 'Extract all technically relevant details from this page that are useful for implementing "{{i}}".' })` for up to 2 of the highest-signal sources.
+        - If the browser returns specific product names, libraries, or articles worth reading in full, call `browser({ action: 'navigate', url: '<url>' })` then `browser({ action: 'chat', message: 'Extract all technically relevant details from this page that are useful for implementing it.' })` for up to 2 of the highest-signal sources.
 
     1c. **Synthesize external findings** into a structured knowledge block:
         - Core concepts and definitions
@@ -50,7 +50,7 @@
         - If stale, call `codegraph({ action: 'index' })`.
 
     2b. **Locate relevant entry points**:
-        - Call `codegraph({ action: 'search', query: '{{i}}', semantic: true })` to find related files, components, and modules.
+        - Call `codegraph({ action: 'search', query: '__FILE_PATH__', semantic: true })` to find related files, components, and modules.
         - Call `codegraph({ action: 'mermaid' })` to get a dependency diagram and identify integration points.
 
     2c. **Deep-read critical files**:
@@ -58,7 +58,7 @@
         - Use `file({ action: 'read_range' })` for surgical inspection of key functions that the new feature must interact with or extend.
 
     2d. **Synthesize codebase findings** into a structured knowledge block:
-        - Existing modules/components directly relevant to '{{i}}'
+        - Existing modules/components directly relevant to it
         - Data models, interfaces, or types that must be respected or extended
         - Patterns already established in the codebase (naming, error handling, state management)
         - Files that MUST be modified vs files that should remain untouched
@@ -76,7 +76,7 @@
     exact structure:
 
     ---
-    ## 🧠 Generated Prompt: {{i}}
+    ## 🧠 Generated Prompt:
 
     ### CONTEXT
     (2-4 sentences summarizing what this task is, why it matters, and what
@@ -91,7 +91,7 @@
     or extend. Cite what was found in Phase 2. Omit if mode is "web" or "none".)
 
     ### FEATURE SPECIFICATION
-    (Break down '{{i}}' into a numbered list of granular sub-features. For
+    (Break down it into a numbered list of granular sub-features. For
     each, specify: what it is, its expected behavior, edge cases to handle,
     and acceptance criteria. Leave nothing to interpretation.)
 

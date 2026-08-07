@@ -14,9 +14,9 @@
     **Strict Workflow**:
     1. **Rich Diff**: Run
        ```bash
-       c=$(echo "{{i}}" | tr ',' ' '); set -- $c; f=$1; l=$NF; case "$f" in *..* ) x=${f%%.*}; y=${f##*.}; b="$x~1"; t="$y";; * ) b="$f~1"; t="$l";; esac; git diff -U999999 --find-renames "$b" "$t" > /tmp/commit_review.txt
+       c=$(echo "__COMMIT_ID_HERE__" | tr ',' ' '); set -- $c; f=$1; l=$NF; case "$f" in *..* ) x=${f%%.*}; y=${f##*.}; b="$x~1"; t="$y";; * ) b="$f~1"; t="$l";; esac; git diff -U999999 --find-renames "$b" "$t" > /tmp/commit_review.txt
        ```
-    2. **Delegate**: Call `browser({ action: 'chat', provider: 'claude', upload_files: ['/tmp/commit_review.txt'], message: 'Review changes in commit(s) {{i}}. Context: {{m}}. Focus on: architectural impact, logic errors, performance regressions, style issues. Tag findings by severity (Critical/Major/Minor/Nit). Be structured and actionable.' })`.
+    2. **Delegate**: Call `browser({ action: 'chat', provider: 'claude', upload_files: ['/tmp/commit_review.txt'], message: 'Review changes in commit(s). Context: {{m}}. Focus on: architectural impact, logic errors, performance regressions, style issues. Tag findings by severity (Critical/Major/Minor/Nit). Be structured and actionable.' })`.
     3. **Report**: Present findings directly.
   enabledSkills:
     - codebase-research

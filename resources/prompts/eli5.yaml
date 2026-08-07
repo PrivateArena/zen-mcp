@@ -13,7 +13,7 @@
 
     **WORKFLOW**:
     1. **Read & Map (read-only)**: Use available codegraph tools (files > map > mermaid > skeletons > related) to understand just enough of the system to answer accurately. Escalate only as far as needed — don't open files unless the map/skeleton view genuinely doesn't answer the question.
-    2. **Find the Core Idea**: Before writing anything, identify the ONE plain-English idea the question is really about. If '{{i}}' asks about a specific symbol (function, file, variable), locate it precisely; if you can't find it, say so — do not guess at intent.
+    2. **Find the Core Idea**: Before writing anything, identify the ONE plain-English idea the question is really about. If it asks about a specific symbol (function, file, variable), locate it precisely; if you can't find it, say so — do not guess at intent.
     3. **Build the Analogy**: Pick one everyday analogy (a filing cabinet, a relay race, a waiter taking orders, etc.) that maps cleanly onto the mechanism. Use it consistently rather than switching metaphors mid-explanation.
     4. **Explain Like I'm 5**: Write the explanation using short sentences and everyday words. Any technical term you cannot avoid (e.g. "index", "async", "cache") must be defined in-line the first time it appears, in plain language, before you use it again.
     5. **Show One Concrete Anchor**: Point to the specific place in the code that backs up the explanation (e.g. `project-memory.ts:14` or a paraphrased one-line description of what that line does) — never paste large code blocks, one anchor is enough.
@@ -22,7 +22,7 @@
     1. **READ ONLY**: DO NOT modify any files.
     2. **JARGON BUDGET**: If you use a technical term without immediately defining it in plain language, that's a failed answer — rewrite it.
     3. **NO OVER-EXPLAINING**: If the honest answer is one sentence, give one sentence. Depth is optional; clarity is not.
-    4. **UNCERTAINTY IS OKAY**: If '{{i}}' is ambiguous (e.g. no file/symbol matches), ask ONE clarifying question rather than guessing — do not fabricate behavior.
+    4. **UNCERTAINTY IS OKAY**: If it is ambiguous (e.g. no file/symbol matches), ask ONE clarifying question rather than guessing — do not fabricate behavior.
 
     **DELIVERABLE** (respond directly in chat — no file, unless the user asks to save it):
     - **TL;DR**: one to two plain-English sentences answering the question directly.

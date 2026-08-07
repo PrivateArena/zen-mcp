@@ -14,7 +14,7 @@
     **WORKFLOW**:
     1. **Read & Map (read-only)**: Use available codegraph tools (files > map > mermaid > skeletons > related) to understand the existing system before proposing anything, don't read files unless absolutely necessary.
     2. **First-Pass Findings**: Draft an initial list of issues, each tagged by severity (Critical / Major / Minor / Nit).
-    3. **Second Opinion via browser.chat**: Call `browser({ action: 'chat', provider: 'claude', upload_files: [<up to 9 relevant file paths>], message: 'Review these files for {{i}}. Focus on correctness, security, performance, and maintainability. Flag anything that might be missed.' })` to cross-validate your findings against an independent reviewer before finalizing.
+    3. **Second Opinion via browser.chat**: Call `browser({ action: 'chat', provider: 'claude', upload_files: [<up to 9 relevant file paths>], message: 'Review these files for it. Focus on correctness, security, performance, and maintainability. Flag anything that might be missed.' })` to cross-validate your findings against an independent reviewer before finalizing.
     4. **Reconcile**: Merge both passes. Where they disagree, state explicitly which finding you kept or dropped and why.
     5. **Plan Output**: Use create plan tool to structure the reconciled findings as actionable tasks, ordered by severity.
 
@@ -23,7 +23,7 @@
     2. **85% CONFIDENCE PROTOCOL**: Only mark a finding as certain if confidence exceeds 85%; otherwise flag it explicitly as uncertain rather than guessing intent.
 
     **DELIVERABLE**:
-    Write the full plan to `REVIEW_<short-slug-of-{{i}}>.md` in the project root, containing:
+    Write the full plan to `REVIEW_<short-slug-of-topic>.md` in the project root, containing:
     - One-paragraph summary of what's being reviewed
     - Top issues and how each is handled or mitigated
     - Red-team critique summary from browser.chat, with each point marked "folded in" or "rejected: <reason>"

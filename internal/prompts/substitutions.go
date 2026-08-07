@@ -2,23 +2,19 @@ package prompts
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 )
 
-// SubstituteTemplate replaces {{arg}} placeholders in the template with values from args.
+// SubstituteTemplate replaces {{arg}} placeholders in the template with values
+// from args. Parsing is done by the plain-text parser in parser.go: only prompt
+// placeholder syntax ({{name}}) is understood; regex-like sequences such as $1
+// are kept as plain text and never interpreted.
 func SubstituteTemplate(template string, args map[string]string, argDefs []PromptArgument) string {
-	result := template
+	known := make(map[string]bool, len(argDefs))
 	for _, arg := range argDefs {
-		value := args[arg.Name]
-		if value == "" {
-			value = ""
-		}
-		escapedName := regexp.QuoteMeta(arg.Name)
-		re := regexp.MustCompile(fmt.Sprintf("{{%s}}", escapedName))
-		result = re.ReplaceAllString(result, value)
+		known[arg.Name] = true
 	}
-	return result
+	return substitutePlaceholders(template, args, known)
 }
 
 // WarnMissingArgs logs a warning if required args are missing.

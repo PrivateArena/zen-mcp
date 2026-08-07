@@ -14,7 +14,7 @@
     **Strict Workflow**:
     1. **Rich Diff**: Run
        ```bash
-       c=$(echo "{{i}}" | tr ',' ' '); set -- $c; f=$1; l=$NF; case "$f" in *..* ) x=${f%%.*}; y=${f##*.}; b="$x~1"; t="$y";; * ) b="$f~1"; t="$l";; esac; git diff -U999999 --find-renames "$b" "$t" > /tmp/commit_hunt.txt
+       c=$(echo "__COMMIT_ID_HERE__" | tr ',' ' '); set -- $c; f=$1; l=$NF; case "$f" in *..* ) x=${f%%.*}; y=${f##*.}; b="$x~1"; t="$y";; * ) b="$f~1"; t="$l";; esac; git diff -U999999 --find-renames "$b" "$t" > /tmp/commit_hunt.txt
        ```
     2. **Analyze**: Read `/tmp/commit_hunt.txt` and isolate the root cause.
     3. **Fix**: 1-sentence explanation + complete corrected code block.

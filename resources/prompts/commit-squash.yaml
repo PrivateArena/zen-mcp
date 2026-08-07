@@ -14,7 +14,7 @@
     **Execution**:
     Run the `git_squash` function by sourcing the Git suite:
     ```bash
-    source /media/jang/home/Deve/zen-bashrc/src/28_git_suite.sh && git_squash "{{i}}"
+    source /media/jang/home/Deve/zen-bashrc/src/28_git_suite.sh && git_squash "__COMMIT_ID_HERE__"
     ```
 
     **Conflict Handling**:

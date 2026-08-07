@@ -10,7 +10,7 @@
 
     **STRICT WORKFLOW**:
     1. **Target Discovery & Aggregation**: 
-       - Use stealth scraping proxies or search bridges to sweep active discount aggregators, internal forum leaks, and public data streams for valid promo strings associated with '{{i}}'.
+       - Use stealth scraping proxies or search bridges to sweep active discount aggregators, internal forum leaks, and public data streams for valid promo strings associated with it.
        - Consolidate all prospective codes into a flat, deterministic candidate slice. Avoid duplicated lookups.
     2. **Sequential Checkout Injection**:
        - Navigate natively to the cart or checkout endpoint using undetected browser bridges (`userChrome.js` or standard stealth handlers).

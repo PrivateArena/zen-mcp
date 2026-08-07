@@ -9,7 +9,7 @@
 
     Do NOT read target file contents yourself. Find file paths only (listing/grep/codegraph — metadata, not content), then delegate in ONE call:
 
-    browser action="chat" provider="claude" message="<specific ask: architecture/entry points/risks/etc for {{i}}>" upload_files=["PROJECT_OVERVIEW.md" if present, <entry point>, <2-3 core files>]
+    browser action="chat" provider="claude" message="<specific ask: architecture/entry points/risks/etc for it>" upload_files=["PROJECT_OVERVIEW.md" if present, <entry point>, <2-3 core files>]
 
     Use browser.brainstorm instead if you need multiple perspectives.
 
