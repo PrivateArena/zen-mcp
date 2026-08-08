@@ -77,7 +77,6 @@ func (s *Storage) prepareStatements() {
 		INSERT INTO nodes (file_id, type, name, language, qualified_name, signature, docstring, start_line, end_line, content)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`))
-	s.setStmt("clearNodesForFile", mustPrepare(s.db, `DELETE FROM nodes WHERE file_id = ?`))
 	s.setStmt("deleteFile", mustPrepare(s.db, `DELETE FROM files WHERE id = ?`))
 	s.setStmt("insertEdge", mustPrepare(s.db, `
 		INSERT INTO edges (source_id, target_id, relation, metadata, confidence)
@@ -159,11 +158,6 @@ func (s *Storage) prepareStatements() {
 		FROM nodes n
 		JOIN files f ON n.file_id = f.id
 		WHERE n.name = ? OR n.qualified_name = ?
-	`))
-	s.setStmt("getNodesByName", mustPrepare(s.db, `
-		SELECT id, file_id, type, name, language, path, qualified_name, signature, docstring, start_line, end_line, content
-		FROM nodes
-		WHERE name = ? OR qualified_name = ?
 	`))
 	s.setStmt("setMetadata", mustPrepare(s.db, `INSERT INTO metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`))
 	s.setStmt("getMetadata", mustPrepare(s.db, `SELECT value FROM metadata WHERE key = ?`))
@@ -404,22 +398,88 @@ func (s *Storage) InsertNodes(nodes []NodeRecord) (int64, error) {
 	return lastID, tx.Commit()
 }
 
+// ReindexFileData atomically replaces a file's index data without disturbing
+// incoming edges from other (unchanged) files. It upserts nodes in place by
+// (name, start_line), deletes stale nodes no longer emitted by the file, and
+// removes only source-side edges so they can be rebuilt from fresh relations.
+func (s *Storage) ReindexFileData(fileID int64, nodes []NodeRecord) error {
+	return s.RunInTransaction(func(tx *sql.Tx) error {
+		rows, err := tx.Query(`SELECT id, name, start_line FROM nodes WHERE file_id = ?`, fileID)
+		if err != nil {
+			return err
+		}
+		existing := make(map[string]int64)
+		for rows.Next() {
+			var id int64
+			var name string
+			var line int
+			if err := rows.Scan(&id, &name, &line); err == nil {
+				existing[nodeKey(name, line)] = id
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
+		for _, n := range nodes {
+			key := nodeKey(n.Name, n.StartLine)
+			if id, ok := existing[key]; ok {
+				if _, err := tx.Exec(`
+					UPDATE nodes SET type=?, name=?, language=?, qualified_name=?, signature=?, docstring=?, start_line=?, end_line=?, content=?
+					WHERE id=?
+				`, n.Type, n.Name, n.Language, n.QualifiedName, n.Signature, n.Docstring, n.StartLine, n.EndLine, n.Content, id); err != nil {
+					return err
+				}
+				delete(existing, key)
+			} else {
+				if _, err := tx.Exec(`
+					INSERT INTO nodes (file_id, type, name, language, qualified_name, signature, docstring, start_line, end_line, content)
+					VALUES (?,?,?,?,?,?,?,?,?,?)
+				`, fileID, n.Type, n.Name, n.Language, n.QualifiedName, n.Signature, n.Docstring, n.StartLine, n.EndLine, n.Content); err != nil {
+					return err
+				}
+			}
+		}
+
+		// Stale nodes no longer present in the file; FK cascade drops their edges.
+		for _, id := range existing {
+			if _, err := tx.Exec(`DELETE FROM nodes WHERE id = ?`, id); err != nil {
+				return err
+			}
+		}
+
+		// Remove only source-side edges so Phase 3 can rebuild them from fresh relations.
+		if _, err := tx.Exec(`DELETE FROM edges WHERE source_id IN (SELECT id FROM nodes WHERE file_id = ?)`, fileID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM imports WHERE file_id = ?`, fileID); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+func nodeKey(name string, line int) string {
+	return fmt.Sprintf("%s\x00%d", name, line)
+}
+
+// RefreshFileMTime updates the stored mtime for a path whose content is
+// unchanged, so the mtime fast-path in the scanner stays effective after
+// a touch or clock skew.
+func (s *Storage) RefreshFileMTime(path string, mtime int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(`UPDATE files SET mtime = ? WHERE path = ?`, mtime, path)
+	return err
+}
+
 // DeleteNodesForFile removes all nodes for a file.
 func (s *Storage) DeleteNodesForFile(fileID int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	_, err := s.db.Exec(`DELETE FROM nodes WHERE file_id = ?`, fileID)
 	return err
-}
-
-// ClearNodesForFile removes all nodes for a file using prepared statement.
-func (s *Storage) ClearNodesForFile(fileID int64) {
-	stmt := s.getStmt("clearNodesForFile")
-	if stmt == nil {
-		s.db.Exec(`DELETE FROM nodes WHERE file_id = ?`, fileID)
-		return
-	}
-	stmt.Exec(fileID)
 }
 
 // InsertEdge inserts an edge.
@@ -634,11 +694,33 @@ func boolToInt(b bool) int {
 }
 
 func sanitizeFtsQuery(q string) string {
-	q = strings.ReplaceAll(q, "\"", "\"\"")
-	if strings.ContainsAny(q, " \t") {
-		q = "\"" + q + "\""
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return `""`
 	}
-	return q
+	q = strings.ReplaceAll(q, `"`, `""`)
+	if isSafeFtsToken(q) {
+		return q
+	}
+	return `"` + q + `"`
+}
+
+// isSafeFtsToken reports whether a single token is plain FTS5 syntax that does
+// not need quoting: word characters plus an optional trailing prefix wildcard.
+// Anything else (column syntax, negation, phrases, punctuation) is quoted so it
+// cannot silently inject FTS5 operators or raise confusing parse errors.
+func isSafeFtsToken(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' {
+			continue
+		}
+		if c == '*' && i == len(s)-1 {
+			continue
+		}
+		return false
+	}
+	return len(s) > 0
 }
 
 // RunInTransaction runs fn in a transaction.
@@ -843,13 +925,16 @@ func (s *Storage) FindShortestPath(fromName, toName string, limit int) (*Shortes
 	toID := toNodes[0].ID
 
 	type bfsItem struct {
-		nodeID int64
-		path   []ShortestPathStep
-		depth  int
+		nodeID  int64
+		path    []ShortestPathStep
+		depth   int
+		srcName string
+		srcFile string
+		srcLine int
 	}
 
 	visited := make(map[int64]bool)
-	queue := []bfsItem{{fromID, nil, 0}}
+	queue := []bfsItem{{fromID, nil, 0, fromNodes[0].Name, fromNodes[0].Path, fromNodes[0].StartLine}}
 	visited[fromID] = true
 
 	for len(queue) > 0 {
@@ -865,7 +950,7 @@ func (s *Storage) FindShortestPath(fromName, toName string, limit int) (*Shortes
 		}
 
 		rows, err := s.db.Query(`
-			SELECT n.name, f.path, n.start_line, n.end_line, e.relation
+			SELECT n.id, n.name, f.path, n.start_line, n.end_line, e.relation
 			FROM edges e
 			JOIN nodes n ON e.target_id = n.id
 			JOIN files f ON n.file_id = f.id
@@ -875,6 +960,7 @@ func (s *Storage) FindShortestPath(fromName, toName string, limit int) (*Shortes
 			continue
 		}
 		var outgoing []struct {
+			id        int64
 			name      string
 			path      string
 			startLine int
@@ -883,13 +969,14 @@ func (s *Storage) FindShortestPath(fromName, toName string, limit int) (*Shortes
 		}
 		for rows.Next() {
 			var n struct {
+				id        int64
 				name      string
 				path      string
 				startLine int
 				endLine   int
 				relation  string
 			}
-			if err := rows.Scan(&n.name, &n.path, &n.startLine, &n.endLine, &n.relation); err == nil {
+			if err := rows.Scan(&n.id, &n.name, &n.path, &n.startLine, &n.endLine, &n.relation); err == nil {
 				outgoing = append(outgoing, n)
 			}
 		}
@@ -899,8 +986,7 @@ func (s *Storage) FindShortestPath(fromName, toName string, limit int) (*Shortes
 		rows.Close()
 
 		for _, edge := range outgoing {
-			nextID := int64(0)
-			_ = s.db.QueryRow(`SELECT id FROM nodes WHERE name = ? AND file_id = (SELECT id FROM files WHERE path = ?)`, edge.name, edge.path).Scan(&nextID)
+			nextID := edge.id
 			if nextID == 0 || visited[nextID] {
 				continue
 			}
@@ -908,15 +994,15 @@ func (s *Storage) FindShortestPath(fromName, toName string, limit int) (*Shortes
 			newPath := make([]ShortestPathStep, len(current.path)+1)
 			copy(newPath, current.path)
 			newPath[len(current.path)] = ShortestPathStep{
-				SourceName: fromNodes[0].Name,
-				SourceFile: fromNodes[0].Path,
-				SourceLine: fromNodes[0].StartLine,
+				SourceName: current.srcName,
+				SourceFile: current.srcFile,
+				SourceLine: current.srcLine,
 				TargetName: edge.name,
 				TargetFile: edge.path,
 				TargetLine: edge.startLine,
 				Relation:   edge.relation,
 			}
-			queue = append(queue, bfsItem{nextID, newPath, current.depth + 1})
+			queue = append(queue, bfsItem{nextID, newPath, current.depth + 1, edge.name, edge.path, edge.startLine})
 		}
 	}
 
@@ -947,10 +1033,10 @@ func (s *Storage) GetNodesForFile(fileID int64) ([]NodeRecord, error) {
 	return nodes, nil
 }
 
+// getNodesByName resolves nodes by name. It is only called from
+// FindShortestPath, which already holds s.mu — do not lock here.
 func (s *Storage) getNodesByName(name string) ([]NodeRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	rows, err := s.db.Query(`SELECT id, file_id, type, name, language, path, qualified_name, signature, docstring, start_line, end_line, content FROM nodes WHERE name = ? OR qualified_name = ?`, name, name)
+	rows, err := s.db.Query(`SELECT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content FROM nodes n JOIN files f ON n.file_id = f.id WHERE n.name = ? OR n.qualified_name = ?`, name, name)
 	if err != nil {
 		return nil, err
 	}
@@ -1240,6 +1326,10 @@ type FileRecord struct {
 	MTime    int64
 	Language string
 	IsTest   bool
+	// content carries the file bytes already read by the scanner so Index does
+	// not re-read the file (single-read change detection). It is never
+	// persisted and is excluded from any serialization outside this package.
+	content []byte
 }
 
 // EdgeRecord represents an edge.

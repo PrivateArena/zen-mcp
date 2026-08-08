@@ -1,6 +1,8 @@
 package codegraph
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,7 +10,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // CodeGraph is the main code graph engine.
@@ -17,6 +21,10 @@ type CodeGraph struct {
 	parser  *Parser
 	scanner *Scanner
 	rootDir string
+
+	// indexMu serializes Index runs so a concurrent Index on the same graph
+	// cannot interleave Phase-2 deletes with Phase-3 edge resolution.
+	indexMu sync.Mutex
 }
 
 // NewCodeGraph creates a new code graph engine.
@@ -58,8 +66,19 @@ type IndexResult struct {
 	Deleted int
 }
 
+// fileParseResult carries one file's parse output through the Index pipeline.
+type fileParseResult struct {
+	fr          FileRecord
+	fileID      int64
+	nodeRecords []NodeRecord
+	relations   []ParsedRelation
+}
+
 // Index performs a full or incremental index.
 func (cg *CodeGraph) Index() (*IndexResult, error) {
+	cg.indexMu.Lock()
+	defer cg.indexMu.Unlock()
+
 	files, err := cg.scanner.GetFilesToProcess()
 	if err != nil {
 		return nil, err
@@ -70,18 +89,16 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 	}
 
 	// Phase 1: parse every changed file and collect nodes + relations
-	type fileParseResult struct {
-		fr          FileRecord
-		fileID      int64
-		nodeRecords []NodeRecord
-		relations   []ParsedRelation
-	}
 	var parseResults []fileParseResult
 
 	for _, fr := range files {
-		content, err := os.ReadFile(filepath.Join(cg.rootDir, fr.Path))
-		if err != nil {
-			continue
+		// Single-read pipeline: the scanner already read the bytes for hashing.
+		content := fr.content
+		if len(content) == 0 {
+			content, err = os.ReadFile(filepath.Join(cg.rootDir, fr.Path))
+			if err != nil {
+				continue
+			}
 		}
 
 		fileID, err := cg.storage.UpsertFile(fr)
@@ -133,41 +150,61 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 		}
 	}
 
-	// Phase 2: delete stale data and insert fresh nodes for every changed file
+	// Phase 2: atomically replace each changed file's data in a single
+	// transaction — upsert nodes in place, drop stale nodes, remove only
+	// source-side edges. Incoming edges from unchanged files are preserved.
 	for _, pr := range parseResults {
-		cg.storage.DeleteNodesForFile(pr.fileID)
-		cg.storage.DeleteEdgesForFile(pr.fileID)
-		cg.storage.DeleteImportsForFile(pr.fileID)
-		if len(pr.nodeRecords) > 0 {
-			cg.storage.InsertNodes(pr.nodeRecords)
+		if err := cg.storage.ReindexFileData(pr.fileID, pr.nodeRecords); err != nil {
+			continue
 		}
 	}
 
-	// Phase 3: build edges now that every target node exists in the DB
+	// Phase 3: build edges now that every target node exists in the DB.
+	// Resolution is scoped: same file first, then same directory, then a
+	// global fallback tagged INFERRED, with a fan-out cap so common symbol
+	// names cannot materialize a Cartesian edge product.
 	for _, pr := range parseResults {
 		var edgeRecords []EdgeRecord
 		for _, rel := range pr.relations {
-			sourceNodes, _ := cg.storage.FindNodesByName(rel.SourceName)
-			targetNodes, _ := cg.storage.FindNodesByName(rel.TargetName)
-
-			if len(sourceNodes) > 0 && len(targetNodes) > 0 {
-				for _, sn := range sourceNodes {
-					for _, tn := range targetNodes {
-						edgeRecords = append(edgeRecords, EdgeRecord{
-							SourceID:   sn.ID,
-							TargetID:   tn.ID,
-							Relation:   rel.Relation,
-							Metadata:   rel.Metadata,
-							Confidence: "EXTRACTED",
-						})
-					}
-				}
+			if rel.Relation == "imports" {
+				importPath := strings.Trim(rel.TargetName, "\"'`")
+				_ = cg.storage.RecordImport(pr.fileID, importPath, rel.IsSideEffect)
+				continue
 			}
 
-		if rel.Relation == "imports" {
-			importPath := strings.Trim(rel.TargetName, "\"'`")
-			_ = cg.storage.RecordImport(pr.fileID, importPath, rel.IsSideEffect)
-		}
+			sourceNodes, srcConf := resolveNodesForScope(cg.storage, rel.SourceName, pr.fr.Path, true)
+			if len(sourceNodes) == 0 {
+				continue
+			}
+			targetNodes, tgtConf := resolveNodesForScope(cg.storage, rel.TargetName, pr.fr.Path, false)
+			if len(targetNodes) == 0 {
+				continue
+			}
+
+			confidence := "EXTRACTED"
+			if srcConf == "INFERRED" || tgtConf == "INFERRED" {
+				confidence = "INFERRED"
+			}
+
+			emitted := 0
+			for _, sn := range sourceNodes {
+				for _, tn := range targetNodes {
+					if emitted >= maxEdgeFanout {
+						break
+					}
+					edgeRecords = append(edgeRecords, EdgeRecord{
+						SourceID:   sn.ID,
+						TargetID:   tn.ID,
+						Relation:   rel.Relation,
+						Metadata:   rel.Metadata,
+						Confidence: confidence,
+					})
+					emitted++
+				}
+				if emitted >= maxEdgeFanout {
+					break
+				}
+			}
 		}
 		if len(edgeRecords) > 0 {
 			cg.storage.InsertEdges(edgeRecords)
@@ -176,23 +213,98 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 
 	result.Indexed = len(parseResults)
 
+	// C4: drop index entries for files that no longer exist on disk.
+	result.Deleted = cg.cleanupDeletedFiles(parseResults)
+
 	cg.parseManifests()
 
 	return result, nil
 }
 
+// maxEdgeFanout caps the number of edges emitted for a single relation so a
+// common symbol name cannot produce a Cartesian product of edges.
+const maxEdgeFanout = 64
+
+// resolveNodesForScope resolves relation endpoints with file-scope awareness:
+// same file first, then same directory, then the global name match as a
+// fallback. requireSameFile forces an in-file match for edge sources, since a
+// relation is always emitted from the file being parsed.
+func resolveNodesForScope(storage *Storage, name, scopeFile string, requireSameFile bool) ([]NodeRecord, string) {
+	all, err := storage.FindNodesByName(name)
+	if err != nil || len(all) == 0 {
+		return nil, "EXTRACTED"
+	}
+
+	var sameFile, sameDir []NodeRecord
+	scopeDir := filepath.Dir(scopeFile)
+	for _, n := range all {
+		switch {
+		case n.Path == scopeFile:
+			sameFile = append(sameFile, n)
+		case filepath.Dir(n.Path) == scopeDir:
+			sameDir = append(sameDir, n)
+		}
+	}
+
+	if len(sameFile) > 0 {
+		return sameFile, "EXTRACTED"
+	}
+	if requireSameFile {
+		return nil, "EXTRACTED"
+	}
+	if len(sameDir) > 0 {
+		return sameDir, "EXTRACTED"
+	}
+	return all, "INFERRED"
+}
+
+// cleanupDeletedFiles removes index records for files that no longer exist on
+// disk and returns how many were dropped.
+func (cg *CodeGraph) cleanupDeletedFiles(processed []fileParseResult) int {
+	processedSet := make(map[string]bool, len(processed))
+	for _, pr := range processed {
+		processedSet[pr.fr.Path] = true
+	}
+
+	deleted := 0
+	for _, fr := range cg.storage.GetAllFiles() {
+		if processedSet[fr.Path] {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(cg.rootDir, fr.Path)); err != nil {
+			if cg.storage.DeleteFile(fr.ID) == nil {
+				deleted++
+			}
+		}
+	}
+	return deleted
+}
+
 // parseManifests parses manifest files (package.json, go.mod, Cargo.toml, pom.xml)
-// and inserts their nodes and edges directly into storage.
+// and inserts their nodes and edges directly into storage. Each manifest is
+// gated by its own hash/mtime so incremental runs skip unchanged manifests.
 func (cg *CodeGraph) parseManifests() {
 	manifestFiles := []string{"package.json", "go.mod", "Cargo.toml", "pom.xml"}
 	for _, manifest := range manifestFiles {
 		fullPath := filepath.Join(cg.rootDir, manifest)
-		if _, err := os.Stat(fullPath); err != nil {
+		info, err := os.Stat(fullPath)
+		if err != nil {
+			continue
+		}
+		if info.Size() > maxFileSize {
 			continue
 		}
 
 		data, err := os.ReadFile(fullPath)
 		if err != nil {
+			continue
+		}
+
+		hashBytes := sha256.Sum256(data)
+		hashStr := hex.EncodeToString(hashBytes[:])
+		mtime := info.ModTime().UnixMilli()
+
+		if cached := cg.storage.GetFileByPath(manifest); cached != nil && cached.Hash == hashStr && cached.MTime == mtime {
 			continue
 		}
 
@@ -204,14 +316,13 @@ func (cg *CodeGraph) parseManifests() {
 		fr := FileRecord{
 			Path:     manifest,
 			Language: "manifest",
+			Hash:     hashStr,
+			MTime:    mtime,
 		}
 		fileID, err := cg.storage.UpsertFile(fr)
 		if err != nil {
 			continue
 		}
-
-		cg.storage.DeleteNodesForFile(fileID)
-		cg.storage.DeleteEdgesForFile(fileID)
 
 		nodeRecords := make([]NodeRecord, 0, len(fileNodes))
 		for _, n := range fileNodes {
@@ -228,25 +339,38 @@ func (cg *CodeGraph) parseManifests() {
 				Content:       n.Content,
 			})
 		}
-		if len(nodeRecords) > 0 {
-			cg.storage.InsertNodes(nodeRecords)
+		if err := cg.storage.ReindexFileData(fileID, nodeRecords); err != nil {
+			continue
 		}
 
 		var edgeRecords []EdgeRecord
 		for _, rel := range fileRelations {
-			sourceNodes, _ := cg.storage.FindNodesByName(rel.SourceName)
-			targetNodes, _ := cg.storage.FindNodesByName(rel.TargetName)
-			if len(sourceNodes) > 0 && len(targetNodes) > 0 {
-				for _, sn := range sourceNodes {
-					for _, tn := range targetNodes {
-						edgeRecords = append(edgeRecords, EdgeRecord{
-							SourceID:   sn.ID,
-							TargetID:   tn.ID,
-							Relation:   rel.Relation,
-							Metadata:   rel.Metadata,
-							Confidence: "EXTRACTED",
-						})
+			sourceNodes, srcConf := resolveNodesForScope(cg.storage, rel.SourceName, manifest, false)
+			targetNodes, tgtConf := resolveNodesForScope(cg.storage, rel.TargetName, manifest, false)
+			if len(sourceNodes) == 0 || len(targetNodes) == 0 {
+				continue
+			}
+			confidence := "EXTRACTED"
+			if srcConf == "INFERRED" || tgtConf == "INFERRED" {
+				confidence = "INFERRED"
+			}
+			emitted := 0
+			for _, sn := range sourceNodes {
+				for _, tn := range targetNodes {
+					if emitted >= maxEdgeFanout {
+						break
 					}
+					edgeRecords = append(edgeRecords, EdgeRecord{
+						SourceID:   sn.ID,
+						TargetID:   tn.ID,
+						Relation:   rel.Relation,
+						Metadata:   rel.Metadata,
+						Confidence: confidence,
+					})
+					emitted++
+				}
+				if emitted >= maxEdgeFanout {
+					break
 				}
 			}
 		}
@@ -985,10 +1109,13 @@ func derefString(s *string) string {
 }
 
 func truncate(s string, maxLen int) string {
-	if len(s) > maxLen {
-		return s[:maxLen]
+	if len(s) <= maxLen {
+		return s
 	}
-	return s
+	for maxLen > 0 && !utf8.RuneStart(s[maxLen]) {
+		maxLen--
+	}
+	return s[:maxLen]
 }
 
 // stringsBuilder is a simple string builder wrapper

@@ -58,6 +58,15 @@ func (s *Scanner) GetFilesToProcess() ([]FileRecord, error) {
 		return nil, fmt.Errorf("too many files (%d), limit is %d", len(files), maxFiles)
 	}
 
+	// Load every stored file record once and diff in memory instead of running
+	// one GetFileByPath query per file on disk.
+	cachedByPath := make(map[string]FileRecord)
+	if s.storage != nil {
+		for _, fr := range s.storage.GetAllFiles() {
+			cachedByPath[fr.Path] = fr
+		}
+	}
+
 	var toProcess []FileRecord
 	for _, relPath := range files {
 		if s.IsIgnored(relPath, false) {
@@ -77,25 +86,38 @@ func (s *Scanner) GetFilesToProcess() ([]FileRecord, error) {
 			continue
 		}
 
+		mtime := info.ModTime().UnixMilli()
+		lang := detectLanguage(relPath)
+
+		cached, ok := cachedByPath[relPath]
+		if ok && cached.MTime == mtime && cached.Hash != "" {
+			// Fast path: unchanged mtime, skip the read + hash entirely.
+			continue
+		}
+
 		content, err := os.ReadFile(fullPath)
 		if err != nil {
 			continue
 		}
 		hash := sha256.Sum256(content)
 		hashStr := hex.EncodeToString(hash[:])
-		mtime := info.ModTime().UnixMilli()
-		lang := detectLanguage(relPath)
 
-		cached := s.storage.GetFileByPath(relPath)
-		if cached == nil || cached.Hash != hashStr || cached.MTime != mtime {
-			toProcess = append(toProcess, FileRecord{
-				Path:     relPath,
-				Hash:     hashStr,
-				MTime:    mtime,
-				Language: lang,
-				IsTest:   isTest(relPath, lang),
-			})
+		if ok && cached.Hash == hashStr {
+			// Content unchanged (touch / clock skew): refresh mtime only.
+			if s.storage != nil {
+				_ = s.storage.RefreshFileMTime(relPath, mtime)
+			}
+			continue
 		}
+
+		toProcess = append(toProcess, FileRecord{
+			Path:     relPath,
+			Hash:     hashStr,
+			MTime:    mtime,
+			Language: lang,
+			IsTest:   isTest(relPath, lang),
+			content:  content,
+		})
 	}
 
 	return toProcess, nil

@@ -291,13 +291,21 @@ func actionIndex(session *layeredGraphSession, isolate int) (string, error) {
 	}
 	parts := make([]string, 0, len(targets))
 	for _, target := range targets {
-		_, _ = target.graph.Index()
+		result, err := target.graph.Index()
+		if err != nil {
+			parts = append(parts, fmt.Sprintf("Scope [%s]: index failed: %v.", target.label, err))
+			continue
+		}
 		stats, _ := target.graph.Status()
 		fileCount := 0
 		if counts, ok := stats["counts"].(map[string]int); ok {
 			fileCount = counts["fileCount"]
 		}
-		parts = append(parts, fmt.Sprintf("Scope [%s]: %d total files.", target.label, fileCount))
+		if result.Deleted > 0 {
+			parts = append(parts, fmt.Sprintf("Scope [%s]: indexed %d file(s), skipped %d, removed %d stale file(s); %d total files.", target.label, result.Indexed, result.Total-result.Indexed, result.Deleted, fileCount))
+		} else {
+			parts = append(parts, fmt.Sprintf("Scope [%s]: indexed %d file(s); %d total files.", target.label, result.Indexed, fileCount))
+		}
 	}
 	return strings.Join(parts, "\n"), nil
 }
