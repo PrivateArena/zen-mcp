@@ -1,16 +1,22 @@
 - name: delegate
-  description: Offload file/codebase understanding to browser.chat instead of reading files yourself. Preserves context.
+  description: Offload file/codebase understanding to browser.chat instead of reading files yourself. Preserves local context by delegating comprehension work to a sub-agent, gated by a constrained-ask requirement.
   arguments:
     - name: i
       description: What to understand/review, and which files/project
       required: true
+  enabledSkills:
+    - codebase-research
+    - chat-research
+  suggestSkills: true
   template: |-
     Task: '{{i}}'.
 
-    Do NOT read target file contents yourself. Find file paths only (listing/grep/codegraph — metadata, not content), then delegate in ONE call:
+    Do NOT read target file contents yourself. Use `codebase-research` (codegraph files > map > skeletons > related — metadata and signatures, not bodies) to locate the relevant files. If `PROJECT_OVERVIEW.md` exists in the project root, read it and skip file discovery per that skill's conditional optimization.
 
-    browser action="chat" provider="claude" message="<specific ask: architecture/entry points/risks/etc for it>" upload_files=["PROJECT_OVERVIEW.md" if present, <entry point>, <2-3 core files>]
+    **BEFORE DELEGATING**: Run the message through `chat-research`'s Message-Quality Gate — Context, numbered specific question(s), files attached with a reason each, and expected output shape. If you can't fill in every field, you haven't scoped the task yet: go back to `codebase-research` rather than sending a generic ask like "explain the architecture" or "review this file." A message that would be equally valid for a different file or project fails the gate.
 
-    Use browser.brainstorm instead if you need multiple perspectives.
+    Delegate in ONE call:
 
-    Use the returned summary to answer. Only read a file yourself if no browser tool exists or the gap is trivial.
+    browser action="chat" provider="claude" message="<the constrained ask produced by the quality gate>" upload_files=["PROJECT_OVERVIEW.md" if present, <entry point>, <2-3 core files, each justified in the ask>]
+
+    Use the returned summary to answer. Only read a file yourself if no browser tool exists, or the gap is trivial (e.g. confirming a single import line) — not as a substitute for scoping the ask properly.
