@@ -177,36 +177,6 @@ func ScanKnowledgeBase(skillBaseDir, skillID string) ([]ResolvedReference, error
 	return refs, nil
 }
 
-// ScanBundledResources scans a skill directory for bundled resource files.
-func ScanBundledResources(skillDir string) []ResolvedReference {
-	resourceDirs := []string{"rules", "scripts", "assets"}
-	var refs []ResolvedReference
-
-	for _, dir := range resourceDirs {
-		dirPath := filepath.Join(skillDir, dir)
-		if _, err := os.Stat(dirPath); os.IsNotExist(err) {
-			continue
-		}
-		entries, err := os.ReadDir(dirPath)
-		if err != nil {
-			continue
-		}
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			ext := strings.ToLower(filepath.Ext(entry.Name()))
-			if ext == ".md" || ext == ".ts" || ext == ".js" || ext == ".json" {
-				refs = append(refs, ResolvedReference{
-					AbsolutePath: filepath.Join(dirPath, entry.Name()),
-					RelativePath: filepath.Join(dir, entry.Name()),
-				})
-			}
-		}
-	}
-	return refs
-}
-
 // ScanSkillFiles scans a skill directory for all files.
 func ScanSkillFiles(skillDir string) []ResolvedReference {
 	resolvedDir, err := filepath.EvalSymlinks(skillDir)

@@ -311,15 +311,6 @@ func (s *Storage) RecordImport(fileID int64, importPath string, isSideEffect boo
 	return err
 }
 
-// DeleteImportsForFile removes all import records for a file.
-func (s *Storage) DeleteImportsForFile(fileID int64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec(`DELETE FROM imports WHERE file_id = ?`, fileID)
-	return err
-}
-
-// IsFileImported returns true if any other file imports the given path
 // or a directory containing the file.
 func (s *Storage) IsFileImported(filePath string) bool {
 	s.mu.Lock()
@@ -372,33 +363,6 @@ func (s *Storage) InsertNode(node NodeRecord) (int64, error) {
 	return id, nil
 }
 
-// InsertNodes inserts multiple nodes in a single transaction and returns the last ID.
-func (s *Storage) InsertNodes(nodes []NodeRecord) (int64, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	tx, err := s.db.Begin()
-	if err != nil {
-		return 0, err
-	}
-	defer tx.Rollback()
-
-	var lastID int64
-	for _, node := range nodes {
-		err := tx.QueryRow(`
-			INSERT INTO nodes (file_id, type, name, language, qualified_name, signature, docstring, start_line, end_line, content)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			RETURNING id
-		`, node.FileID, node.Type, node.Name, node.Language, node.QualifiedName, node.Signature, node.Docstring, node.StartLine, node.EndLine, node.Content).
-			Scan(&lastID)
-		if err != nil {
-			return 0, err
-		}
-	}
-	return lastID, tx.Commit()
-}
-
-// ReindexFileData atomically replaces a file's index data without disturbing
 // incoming edges from other (unchanged) files. It upserts nodes in place by
 // (name, start_line), deletes stale nodes no longer emitted by the file, and
 // removes only source-side edges so they can be rebuilt from fresh relations.
@@ -474,15 +438,6 @@ func (s *Storage) RefreshFileMTime(path string, mtime int64) error {
 	return err
 }
 
-// DeleteNodesForFile removes all nodes for a file.
-func (s *Storage) DeleteNodesForFile(fileID int64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec(`DELETE FROM nodes WHERE file_id = ?`, fileID)
-	return err
-}
-
-// InsertEdge inserts an edge.
 func (s *Storage) InsertEdge(sourceID, targetID int64, relation, metadata string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -520,15 +475,6 @@ func (s *Storage) InsertEdges(edges []EdgeRecord) error {
 	return tx.Commit()
 }
 
-// DeleteEdgesForFile removes edges for nodes in a file.
-func (s *Storage) DeleteEdgesForFile(fileID int64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec(`DELETE FROM edges WHERE source_id IN (SELECT id FROM nodes WHERE file_id = ?) OR target_id IN (SELECT id FROM nodes WHERE file_id = ?)`, fileID, fileID)
-	return err
-}
-
-// SearchFTS searches the FTS5 index.
 func (s *Storage) SearchFTS(query string) ([]NodeSearchResult, error) {
 	sanitized := sanitizeFtsQuery(query)
 	rows, err := s.db.Query(`
@@ -738,27 +684,6 @@ func (s *Storage) RunInTransaction(fn func(tx *sql.Tx) error) error {
 	return tx.Commit()
 }
 
-// SetMetadata sets a metadata key/value.
-func (s *Storage) SetMetadata(key, value string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec(`INSERT INTO metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
-	return err
-}
-
-// GetMetadata gets a metadata value.
-func (s *Storage) GetMetadata(key string) string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var value string
-	err := s.db.QueryRow(`SELECT value FROM metadata WHERE key = ?`, key).Scan(&value)
-	if err != nil {
-		return ""
-	}
-	return value
-}
-
-// GetAllFiles returns all indexed files.
 func (s *Storage) GetAllFiles() []FileRecord {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1056,168 +981,6 @@ func (s *Storage) getNodesByName(name string) ([]NodeRecord, error) {
 	return nodes, nil
 }
 
-// FindNodeByName finds a single node by name, preferring qualified_name matches.
-func (s *Storage) FindNodeByName(name string) *NodeRecord {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	var n NodeRecord
-	err := s.db.QueryRow(`
-		SELECT id, file_id, type, name, language, qualified_name, signature, docstring, start_line, end_line, content
-		FROM nodes
-		WHERE qualified_name = ? OR name = ?
-		ORDER BY (qualified_name = ?) DESC
-		LIMIT 1
-	`, name, name, name).Scan(&n.ID, &n.FileID, &n.Type, &n.Name, &n.Language, &n.QualifiedName, &n.Signature, &n.Docstring, &n.StartLine, &n.EndLine, &n.Content)
-	if err != nil {
-		return nil
-	}
-	n.Path = s.getFilePathForNode(n.FileID)
-	return &n
-}
-
-// FindNodeByTypeAndName finds a node by type and name.
-func (s *Storage) FindNodeByTypeAndName(typ, name string) *NodeRecord {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	var n NodeRecord
-	err := s.db.QueryRow(`
-		SELECT id, file_id, type, name, language, qualified_name, signature, docstring, start_line, end_line, content
-		FROM nodes
-		WHERE type = ? AND (name = ? OR qualified_name = ?)
-		LIMIT 1
-	`, typ, name, name).Scan(&n.ID, &n.FileID, &n.Type, &n.Name, &n.Language, &n.QualifiedName, &n.Signature, &n.Docstring, &n.StartLine, &n.EndLine, &n.Content)
-	if err != nil {
-		return nil
-	}
-	n.Path = s.getFilePathForNode(n.FileID)
-	return &n
-}
-
-func (s *Storage) getFilePathForNode(fileID int64) string {
-	var path string
-	_ = s.db.QueryRow(`SELECT path FROM files WHERE id = ?`, fileID).Scan(&path)
-	return path
-}
-
-// GetAllEdges returns all edges with optional path filter and limit.
-func (s *Storage) GetAllEdges(pathFilter string, limit int) []EdgeRecord {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	query := `
-		SELECT e.source_id, e.target_id, e.relation, e.metadata, e.confidence
-		FROM edges e
-	`
-	args := []any{}
-	if pathFilter != "" {
-		query += ` WHERE e.source_id IN (SELECT id FROM nodes WHERE file_id IN (SELECT id FROM files WHERE path LIKE ?))`
-		args = append(args, "%"+pathFilter+"%")
-	}
-	if limit > 0 {
-		query += ` LIMIT ?`
-		args = append(args, limit)
-	}
-	rows, err := s.db.Query(query, args...)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-
-	var results []EdgeRecord
-	for rows.Next() {
-		var e EdgeRecord
-		if err := rows.Scan(&e.SourceID, &e.TargetID, &e.Relation, &e.Metadata, &e.Confidence); err == nil {
-			results = append(results, e)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil
-	}
-	return results
-}
-
-// GetAllEdgeRecords returns raw edge records with IDs.
-func (s *Storage) GetAllEdgeRecords(pathFilter string, limit int) []RawEdgeRecord {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	query := `
-		SELECT e.source_id, e.target_id, e.relation
-		FROM edges e
-		JOIN nodes s ON e.source_id = s.id
-		JOIN nodes t ON e.target_id = t.id
-		JOIN files fs ON s.file_id = fs.id
-		JOIN files ft ON t.file_id = ft.id
-	`
-	var rows *sql.Rows
-	var err error
-
-	if pathFilter != "" {
-		query += ` WHERE fs.path LIKE ? OR ft.path LIKE ?`
-		if limit > 0 {
-			query += ` LIMIT ?`
-			rows, err = s.db.Query(query, "%"+pathFilter+"%", "%"+pathFilter+"%", limit)
-		} else {
-			rows, err = s.db.Query(query, "%"+pathFilter+"%", "%"+pathFilter+"%")
-		}
-	} else {
-		if limit > 0 {
-			query += ` LIMIT ?`
-			rows, err = s.db.Query(query, limit)
-		} else {
-			rows, err = s.db.Query(query)
-		}
-	}
-
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-
-	var results []RawEdgeRecord
-	for rows.Next() {
-		var e RawEdgeRecord
-		if err := rows.Scan(&e.SourceID, &e.TargetID, &e.Relation); err == nil {
-			results = append(results, e)
-		}
-	}
-	return results
-}
-
-// SearchSymbols searches symbols using FTS.
-func (s *Storage) SearchSymbols(query string, limit int) []NodeSearchResult {
-	sanitized := sanitizeFtsQuery(query)
-	rows, err := s.db.Query(`
-		SELECT n.id, n.name, n.qualified_name, n.type, f.path, n.start_line, n.end_line
-		FROM nodes n
-		JOIN nodes_fts fts ON n.id = fts.rowid
-		JOIN files f ON n.file_id = f.id
-		WHERE nodes_fts MATCH ?
-		ORDER BY rank
-		LIMIT ?
-	`, sanitized, limit)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-
-	var results []NodeSearchResult
-	for rows.Next() {
-		var r NodeSearchResult
-		if err := rows.Scan(&r.ID, &r.Name, &r.QualifiedName, &r.Type, &r.Path, &r.StartLine, &r.EndLine); err != nil {
-			continue
-		}
-		results = append(results, r)
-	}
-	if err := rows.Err(); err != nil {
-		return nil
-	}
-	return results
-}
-
-// GetStats returns graph statistics.
 func (s *Storage) GetStats() map[string]int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

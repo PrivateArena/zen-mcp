@@ -101,7 +101,6 @@ func Warn(args ...any)  { emit("warn", args...) }
 func Error(args ...any) { emit("error", args...) }
 
 func Debugf(format string, args ...any) { emit("debug", fmt.Sprintf(format, args...)) }
-func Infof(format string, args ...any)  { emit("info", fmt.Sprintf(format, args...)) }
 func Warnf(format string, args ...any)  { emit("warn", fmt.Sprintf(format, args...)) }
 func Errorf(format string, args ...any) { emit("error", fmt.Sprintf(format, args...)) }
 

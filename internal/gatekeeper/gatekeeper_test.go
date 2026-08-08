@@ -94,28 +94,6 @@ func TestGatekeeperDisabled(t *testing.T) {
 	if err := gk.ValidatePathSafety("/etc/passwd", "read"); err != nil {
 		t.Errorf("disabled gatekeeper should pass everything, got %v", err)
 	}
-	if err := gk.ValidatePathSafetySync("/etc/passwd", "read"); err != nil {
-		t.Errorf("disabled sync check should pass, got %v", err)
-	}
-}
-
-func TestValidatePathSafetySyncBlocksRestricted(t *testing.T) {
-	gk, _ := setupGatekeeper(t)
-	err := gk.ValidatePathSafetySync("/etc/passwd", "open")
-	if err == nil {
-		t.Fatal("expected DANGEROUS PATH error")
-	}
-	if !strings.Contains(err.Error(), "DANGEROUS PATH DETECTED") {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestValidatePathSafetySyncAllowsTemp(t *testing.T) {
-	gk, _ := setupGatekeeper(t)
-	tmp := filepath.Join(t.TempDir(), "zen-run-script.py")
-	if err := gk.ValidatePathSafetySync(tmp, "run"); err != nil {
-		t.Errorf("zen-run-* temp should be allowed, got %v", err)
-	}
 }
 
 func runAsync(fn func() error) <-chan error {

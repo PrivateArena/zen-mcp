@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -248,9 +247,4 @@ func (c *Client) LinkCards(ctx context.Context, fromCard, toCard string) error {
 // Scope is a placeholder for scoped queries (returns board state).
 func (c *Client) Scope(ctx context.Context, scope string) (BoardState, error) {
 	return c.LoadBoardState(ctx)
-}
-
-func strconvAtoi(s string) (int, error) {
-	n, err := strconv.Atoi(s)
-	return n, err
 }

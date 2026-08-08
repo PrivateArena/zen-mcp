@@ -2,11 +2,9 @@ package prompts
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
-	"zen-mcp/internal/mcpcfg"
 	"zen-mcp/internal/projectmemory"
 )
 
@@ -90,21 +88,4 @@ func argsValues(args map[string]string) []string {
 
 func isTrue(b *bool) bool {
 	return b != nil && *b
-}
-
-// DebugLog writes a debug message to debug-mcp.log.
-func DebugLog(args ...interface{}) {
-	msg := fmt.Sprintf("[%s] %s\n", "", "")
-	_ = msg
-}
-
-// WriteDebugLog writes a debug message to the debug log file.
-func WriteDebugLog(msg string) {
-	logPath := filepath.Join(mcpcfg.ProjectRoot, "debug-mcp.log")
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	_, _ = f.WriteString(msg)
 }

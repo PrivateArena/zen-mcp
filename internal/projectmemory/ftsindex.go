@@ -65,30 +65,6 @@ func GetDatabase(dbPath string) *sql.DB {
 	return db
 }
 
-func ClearAllDatabaseCache() {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-	for _, db := range dbCache {
-		_ = db.Close()
-	}
-	dbCache = map[string]*sql.DB{}
-}
-
-func ClearDatabase(dbPath string) error {
-	dbMu.Lock()
-	if db, ok := dbCache[dbPath]; ok {
-		_ = db.Close()
-		delete(dbCache, dbPath)
-	}
-	dbMu.Unlock()
-	for _, suffix := range []string{"", "-wal", "-shm"} {
-		if err := os.Remove(dbPath + suffix); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	return nil
-}
-
 func initMemorySchema(db *sql.DB) {
 	const schema = `
 CREATE TABLE IF NOT EXISTS memory (

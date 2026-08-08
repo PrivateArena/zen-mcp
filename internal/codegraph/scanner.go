@@ -285,30 +285,6 @@ func (s *Scanner) IsSupported(file string) bool {
 	return isSupported(file)
 }
 
-// GetFileDetails returns content, hash, mtime, language, and is_test for a file.
-func (s *Scanner) GetFileDetails(relPath string) (content string, hash string, mtime int64, language string, isTest bool, err error) {
-	fullPath := filepath.Join(s.rootDir, relPath)
-	info, err := os.Stat(fullPath)
-	if err != nil {
-		return "", "", 0, "", false, err
-	}
-	if info.Size() > maxFileSize {
-		return "", "", 0, "", false, fmt.Errorf("file exceeds 500KB limit")
-	}
-
-	data, err := os.ReadFile(fullPath)
-	if err != nil {
-		return "", "", 0, "", false, err
-	}
-	content = string(data)
-	hashBytes := sha256.Sum256(data)
-	hash = hex.EncodeToString(hashBytes[:])
-	mtime = info.ModTime().UnixMilli()
-	language = s.detectLanguage(relPath)
-	isTest = s.isTest(relPath, language)
-	return content, hash, mtime, language, isTest, nil
-}
-
 func (s *Scanner) detectLanguage(relPath string) string {
 	if s.parser != nil {
 		ext := "." + strings.ToLower(filepath.Ext(relPath))
@@ -318,10 +294,6 @@ func (s *Scanner) detectLanguage(relPath string) string {
 		}
 	}
 	return detectLanguage(relPath)
-}
-
-func (s *Scanner) isTest(relPath string, language string) bool {
-	return isTest(relPath, language)
 }
 
 // LoadTsConfigAliases loads tsconfig.json path aliases.
@@ -363,15 +335,4 @@ func (s *Scanner) LoadTsConfigAliases() {
 		resolved := strings.TrimSuffix(target, "*")
 		s.aliasMap[prefix] = resolved
 	}
-}
-
-// ResolveAlias resolves a TS import specifier against tsconfig path aliases.
-func (s *Scanner) ResolveAlias(specifier string) string {
-	for prefix, target := range s.aliasMap {
-		if strings.HasPrefix(specifier, prefix) {
-			rest := strings.TrimPrefix(specifier, prefix)
-			return filepath.Join(s.aliasBaseUrl, target+rest)
-		}
-	}
-	return ""
 }

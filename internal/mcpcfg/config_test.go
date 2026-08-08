@@ -124,9 +124,6 @@ func TestLoadMergesDefaultsAndUserConfig(t *testing.T) {
 	if len(c.GatekeeperRememberPaths) != 2 {
 		t.Errorf("gatekeeper_remember_paths = %v", c.GatekeeperRememberPaths)
 	}
-	if got := DaemonURL(); got != "http://127.0.0.1:31337" {
-		t.Errorf("DaemonURL = %q", got)
-	}
 }
 
 func TestLoadMissingConfigUsesDefaults(t *testing.T) {
@@ -290,26 +287,6 @@ func TestWatchConfigIgnoreChmod(t *testing.T) {
 	time.Sleep(700 * time.Millisecond)
 	if reloadCount.Load() != 0 {
 		t.Errorf("chmod should not trigger reload, count=%d", reloadCount.Load())
-	}
-}
-
-func TestLoadWikiConfig(t *testing.T) {
-	dir := t.TempDir()
-	old := ProjectRoot
-	ProjectRoot = dir
-	defer func() { ProjectRoot = old }()
-	if err := os.WriteFile(filepath.Join(dir, "wiki.json"), []byte(`{"domains":{"en.wikipedia.org":{"engine":"mediawiki","min_char":500}}}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	wc := LoadWikiConfig()
-	f, ok := wc.Domains["en.wikipedia.org"]
-	if !ok || f.MinChar != 500 || f.Engine != "mediawiki" {
-		t.Errorf("wiki config wrong: %+v", wc)
-	}
-	// missing wiki.json -> empty domains
-	os.Remove(filepath.Join(dir, "wiki.json"))
-	if wc := LoadWikiConfig(); wc.Domains == nil || len(wc.Domains) != 0 {
-		t.Errorf("missing wiki.json should be empty, got %+v", wc.Domains)
 	}
 }
 

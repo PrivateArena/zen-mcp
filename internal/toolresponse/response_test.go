@@ -102,24 +102,6 @@ func TestRenderOutputOtherData(t *testing.T) {
 	}
 }
 
-func TestIsCommandResult(t *testing.T) {
-	if !IsCommandResult(CommandResult{Stdout: "x", ExitCode: 0}) {
-		t.Error("CommandResult should be detected")
-	}
-	if IsCommandResult(map[string]any{"hello": 1}) {
-		t.Error("plain map should not be a command result")
-	}
-	if !IsCommandResult(map[string]any{"stdout": "x", "exitCode": 1}) {
-		t.Error("map with stdout string should be a command result")
-	}
-	if IsCommandResult(map[string]any{"exitCode": 1}) {
-		t.Error("map without stdout should not be a command result")
-	}
-	if IsCommandResult(CommandResult{Stdout: ""}) {
-		t.Error("empty stdout CommandResult should not count")
-	}
-}
-
 func TestToolContext(t *testing.T) {
 	ctx := WithToolContext(context.Background(), ToolContext{ToolName: "browser_navigate", Params: map[string]any{"action": "navigate"}})
 	tc, ok := ToolContextFrom(ctx)

@@ -37,10 +37,6 @@ func ConfigFilePath() string {
 	return filepath.Join(ProjectRoot, "config.json")
 }
 
-func WikiConfigFilePath() string {
-	return filepath.Join(ProjectRoot, "wiki.json")
-}
-
 func MapFilePath() string {
 	return filepath.Join(ProjectRoot, "map.json")
 }

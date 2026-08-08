@@ -116,13 +116,6 @@ func (g *Gatekeeper) getAllowedPathsFilePath() string {
 	return filepath.Join(home, ".gemini", "allowed-paths.json")
 }
 
-func (g *Gatekeeper) ClearAllowedPathsCache() {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.cachedAllowedPaths = nil
-	g.lastLoadedPath = ""
-}
-
 func (g *Gatekeeper) LoadAllowedPaths() []string {
 	filePath := g.getAllowedPathsFilePath()
 	if filePath == "" {
@@ -448,18 +441,6 @@ func (g *Gatekeeper) ValidatePathSafety(path, operationName string) error {
 			}
 			return fmt.Errorf("[%s] Security block: Path access to %q was rejected or timed out. (%s)%s", operationName, normalizedPath, reason, suggestion)
 		}
-	}
-	return nil
-}
-
-func (g *Gatekeeper) ValidatePathSafetySync(path, operationName string) error {
-	cfg := mcpcfg.Get()
-	if cfg != nil && !cfg.GatekeeperEnabled {
-		return nil
-	}
-	normalizedPath := g.resolvePath(path)
-	if g.IsPathUnderRestrictedRoot(normalizedPath) {
-		return fmt.Errorf("[%s] DANGEROUS PATH DETECTED: %q. System roots or home infrastructure subdirectories are restricted for safety.", operationName, normalizedPath)
 	}
 	return nil
 }

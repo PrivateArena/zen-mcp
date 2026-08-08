@@ -280,16 +280,6 @@ func GetToolConfig(toolName string) ToolConfig {
 	return def
 }
 
-func DaemonURL() string {
-	c := Get()
-	return "http://" + c.Host + ":" + strconv.Itoa(c.DaemonPort)
-}
-
-func ProxyURL() string {
-	c := Get()
-	return "http://" + c.Host + ":" + strconv.Itoa(c.ProxyPort)
-}
-
 func FirefoxBridgeURL() string {
 	c := Get()
 	return "http://" + c.Host + ":" + strconv.Itoa(c.FirefoxBridgePort)
@@ -313,22 +303,6 @@ func Load() error {
 	}
 	Config.Store(&cfg)
 	return nil
-}
-
-func LoadWikiConfig() WikiConfig {
-	def := WikiConfig{Domains: map[string]WikiFilter{}}
-	data, err := os.ReadFile(WikiConfigFilePath())
-	if err != nil {
-		return def
-	}
-	var wc WikiConfig
-	if err := json.Unmarshal(data, &wc); err != nil {
-		return def
-	}
-	if wc.Domains == nil {
-		wc.Domains = map[string]WikiFilter{}
-	}
-	return wc
 }
 
 func readJSONMap(path string) (map[string]any, error) {

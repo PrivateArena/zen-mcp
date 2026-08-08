@@ -1,7 +1,6 @@
 package toolsuggestions
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -138,15 +137,6 @@ func GetToolSuggestion(toolName string) *ToolSuggestion {
 	return &s
 }
 
-func GetAllToolNames() []string {
-	names := make([]string, 0, len(suggestions))
-	for name := range suggestions {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
-}
-
 func GetToolsByCategory() map[string][]ToolRef {
 	categories := map[string][]string{
 		"👁️ Vision & Capture":      {"capture", "colab"},
@@ -172,19 +162,6 @@ func GetToolsByCategory() map[string][]ToolRef {
 type ToolRef struct {
 	Name        string
 	Description string
-}
-
-func FormatToolReference() string {
-	var b strings.Builder
-	b.WriteString("# 🛠️ Tool Quick Reference\n\n")
-	for _, category := range []string{"👁️ Vision & Capture", "🌐 Browser & Automation", "📁 Workspace & Storage", "🔧 Shell & Sandbox", "⚙️ Reasoning & Knowledge", "🛠️ Server Management"} {
-		b.WriteString("## " + category + "\n")
-		for _, tool := range GetToolsByCategory()[category] {
-			b.WriteString(fmt.Sprintf("- **%s**: %s\n", tool.Name, tool.Description))
-		}
-		b.WriteString("\n")
-	}
-	return b.String()
 }
 
 func actionMatch(rule ActionSuggestionRule, action string) bool {
@@ -330,76 +307,4 @@ func introspectSchema(schema any, action string) string {
 		b.WriteString(line + "\n")
 	}
 	return b.String()
-}
-
-func FindMistakeCorrection(toolName, errorMessage string, action string, schema any) *MistakeCorrection {
-	suggestion := FormatSuggestion(toolName, errorMessage, action, schema)
-	if suggestion == "" {
-		return nil
-	}
-	correctUsage := fmt.Sprintf("%s({ ... })", toolName)
-	if s := GetToolSuggestion(toolName); s != nil && s.ExampleUsage != "" {
-		correctUsage = s.ExampleUsage
-	}
-	return &MistakeCorrection{Message: suggestion, CorrectUsage: correctUsage}
-}
-
-type MistakeCorrection struct {
-	Message      string
-	CorrectUsage string
-}
-
-func SemanticPlaceholder(key string, typeName string) any {
-	lk := strings.ToLower(key)
-	switch typeName {
-	case "boolean":
-		return false
-	case "number":
-		return 1
-	case "array":
-		return []any{}
-	case "object":
-		return map[string]any{}
-	}
-	switch {
-	case strings.Contains(lk, "url"):
-		return "https://example.com"
-	case strings.Contains(lk, "path"):
-		return "/abs/path/to/file"
-	case strings.Contains(lk, "alias"):
-		return "my-alias"
-	case strings.Contains(lk, "query"):
-		return "search term"
-	case strings.Contains(lk, "command"):
-		return "npm run build"
-	case strings.Contains(lk, "code"):
-		return "return document.title;"
-	case strings.Contains(lk, "slug"):
-		return "my-board"
-	case strings.Contains(lk, "name"):
-		return "my-project"
-	case strings.Contains(lk, "title"):
-		return "Task Title"
-	case strings.Contains(lk, "thought"):
-		return "I need to consider..."
-	case strings.Contains(lk, "message"):
-		return "Hello, how can you help?"
-	case strings.Contains(lk, "provider"):
-		return "gemini"
-	case strings.Contains(lk, "selector"):
-		return "button"
-	case strings.Contains(lk, "prompt"):
-		return "Explain this code"
-	case strings.Contains(lk, "container"):
-		return "Personal"
-	}
-	return "<string>"
-}
-
-func MustJSON(v any) string {
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return fmt.Sprintf("%v", v)
-	}
-	return string(b)
 }

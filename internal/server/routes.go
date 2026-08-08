@@ -179,14 +179,13 @@ func (d RouteDeps) postMCP(w http.ResponseWriter, r *http.Request) {
 	srv := d.ServerCache.getOrCreate(logicalID, d.CreateMCPServer, d.Registry)
 
 	handler := mcpserver.NewStreamableHTTPServer(srv, mcpserver.WithStateLess(true))
-	ctx := WithPoolServer(r.Context(), srv)
 	if jsonBodyMethod(r) == "tools/list" {
 		bw := toolsListRewriter(w)
-		handler.ServeHTTP(bw, r.WithContext(ctx))
+		handler.ServeHTTP(bw, r)
 		_ = bw.finish()
 		return
 	}
-	handler.ServeHTTP(w, r.WithContext(ctx))
+	handler.ServeHTTP(w, r)
 }
 
 // autoDetectWorkspace resolves a workspace root from initialize params, query,

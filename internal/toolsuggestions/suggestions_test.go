@@ -25,19 +25,6 @@ func TestGetToolSuggestionKnown(t *testing.T) {
 	}
 }
 
-func TestGetAllToolNames(t *testing.T) {
-	names := GetAllToolNames()
-	if len(names) != 12 {
-		t.Errorf("expected 12 tools, got %d", len(names))
-	}
-	expected := map[string]bool{"workspace": true, "capture": true, "think": true, "memory": true, "context": true, "run": true, "shell": true, "skills": true, "codegraph": true, "browser": true, "server": true, "colab": true}
-	for _, n := range names {
-		if !expected[n] {
-			t.Errorf("unexpected tool name %q", n)
-		}
-	}
-}
-
 func TestValidateToolCallMissingRequired(t *testing.T) {
 	res := ValidateToolCall("browser", "navigate", map[string]any{}, schema())
 	if res.Valid {
@@ -109,19 +96,6 @@ func TestFormatSuggestionSchemaIntrospection(t *testing.T) {
 	}
 }
 
-func TestFindMistakeCorrection(t *testing.T) {
-	mc := FindMistakeCorrection("browser", "url is required", "navigate", schema())
-	if mc == nil {
-		t.Fatal("expected correction")
-	}
-	if !strings.Contains(mc.Message, "navigate") {
-		t.Errorf("message should mention navigate: %s", mc.Message)
-	}
-	if mc.CorrectUsage != "browser({ action: \"active_tab\" })" {
-		t.Errorf("CorrectUsage = %q", mc.CorrectUsage)
-	}
-}
-
 func TestGetToolsByCategory(t *testing.T) {
 	cats := GetToolsByCategory()
 	browser := cats["🌐 Browser & Automation"]
@@ -134,37 +108,6 @@ func TestGetToolsByCategory(t *testing.T) {
 	}
 	if total != 11 {
 		t.Errorf("expected 11 tool refs (context omitted, matches TS), got %d", total)
-	}
-}
-
-func TestFormatToolReference(t *testing.T) {
-	ref := FormatToolReference()
-	if !strings.Contains(ref, "# 🛠️ Tool Quick Reference") {
-		t.Errorf("reference header missing: %s", ref)
-	}
-	if !strings.Contains(ref, "**browser**:") {
-		t.Errorf("reference missing browser entry: %s", ref)
-	}
-}
-
-func TestSemanticPlaceholder(t *testing.T) {
-	if p := SemanticPlaceholder("url", "string"); p != "https://example.com" {
-		t.Errorf("url placeholder = %v", p)
-	}
-	if p := SemanticPlaceholder("selector", "string"); p != "button" {
-		t.Errorf("selector placeholder = %v", p)
-	}
-	if p := SemanticPlaceholder("enabled", "boolean"); p != false {
-		t.Errorf("boolean placeholder = %v", p)
-	}
-	if p := SemanticPlaceholder("count", "number"); p != 1 {
-		t.Errorf("number placeholder = %v", p)
-	}
-	if p := SemanticPlaceholder("tags", "array"); p == nil {
-		t.Errorf("array placeholder nil")
-	}
-	if p := SemanticPlaceholder("misc", "string"); p != "<string>" {
-		t.Errorf("fallback placeholder = %v", p)
 	}
 }
 
@@ -184,9 +127,3 @@ func TestIntrospectSchema(t *testing.T) {
 	}
 }
 
-func TestMustJSON(t *testing.T) {
-	out := MustJSON(map[string]any{"a": 1})
-	if !strings.Contains(out, "\"a\"") {
-		t.Errorf("MustJSON output: %s", out)
-	}
-}

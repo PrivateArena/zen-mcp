@@ -10,12 +10,6 @@ import (
 	"zen-mcp/internal/mcpcfg"
 )
 
-func TestNormalizeKey(t *testing.T) {
-	if got := NormalizeKey("Hello World!"); got != "hello world" {
-		t.Errorf("NormalizeKey() = %q, want %q", got, "hello world")
-	}
-}
-
 func TestMigrateToV3(t *testing.T) {
 	raw := map[string]any{"schema_version": 2, "timestamp": "2024-01-01T00:00:00.000Z", "session_title": "T", "objective": "O", "session_notes": "N"}
 	ev := MigrateToV3(raw)

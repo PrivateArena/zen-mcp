@@ -209,9 +209,6 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 		}()
 	}
 
-	stopReaper := server.StartIdleReaper()
-	defer stopReaper()
-
 	logfilter.Info(fmt.Sprintf("[MCP] Terminal commander started. Export port: %d.", exportPort))
 	terminal.SetDeps(deps)
 	terminal.StartTerminalCommander()

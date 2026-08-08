@@ -30,17 +30,6 @@ type CommandResult struct {
 	Savings      *string `json:"savings,omitempty"`
 }
 
-func IsCommandResult(v any) bool {
-	m, ok := v.(map[string]any)
-	if !ok {
-		cr, ok := v.(CommandResult)
-		return ok && cr.Stdout != ""
-	}
-	_, hasStdout := m["stdout"].(string)
-	_, hasExit := m["exitCode"]
-	return hasStdout && hasExit
-}
-
 func RenderOutput(format string, data any) string {
 	if data == nil {
 		return ""
