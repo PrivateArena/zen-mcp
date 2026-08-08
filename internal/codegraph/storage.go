@@ -220,6 +220,14 @@ func (s *Storage) initSchema() error {
 			key TEXT PRIMARY KEY,
 			value TEXT
 		);
+		CREATE TABLE IF NOT EXISTS imports (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+			import_path TEXT NOT NULL,
+			is_side_effect INTEGER NOT NULL DEFAULT 0
+		);
+		CREATE INDEX IF NOT EXISTS idx_imports_file ON imports(file_id);
+		CREATE INDEX IF NOT EXISTS idx_imports_path ON imports(import_path);
 	`)
 	if err != nil {
 		return err
@@ -298,6 +306,50 @@ func (s *Storage) GetFileByPath(path string) *FileRecord {
 		return nil
 	}
 	return &fr
+}
+
+// RecordImport records that fileID imports importPath.
+func (s *Storage) RecordImport(fileID int64, importPath string, isSideEffect bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(`INSERT INTO imports (file_id, import_path, is_side_effect) VALUES (?, ?, ?)`,
+		fileID, importPath, boolToInt(isSideEffect))
+	return err
+}
+
+// DeleteImportsForFile removes all import records for a file.
+func (s *Storage) DeleteImportsForFile(fileID int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(`DELETE FROM imports WHERE file_id = ?`, fileID)
+	return err
+}
+
+// IsFileImported returns true if any other file imports the given path
+// or a directory containing the file.
+func (s *Storage) IsFileImported(filePath string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	dir := filepath.Dir(filePath)
+	var exists int
+	err := s.db.QueryRow(`
+		SELECT 1 FROM imports i
+		JOIN files f ON i.file_id = f.id
+		WHERE f.path != ?
+		  AND (
+			i.import_path = ?
+			OR i.import_path = ?
+			OR i.import_path LIKE ?
+			OR i.import_path LIKE ?
+			OR i.import_path LIKE ?
+			OR i.import_path LIKE ?
+		  )
+		LIMIT 1
+	`, filePath, filePath, dir,
+		"%"+filePath, filePath+"%",
+		"%"+dir, dir+"%").Scan(&exists)
+	return err == nil && exists > 0
 }
 
 // DeleteFile removes a file and its nodes/edges.
@@ -1163,41 +1215,15 @@ func (s *Storage) FindDeadCode(query string, limit int) *DeadcodeResult {
 		}
 	}
 
-	// Secondary content-scan fallback for orphan candidates whose stem appears
-	// in another file's import string
 	if len(orphanFiles) > 0 {
-		importCheck, err := s.db.Prepare(`
-			SELECT 1 FROM nodes n2
-			JOIN files f2 ON n2.file_id = f2.id
-			WHERE f2.path != ?
-			  AND (n2.content LIKE ? OR n2.content LIKE ?)
-			LIMIT 1
-		`)
-		if err == nil {
-			defer importCheck.Close()
-			referencedByImport := make(map[string]bool)
-			for _, orphan := range orphanFiles {
-				stem := strings.TrimSuffix(orphan.Path, filepath.Ext(orphan.Path))
-				base := filepath.Base(stem)
-				if len(base) < 4 {
-					continue
-				}
-				var exists int
-				_ = importCheck.QueryRow(orphan.Path, "%./"+base+"%", "%../"+base+"%").Scan(&exists)
-				if exists > 0 {
-					referencedByImport[orphan.Path] = true
-				}
+		filtered := make([]FileRecord, 0, len(orphanFiles))
+		for _, of := range orphanFiles {
+			if s.IsFileImported(of.Path) {
+				continue
 			}
-			if len(referencedByImport) > 0 {
-				filtered := make([]FileRecord, 0, len(orphanFiles))
-				for _, of := range orphanFiles {
-					if !referencedByImport[of.Path] {
-						filtered = append(filtered, of)
-					}
-				}
-				orphanFiles = filtered
-			}
+			filtered = append(filtered, of)
 		}
+		orphanFiles = filtered
 	}
 
 	return &DeadcodeResult{

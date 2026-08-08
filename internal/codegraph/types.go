@@ -14,10 +14,12 @@ type ParsedNode struct {
 
 // ParsedRelation represents a relationship between two symbols.
 type ParsedRelation struct {
-	SourceName string
-	TargetName string
-	Relation   string
-	Metadata   string
+	SourceName   string
+	TargetName   string
+	Relation     string
+	Metadata     string
+	SourceFile   string
+	IsSideEffect bool
 }
 
 // RelatedRecord represents a related file/symbol edge.

@@ -93,14 +93,43 @@ func extractGoRelations(node *tree_sitter.Node, currentFn *string, relations *[]
 				Relation:   "calls",
 			})
 		}
+
+		argsNode := node.ChildByFieldName("arguments")
+		if argsNode != nil {
+			for i := uint(0); i < argsNode.NamedChildCount(); i++ {
+				arg := argsNode.NamedChild(i)
+				if arg == nil {
+					continue
+				}
+				var idNode *tree_sitter.Node
+				if arg.Kind() == "identifier" {
+					idNode = arg
+				} else if arg.NamedChildCount() > 0 {
+					child := arg.NamedChild(0)
+					if child.Kind() == "identifier" {
+						idNode = child
+					}
+				}
+				if idNode != nil {
+					*relations = append(*relations, ParsedRelation{
+						SourceName: fnName,
+						TargetName: idNode.Utf8Text(src),
+						Relation:   "references",
+					})
+				}
+			}
+		}
 	} else if kind == "import_spec" {
 		pathNode := node.ChildByFieldName("path")
 		if pathNode != nil {
 			mod := pathNode.Utf8Text(src)
+			nameNode := node.ChildByFieldName("name")
+			isSideEffect := nameNode != nil && nameNode.Utf8Text(src) == "_"
 			*relations = append(*relations, ParsedRelation{
-				SourceName: "module",
-				TargetName: mod,
-				Relation:   "imports",
+				SourceName:   "module",
+				TargetName:   mod,
+				Relation:     "imports",
+				IsSideEffect: isSideEffect,
 			})
 		}
 	}

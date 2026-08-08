@@ -69,6 +69,15 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 		Total: len(files),
 	}
 
+	// Phase 1: parse every changed file and collect nodes + relations
+	type fileParseResult struct {
+		fr          FileRecord
+		fileID      int64
+		nodeRecords []NodeRecord
+		relations   []ParsedRelation
+	}
+	var parseResults []fileParseResult
+
 	for _, fr := range files {
 		content, err := os.ReadFile(filepath.Join(cg.rootDir, fr.Path))
 		if err != nil {
@@ -80,11 +89,6 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 			continue
 		}
 
-		// Clear old nodes/edges for this file
-		cg.storage.DeleteNodesForFile(fileID)
-		cg.storage.DeleteEdgesForFile(fileID)
-
-		// Parse and insert nodes
 		nodes, relations, err := cg.parser.Parse(filepath.Ext(fr.Path), content)
 		if err != nil {
 			continue
@@ -98,9 +102,7 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 			nodes[i].Content = truncate(nodes[i].Content, 1000)
 		}
 
-		// Build node records for batch insert
 		nodeRecords := make([]NodeRecord, 0, len(nodes))
-		nodeIDMap := make(map[string]int64)
 		for i := range nodes {
 			nr := NodeRecord{
 				FileID:        fileID,
@@ -117,27 +119,36 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 			nodeRecords = append(nodeRecords, nr)
 		}
 
-		// Batch insert nodes
-		if len(nodeRecords) > 0 {
-			_, err := cg.storage.InsertNodes(nodeRecords)
-			if err != nil {
-				continue
-			}
-		}
+		parseResults = append(parseResults, fileParseResult{
+			fr:          fr,
+			fileID:      fileID,
+			nodeRecords: nodeRecords,
+			relations:   relations,
+		})
+	}
 
-		// Re-fetch IDs for relation building
-		insertedNodes, _ := cg.storage.GetNodesForFile(fileID)
-		for i := range insertedNodes {
-			nodeIDMap[insertedNodes[i].Name+":"+insertedNodes[i].QualifiedName] = insertedNodes[i].ID
+	for i := range parseResults {
+		for j := range parseResults[i].relations {
+			parseResults[i].relations[j].SourceFile = parseResults[i].fr.Path
 		}
+	}
 
-		// Collect relations for batch insert
+	// Phase 2: delete stale data and insert fresh nodes for every changed file
+	for _, pr := range parseResults {
+		cg.storage.DeleteNodesForFile(pr.fileID)
+		cg.storage.DeleteEdgesForFile(pr.fileID)
+		cg.storage.DeleteImportsForFile(pr.fileID)
+		if len(pr.nodeRecords) > 0 {
+			cg.storage.InsertNodes(pr.nodeRecords)
+		}
+	}
+
+	// Phase 3: build edges now that every target node exists in the DB
+	for _, pr := range parseResults {
 		var edgeRecords []EdgeRecord
-		for _, rel := range relations {
-			sourceKey := rel.SourceName
-			targetKey := rel.TargetName
-			sourceNodes, _ := cg.storage.FindNodesByName(sourceKey)
-			targetNodes, _ := cg.storage.FindNodesByName(targetKey)
+		for _, rel := range pr.relations {
+			sourceNodes, _ := cg.storage.FindNodesByName(rel.SourceName)
+			targetNodes, _ := cg.storage.FindNodesByName(rel.TargetName)
 
 			if len(sourceNodes) > 0 && len(targetNodes) > 0 {
 				for _, sn := range sourceNodes {
@@ -152,29 +163,27 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 					}
 				}
 			}
-		}
 
+		if rel.Relation == "imports" {
+			importPath := strings.Trim(rel.TargetName, "\"'`")
+			_ = cg.storage.RecordImport(pr.fileID, importPath, rel.IsSideEffect)
+		}
+		}
 		if len(edgeRecords) > 0 {
 			cg.storage.InsertEdges(edgeRecords)
 		}
-
-		result.Indexed++
 	}
 
-	// Phase 1.5: Parse manifest files
-	cg.parseManifests()
+	result.Indexed = len(parseResults)
 
-	// Phase 2: Batch generate embeddings for all gathered nodes
-	// (Skipped in Go - embeddings are handled by TS daemon)
+	cg.parseManifests()
 
 	return result, nil
 }
 
 // parseManifests parses manifest files (package.json, go.mod, Cargo.toml, pom.xml)
-func (cg *CodeGraph) parseManifests() ([]NodeRecord, []ParsedRelation) {
-	var nodes []NodeRecord
-	var relations []ParsedRelation
-
+// and inserts their nodes and edges directly into storage.
+func (cg *CodeGraph) parseManifests() {
 	manifestFiles := []string{"package.json", "go.mod", "Cargo.toml", "pom.xml"}
 	for _, manifest := range manifestFiles {
 		fullPath := filepath.Join(cg.rootDir, manifest)
@@ -188,22 +197,63 @@ func (cg *CodeGraph) parseManifests() ([]NodeRecord, []ParsedRelation) {
 		}
 
 		fileNodes, fileRelations := parseManifestContent(string(data), manifest)
+		if len(fileNodes) == 0 {
+			continue
+		}
+
+		fr := FileRecord{
+			Path:     manifest,
+			Language: "manifest",
+		}
+		fileID, err := cg.storage.UpsertFile(fr)
+		if err != nil {
+			continue
+		}
+
+		cg.storage.DeleteNodesForFile(fileID)
+		cg.storage.DeleteEdgesForFile(fileID)
+
+		nodeRecords := make([]NodeRecord, 0, len(fileNodes))
 		for _, n := range fileNodes {
-			nodes = append(nodes, NodeRecord{
+			nodeRecords = append(nodeRecords, NodeRecord{
+				FileID:        fileID,
 				Type:          n.Type,
 				Name:          n.Name,
 				Language:      "manifest",
 				QualifiedName: derefString(n.QualifiedName),
 				Signature:     n.Signature,
+				Docstring:     n.Docstring,
 				StartLine:     n.StartLine,
 				EndLine:       n.EndLine,
 				Content:       n.Content,
 			})
 		}
-		relations = append(relations, fileRelations...)
-	}
+		if len(nodeRecords) > 0 {
+			cg.storage.InsertNodes(nodeRecords)
+		}
 
-	return nodes, relations
+		var edgeRecords []EdgeRecord
+		for _, rel := range fileRelations {
+			sourceNodes, _ := cg.storage.FindNodesByName(rel.SourceName)
+			targetNodes, _ := cg.storage.FindNodesByName(rel.TargetName)
+			if len(sourceNodes) > 0 && len(targetNodes) > 0 {
+				for _, sn := range sourceNodes {
+					for _, tn := range targetNodes {
+						edgeRecords = append(edgeRecords, EdgeRecord{
+							SourceID:   sn.ID,
+							TargetID:   tn.ID,
+							Relation:   rel.Relation,
+							Metadata:   rel.Metadata,
+							Confidence: "EXTRACTED",
+						})
+					}
+				}
+			}
+		}
+		if len(edgeRecords) > 0 {
+			cg.storage.InsertEdges(edgeRecords)
+		}
+	}
 }
 
 func parseManifestContent(content, filename string) ([]ParsedNode, []ParsedRelation) {

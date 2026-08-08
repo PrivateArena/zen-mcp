@@ -311,3 +311,146 @@ func Send(params ChatParams) {}
 		}
 	}
 }
+
+func TestDeadcodeDoesNotFlagCrossFileCalls(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	storageSrc := `package foo
+
+type Storage struct{}
+
+func (s *Storage) InsertNodes(nodes []NodeRecord) (int64, error) {
+	return 0, nil
+}
+
+func (s *Storage) InsertEdges(edges []EdgeRecord) error {
+	return nil
+}
+`
+	engineSrc := `package foo
+
+func Index(storage *Storage) {
+	var nodes []NodeRecord
+	storage.InsertNodes(nodes)
+	storage.InsertEdges(nil)
+}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "storage.go"), []byte(storageSrc), 0644); err != nil {
+		t.Fatalf("write storage fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "engine.go"), []byte(engineSrc), 0644); err != nil {
+		t.Fatalf("write engine fixture: %v", err)
+	}
+
+	cg, err := NewCodeGraph(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCodeGraph: %v", err)
+	}
+	defer cg.Close()
+
+	if _, err := cg.Index(); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	symbols, err := cg.Deadcode()
+	if err != nil {
+		t.Fatalf("Deadcode: %v", err)
+	}
+
+	for _, s := range symbols {
+		if s.Name == "InsertNodes" || s.Name == "InsertEdges" {
+			t.Fatalf("cross-file called method should not be deadcode, got: %s %s at %s:%d", s.Type, s.Name, s.Path, s.StartLine)
+		}
+	}
+}
+
+func TestDeadcodeDoesNotFlagArgumentReferences(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	src := `package foo
+
+func brainExtract() error {
+	return nil
+}
+
+func init() {
+	Register("be", brainExtract)
+}
+
+func Register(name string, h Handler) {}
+type Handler func(args []string) error
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "handlers.go"), []byte(src), 0644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	cg, err := NewCodeGraph(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCodeGraph: %v", err)
+	}
+	defer cg.Close()
+
+	if _, err := cg.Index(); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	symbols, err := cg.Deadcode()
+	if err != nil {
+		t.Fatalf("Deadcode: %v", err)
+	}
+
+	for _, s := range symbols {
+		if s.Name == "brainExtract" {
+			t.Fatalf("function passed as argument should not be deadcode, got: %s %s at %s:%d", s.Type, s.Name, s.Path, s.StartLine)
+		}
+	}
+}
+
+func TestDeadcodeDoesNotFlagSideEffectImportedFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	mainSrc := `package main
+
+import (
+	_ "foo/handlers"
+)
+
+func main() {}
+`
+	handlerSrc := `package handlers
+
+func Init() {
+	Register("help", func() {})
+}
+
+func Register(name string, h Handler) {}
+type Handler func()
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte(mainSrc), 0644); err != nil {
+		t.Fatalf("write main fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "handlers.go"), []byte(handlerSrc), 0644); err != nil {
+		t.Fatalf("write handlers fixture: %v", err)
+	}
+
+	cg, err := NewCodeGraph(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCodeGraph: %v", err)
+	}
+	defer cg.Close()
+
+	if _, err := cg.Index(); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	result, err := cg.FindDeadCode("", 200)
+	if err != nil {
+		t.Fatalf("FindDeadCode: %v", err)
+	}
+
+	for _, of := range result.OrphanFiles {
+		if of.Path == "handlers.go" {
+			t.Fatalf("side-effect imported file should not be orphaned, got: %s", of.Path)
+		}
+	}
+}
