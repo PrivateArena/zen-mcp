@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"zen-mcp/internal/mcpcfg"
 )
@@ -37,14 +36,6 @@ func CallBridge(ctx context.Context, action string, params map[string]any) (map[
 		url += "/"
 	}
 
-	timeoutMs := mcpcfg.GetToolConfig("browser").Timeout
-	if timeoutMs <= 0 {
-		timeoutMs = 2_400_000
-	}
-	if t, ok := params["timeout"].(int); ok && t > 0 {
-		timeoutMs = t
-	}
-
 	sanitized := sanitizeBridgeParams(params)
 
 	reqBody := map[string]any{"action": action}
@@ -57,16 +48,20 @@ func CallBridge(ctx context.Context, action string, params map[string]any) (map[
 		return nil, fmt.Errorf("bridge marshal: %w", err)
 	}
 
-	reqCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
-	defer cancel()
+	// The MCP request context is canceled whenever the client disconnects or
+	// cancels the request. Long-running bridge operations (browser.chat,
+	// brainstorm) must be allowed to run to completion regardless — detach
+	// from the parent context and give the bridge POST no client-side
+	// deadline, so it can never be cut off mid-operation.
+	detached := context.WithoutCancel(ctx)
 
-	req, err := http.NewRequestWithContext(reqCtx, "POST", url, bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(detached, "POST", url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: time.Duration(timeoutMs) * time.Millisecond}
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("bridge request failed: %w", err)
