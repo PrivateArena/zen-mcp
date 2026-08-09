@@ -121,11 +121,8 @@ func init() {
 	})
 
 	terminal.Register("export-cli", func(args []string) error {
-		sub := ""
-		if len(args) > 0 {
-			sub = args[0]
-		}
-		if sub == "--clean" || sub == "clean" {
+		clean, short := parseExportCLIArgs(args)
+		if clean {
 			terminal.ExportCliClean(terminal.LogOut)
 			return nil
 		}
@@ -136,9 +133,24 @@ func init() {
 			cliPort = c.CliPort
 			mcpPort = c.McpPort
 		}
-		terminal.ExportCLI(terminal.LogOut, cliPort, mcpPort)
+		terminal.ExportCLIWithShort(terminal.LogOut, cliPort, mcpPort, short)
 		return nil
 	})
+}
+
+// parseExportCLIArgs extracts the --clean/clean and --short/short flags from
+// export-cli args; unknown args are ignored. It returns clean=false, short=false
+// when no flag is present (the plain export default).
+func parseExportCLIArgs(args []string) (clean, short bool) {
+	for _, a := range args {
+		switch a {
+		case "--clean", "clean":
+			clean = true
+		case "--short", "short":
+			short = true
+		}
+	}
+	return clean, short
 }
 
 func buildToolCost() string {

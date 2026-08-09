@@ -183,6 +183,184 @@ func TestWriteAtomic(t *testing.T) {
 	}
 }
 
+func TestShortAliasMap(t *testing.T) {
+	cases := []struct {
+		name   string
+		params []cliParam
+		want   map[string]string
+	}{
+		{
+			name:   "single param becomes first char",
+			params: []cliParam{{key: "message"}},
+			want:   map[string]string{"message": "m"},
+		},
+		{
+			name:   "colliding first letters disambiguate",
+			params: []cliParam{{key: "message"}, {key: "model"}},
+			want:   map[string]string{"message": "me", "model": "mo"},
+		},
+		{
+			name:   "prefix key keeps full name",
+			params: []cliParam{{key: "url"}, {key: "url2"}},
+			want:   map[string]string{"url": "url", "url2": "url2"},
+		},
+		{
+			name:   "h reserved for help",
+			params: []cliParam{{key: "help"}},
+			want:   map[string]string{"help": "he"},
+		},
+		{
+			name:   "real browser param set",
+			params: []cliParam{{key: "action"}, {key: "body"}, {key: "code"}, {key: "headers"}, {key: "message"}, {key: "method"}, {key: "provider"}, {key: "take_screenshot"}, {key: "upload_files"}, {key: "url"}},
+			want: map[string]string{
+				"action": "a", "body": "b", "code": "c", "headers": "he",
+				"message": "mes", "method": "met", "provider": "p",
+				"take_screenshot": "t", "upload_files": "up", "url": "ur",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := shortAliasMap(tc.params)
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %d aliases, want %d: %v", len(got), len(tc.want), got)
+			}
+			for k, want := range tc.want {
+				if got[k] != want {
+					t.Errorf("alias[%q] = %q, want %q", k, got[k], want)
+				}
+			}
+			seen := map[string]bool{}
+			for k, a := range got {
+				if seen[a] {
+					t.Errorf("duplicate alias %q for keys %q", a, k)
+				}
+				if a == "h" {
+					t.Errorf("reserved alias h assigned to %q", k)
+				}
+				seen[a] = true
+			}
+		})
+	}
+}
+
+func TestShortAliasMapSkipsEmptyKeys(t *testing.T) {
+	got := shortAliasMap([]cliParam{{key: ""}, {key: "message"}})
+	if got["message"] != "m" {
+		t.Errorf("alias[message] = %q, want m", got["message"])
+	}
+}
+
+func TestBuildWrapperScriptShort(t *testing.T) {
+	shortScript := buildWrapperScriptOpt(sampleTool(), "http://127.0.0.1:2999", true)
+	defaultScript := buildWrapperScript(sampleTool(), "http://127.0.0.1:2999")
+
+	for _, want := range []string{
+		`    -a) key="action"; PARAMS["$key"]="$2"; shift 2 ;;`,
+		`    -u) key="url"; PARAMS["$key"]="$2"; shift 2 ;;`,
+		`    -c) key="count"; PARAMS["$key"]="$2"; shift 2 ;;`,
+		`echo "  $0 -<short> <value>...   # short aliases"`,
+		`echo "  -a, --action (required)  Browser action. [navigate|chat|screenshot]"`,
+		`echo "  -c, --count  How many"`,
+		"#   -a, --action (required)  Browser action. [navigate|chat|screenshot]",
+	} {
+		if !strings.Contains(shortScript, want) {
+			t.Errorf("short script missing %q", want)
+		}
+	}
+
+	// Long form must still be accepted in short wrappers, and the default
+	// (non-short) wrapper must be byte-identical in behavior to before.
+	for _, forbid := range []string{
+		`-a) key="action"`,
+		`-c, --count`,
+		`-<short>`,
+	} {
+		if strings.Contains(defaultScript, forbid) {
+			t.Errorf("default script must not contain %q (short mode leaked)", forbid)
+		}
+	}
+	for _, want := range []string{
+		`echo "  --action (required)  Browser action. [navigate|chat|screenshot]"`,
+		`key="${1#--}"; PARAMS["$key"]="$2"; shift 2 ;;`,
+	} {
+		if !strings.Contains(defaultScript, want) {
+			t.Errorf("default script missing %q", want)
+		}
+	}
+}
+
+func TestBuildWrapperScriptShortShellSyntaxAndHelp(t *testing.T) {
+	script := buildWrapperScriptOpt(sampleTool(), "http://127.0.0.1:2999", true)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "zen-browser")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("bash", "-n", path).CombinedOutput(); err != nil {
+		t.Fatalf("bash -n failed: %v\n%s", err, out)
+	}
+	out, err := exec.Command(path, "--help").CombinedOutput()
+	if err != nil {
+		t.Fatalf("--help failed: %v\n%s", err, out)
+	}
+	for _, want := range []string{
+		"-a, --action (required)  Browser action. [navigate|chat|screenshot]",
+		"-c, --count  How many",
+		"-<short> <value>...",
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("short help output missing %q\n%s", want, out)
+		}
+	}
+}
+
+func TestExportCLIWithShortEndToEnd(t *testing.T) {
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origWd)
+
+	work := t.TempDir()
+	if err := os.Chdir(work); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	var out bytes.Buffer
+	ExportCLIWithShort(&out, 2999, 3001, true)
+	if !strings.Contains(out.String(), "Exported") {
+		t.Fatalf("unexpected output: %s", out.String())
+	}
+
+	// Real browser tool: action -> a, message -> mes, headers -> he (not h).
+	script, err := os.ReadFile(filepath.Join(work, "cli", "zen-browser"))
+	if err != nil {
+		t.Fatalf("zen-browser missing: %v", err)
+	}
+	for _, want := range []string{
+		`-a) key="action"`,
+		`-mes) key="message"`,
+		`-he) key="headers"`,
+		`-a, --action`,
+		`-mes, --message`,
+	} {
+		if !strings.Contains(string(script), want) {
+			t.Errorf("real wrapper missing %q", want)
+		}
+	}
+	if strings.Contains(string(script), `-h) key=`) {
+		t.Errorf("reserved -h must never be emitted as a param alias")
+	}
+
+	path := filepath.Join(work, "cli", "zen-browser")
+	if out, err := exec.Command("bash", "-n", path).CombinedOutput(); err != nil {
+		t.Fatalf("bash -n failed: %v\n%s", err, out)
+	}
+}
+
 func TestExportCLIEndToEnd(t *testing.T) {
 	origWd, err := os.Getwd()
 	if err != nil {

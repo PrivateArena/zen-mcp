@@ -27,8 +27,15 @@ type cliParam struct {
 	values   []string
 }
 
-// ExportCLI generates CLI wrapper scripts for all tools.
+// ExportCLI generates CLI wrapper scripts for all tools using full --param names.
 func ExportCLI(w io.Writer, cliPort, mcpPort int) {
+	ExportCLIWithShort(w, cliPort, mcpPort, false)
+}
+
+// ExportCLIWithShort generates CLI wrapper scripts. When short is true each
+// param also gets its shortest unambiguous -alias (--message -> -m) so callers
+// can save tokens; full --param names remain accepted either way.
+func ExportCLIWithShort(w io.Writer, cliPort, mcpPort int, short bool) {
 	host := "127.0.0.1"
 	port := cliPort
 	if port == 0 {
@@ -50,7 +57,7 @@ func ExportCLI(w io.Writer, cliPort, mcpPort int) {
 	toolList := collectTools()
 	generated := map[string]bool{}
 	for _, t := range toolList {
-		script := buildWrapperScript(t, url)
+		script := buildWrapperScriptOpt(t, url, short)
 		path := filepath.Join(cliDir, "zen-"+t.name)
 		if err := writeAtomic(path, script); err != nil {
 			fmt.Fprintf(w, "WARN: failed to write %s: %v\n", path, err)
@@ -174,6 +181,62 @@ func collectParams(schema map[string]any) []cliParam {
 	return params
 }
 
+// shortAliasMap computes, per tool, the shortest unambiguous alias for each
+// param key (e.g. message -> m, or mes when method is also present). Keys that
+// are a prefix of another key keep their full name (url vs url2). The single
+// char "h" is reserved for --help and never used.
+func shortAliasMap(params []cliParam) map[string]string {
+	if len(params) == 0 {
+		return nil
+	}
+	keys := make([]string, len(params))
+	for i, p := range params {
+		keys[i] = p.key
+	}
+	aliases := make(map[string]string, len(params))
+	for _, p := range params {
+		if p.key == "" {
+			continue
+		}
+		aliases[p.key] = shortestAlias(p.key, keys)
+	}
+	return aliases
+}
+
+// shortestAlias returns the shortest prefix of key that is not a prefix of any
+// other key in keys, falling back to the full key when no proper prefix is
+// unique. "h" is skipped so --help never collides with a short alias.
+func shortestAlias(key string, keys []string) string {
+	for i := 1; i <= len(key); i++ {
+		cand := key[:i]
+		if cand == "h" {
+			continue
+		}
+		unique := true
+		for _, k := range keys {
+			if k == key {
+				continue
+			}
+			if strings.HasPrefix(k, cand) {
+				unique = false
+				break
+			}
+		}
+		if unique {
+			return cand
+		}
+	}
+	return key
+}
+
+// flagLabel renders "--key" or "-a, --key" for help/header lines.
+func flagLabel(p cliParam, aliases map[string]string) string {
+	if a, ok := aliases[p.key]; ok {
+		return "-" + a + ", --" + p.key
+	}
+	return "--" + p.key
+}
+
 // strSlice extracts string elements from []string, []any, or nil.
 func strSlice(v any) []string {
 	switch s := v.(type) {
@@ -217,6 +280,12 @@ func oneLine(s string) string {
 
 // buildHelpStatements renders the --help case body for the wrapper.
 func buildHelpStatements(t cliTool, url string) []string {
+	return buildHelpStatementsOpt(t, url, nil)
+}
+
+// buildHelpStatementsOpt renders the --help case body; when aliases are set
+// params are shown as "-a, --key".
+func buildHelpStatementsOpt(t cliTool, url string, aliases map[string]string) []string {
 	desc := oneLine(t.description)
 	if desc == "" {
 		desc = "(no description)"
@@ -232,12 +301,17 @@ func buildHelpStatements(t cliTool, url string) []string {
 		`echo "USAGE:"`,
 		`echo "  $0 --<param> <value>..."`,
 		`echo "  $0 --json '{\"key\":\"val\"}'   # raw JSON escape hatch"`,
+	}
+	if len(aliases) > 0 {
+		lines = append(lines, `echo "  $0 -<short> <value>...   # short aliases"`)
+	}
+	lines = append(lines,
 		`echo ""`,
 		`echo "PARAMETERS:"`,
-	}
+	)
 	for _, p := range params {
 		req, vals := paramSuffix(p)
-		lines = append(lines, `echo "  --`+q(p.key)+req+`  `+q(p.desc)+vals+`"`)
+		lines = append(lines, `echo "  `+flagLabel(p, aliases)+req+`  `+q(p.desc)+vals+`"`)
 	}
 	var allValues []string
 	for _, p := range params {
@@ -254,11 +328,24 @@ func buildHelpStatements(t cliTool, url string) []string {
 	return lines
 }
 
-// buildWrapperScript renders a self-contained bash wrapper for one tool.
+// buildWrapperScript renders a self-contained bash wrapper for one tool using
+// full --param names.
 func buildWrapperScript(t cliTool, url string) string {
+	return buildWrapperScriptOpt(t, url, false)
+}
+
+// buildWrapperScriptOpt renders the wrapper; when short is true each param
+// also gets its shortest unambiguous single-dash alias (--message -> -m) in
+// the arg parser, header comment, and --help output.
+func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	desc := oneLine(t.description)
 	if desc == "" {
 		desc = "(no description)"
+	}
+	params := collectParams(t.schema)
+	var aliases map[string]string
+	if short {
+		aliases = shortAliasMap(params)
 	}
 
 	var b strings.Builder
@@ -269,10 +356,10 @@ func buildWrapperScript(t cliTool, url string) string {
 	ln("# " + t.name + " — generated wrapper for MCP tool: " + t.name)
 	ln("# " + desc)
 	ln("# Parameters (from JSON Schema):")
-	for _, p := range collectParams(t.schema) {
+	for _, p := range params {
 		req, vals := paramSuffix(p)
 		if p.desc != "" || req != "" || vals != "" {
-			ln("#   --" + p.key + req + "  " + oneLine(p.desc) + vals)
+			ln("#   " + flagLabel(p, aliases) + req + "  " + oneLine(p.desc) + vals)
 		}
 	}
 	ln("# Server: " + url)
@@ -292,10 +379,15 @@ func buildWrapperScript(t cliTool, url string) string {
 	ln(`  case "$1" in`)
 	ln(`    --json)  RAW_JSON="$2"; shift 2 ;;`)
 	ln(`    --help|-h)`)
-	for _, l := range buildHelpStatements(t, url) {
+	for _, l := range buildHelpStatementsOpt(t, url, aliases) {
 		ln("      " + l)
 	}
 	ln(`      ;;`)
+	for _, p := range params {
+		if a, ok := aliases[p.key]; ok {
+			ln(`    -` + a + `) key="` + p.key + `"; PARAMS["$key"]="$2"; shift 2 ;;`)
+		}
+	}
 	ln(`    --*)`)
 	ln(`      key="${1#--}"; PARAMS["$key"]="$2"; shift 2 ;;`)
 	ln(`    *) echo "Unknown arg: $1" >&2; exit 1 ;;`)
