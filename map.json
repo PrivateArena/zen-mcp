@@ -1,7 +1,10 @@
 {
+  "/media/jang/home/Deve/zen-mcp": {
+    "lastVisited": "2026-08-09T04:04:21.661Z"
+  },
   "/media/jang/home/Deve/worldproxy/zendes/zen-webserver": {
     "description": "ZenServer is multi-purpose webserver that hosts the ZenECO system (ZenNote whiteboard note taking app, ZenRAG) and can multiply itself.",
-    "lastVisited": "2026-08-09T03:07:31.296Z",
+    "lastVisited": "2026-08-09T03:14:46.155Z",
     "scopes": {
       "news": [
         "www/news.yaml",
@@ -15,9 +18,6 @@
         "www/note.yaml"
       ]
     }
-  },
-  "/media/jang/home/Deve/zen-mcp": {
-    "lastVisited": "2026-08-09T02:49:55.592Z"
   },
   "/media/jang/home/Deve/worldproxy/zendes/zen2": {
     "description": "ZenProxy is uBO-like adblock proxy with higher capabilities like Tagging  (from Privoxy), header filtering, download accelerating, proxying, leeching and bandwidth controlling.",
