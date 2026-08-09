@@ -77,6 +77,10 @@ func ResolvePrompt(p PromptDefinition, args map[string]string, workspace string)
 		}
 	}
 
+	if mcpcfg.Get().Mcp2Cli {
+		text = TransformMCPToCLI(text)
+	}
+
 	return text, nil
 }
 

@@ -80,6 +80,37 @@ func TestLoadSkillContentMissingSkill(t *testing.T) {
 	}
 }
 
+func TestLoadSkillContentMcp2CliTransforms(t *testing.T) {
+	origRoot := mcpcfg.ProjectRoot
+	defer func() { mcpcfg.ProjectRoot = origRoot }()
+
+	tmpDir := t.TempDir()
+	mcpcfg.ProjectRoot = tmpDir
+	skillsDir := filepath.Join(tmpDir, "resources", "skills")
+	os.MkdirAll(skillsDir, 0o755)
+
+	skillContent := "# Skill Test\n\nUse `codegraph({ action: 'files' })` and `codegraph({ action: 'map' })`.\n"
+	os.WriteFile(filepath.Join(skillsDir, "codebase-research.md"), []byte(skillContent), 0o644)
+
+	oldCfg := mcpcfg.Get()
+	defer func() { mcpcfg.Config.Store(oldCfg) }()
+
+	cfg := *oldCfg
+	cfg.Mcp2Cli = true
+	mcpcfg.Config.Store(&cfg)
+
+	loaded, err := LoadSkillContent("codebase-research")
+	if err != nil {
+		t.Fatalf("LoadSkillContent failed: %v", err)
+	}
+	if !strings.Contains(loaded, "zen-codegraph --action files") {
+		t.Errorf("expected zen-codegraph --action files in loaded content, got:\n%s", loaded)
+	}
+	if !strings.Contains(loaded, "zen-codegraph --action map") {
+		t.Errorf("expected zen-codegraph --action map in loaded content, got:\n%s", loaded)
+	}
+}
+
 func TestPromptHandlerUsesCapturedDefinition(t *testing.T) {
 	origRoot := mcpcfg.ProjectRoot
 	defer func() { mcpcfg.ProjectRoot = origRoot }()

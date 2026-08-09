@@ -130,6 +130,7 @@ type ZenConfig struct {
 	ChatFileThresholdKb          int                        `json:"chat_file_threshold_kb"`
 	ChatOutputPath               *string                    `json:"chat_output_path,omitempty"`
 	EnabledTools                 map[string]bool            `json:"enabled_tools,omitempty"`
+	Mcp2Cli                      bool                       `json:"mcp2cli,omitempty"`
 }
 
 func defaultConfig() ZenConfig {
@@ -206,6 +207,7 @@ func defaultConfig() ZenConfig {
 		},
 		TelemetryEnabled:    true,
 		ChatFileThresholdKb: 200,
+		Mcp2Cli:             false,
 	}
 }
 

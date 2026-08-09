@@ -175,5 +175,11 @@ func LoadSkillContent(skillID string) (string, error) {
 	skillDir := filepath.Dir(path)
 	resolved := skills.ResolveSkillContent(string(content), skillDir, skillID)
 
-	return fmt.Sprintf("# Skill: %s\n\n%s", title, resolved.Enriched), nil
+	result := fmt.Sprintf("# Skill: %s\n\n%s", title, resolved.Enriched)
+
+	if mcpcfg.Get().Mcp2Cli {
+		result = TransformMCPToCLI(result)
+	}
+
+	return result, nil
 }
