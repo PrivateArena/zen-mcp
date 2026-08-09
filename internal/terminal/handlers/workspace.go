@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"zen-mcp/internal/terminal"
+	"zen-mcp/internal/workspace"
 )
 
 func init() {
@@ -19,20 +20,23 @@ func init() {
 	})
 }
 
+// cd mirrors the TS `cd` handler. The argument is resolved through the
+// map.json alias/heuristic resolver, so `cd zen-mcp` or `cd server mcp`
+// resolves to a registered full path; unknown input falls back to a
+// cwd-joined relative path (checked for existence by the caller).
 func cd(args []string) error {
 	force := false
-	pathArg := ""
+	var pathParts []string
 	for _, a := range args {
 		if a == "--force" {
 			force = true
 			continue
 		}
-		if pathArg == "" && !strings.HasPrefix(a, "--") {
-			pathArg = a
+		if !strings.HasPrefix(a, "--") {
+			pathParts = append(pathParts, a)
 		}
 	}
-
-	if pathArg == "" {
+	if len(pathParts) == 0 {
 		return fmt.Errorf("usage: %s <path> [--force]", "cd")
 	}
 
@@ -41,13 +45,16 @@ func cd(args []string) error {
 		return fmt.Errorf("store not initialized")
 	}
 
+	cwd, _ := os.Getwd()
+	resolvedPath := workspace.ResolveWorkspacePath(strings.Join(pathParts, " "), cwd)
+	current := terminal.Ws()
+
 	if force {
-		cwd, _ := os.Getwd()
-		finalPath := pathArg
-		if !filepath.IsAbs(pathArg) {
-			finalPath = filepath.Join(cwd, pathArg)
+		finalPath := resolvedPath
+		if !exists(finalPath) {
+			finalPath = filepath.Join(cwd, strings.Join(pathParts, " "))
 		}
-		if _, err := os.Stat(finalPath); os.IsNotExist(err) {
+		if !exists(finalPath) {
 			return fmt.Errorf("%s does not exist", finalPath)
 		}
 		d.Store.Set("workspace-root", finalPath)
@@ -56,21 +63,18 @@ func cd(args []string) error {
 		return nil
 	}
 
-	current := terminal.Ws()
-	target := pathArg
-	if !filepath.IsAbs(target) {
-		cwd, _ := os.Getwd()
-		target = filepath.Join(cwd, target)
-	}
-	if target != current {
-		if _, err := os.Stat(target); os.IsNotExist(err) {
-			terminal.Logf("ERROR: %s does not exist. Workspace root unchanged: %s", target, current)
-			return nil
-		}
-		d.Store.Set("workspace-root", target)
-		terminal.Logf("OK: Workspace root -> %s", target)
+	if resolvedPath != current && exists(resolvedPath) {
+		d.Store.Set("workspace-root", resolvedPath)
+		terminal.Logf("OK: Workspace root -> %s", resolvedPath)
+	} else if !exists(resolvedPath) {
+		terminal.Logf("ERROR: %s does not exist. Workspace root unchanged: %s", resolvedPath, current)
 	} else {
 		terminal.Logf("OK: Workspace root -> %s", current)
 	}
 	return nil
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

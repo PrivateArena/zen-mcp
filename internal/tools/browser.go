@@ -14,8 +14,8 @@ import (
 
 	"zen-mcp/internal/bridge"
 	"zen-mcp/internal/mcpcfg"
-	"zen-mcp/internal/shared"
 	"zen-mcp/internal/toolresponse"
+	wspkg "zen-mcp/internal/workspace"
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
@@ -458,7 +458,7 @@ func wrapBridgeOutput(ctx context.Context, action string, bridgeParams map[strin
 			if mcpcfg.Get().ChatOutputPath != nil && *mcpcfg.Get().ChatOutputPath != "" {
 				chatDir = *mcpcfg.Get().ChatOutputPath
 			} else {
-				ws := shared.ResolveWorkspace(workspace, workspace, deps.Store)
+				ws := wspkg.ResolveWorkspace(workspace, workspace, deps.Store)
 				chatDir = filepath.Join(ws, ".zenmcp", "chat")
 			}
 			if err := os.MkdirAll(chatDir, 0755); err == nil {

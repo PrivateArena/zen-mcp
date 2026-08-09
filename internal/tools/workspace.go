@@ -13,6 +13,7 @@ import (
 	"zen-mcp/internal/projectmemory"
 	"zen-mcp/internal/toolresponse"
 	"zen-mcp/internal/toolstate"
+	wspkg "zen-mcp/internal/workspace"
 )
 
 func defWorkspace(workspace string, deps Deps) ToolDef {
@@ -43,7 +44,7 @@ func HandleWorkspaceAction(ctx context.Context, path, workspace string, deps Dep
 		prevPath = v
 	}
 
-	resolver := NewPathResolver(LoadAliasMap(), "")
+	resolver := wspkg.NewPathResolver(wspkg.LoadAliasMap(), "")
 	newRoot, ok := resolver.Resolve(path)
 	if !ok {
 		return toolresponse.WrapErrorWithContext(ctx, "workspace", &workspaceErr{msg: "path is required"}, start)

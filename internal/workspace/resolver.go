@@ -1,4 +1,4 @@
-package tools
+package workspace
 
 import (
 	"encoding/json"
@@ -30,6 +30,9 @@ func NewPathResolver(aliasMap map[string]string, cwd string) *PathResolver {
 	return &PathResolver{aliasMap: aliasMap, candidates: map[string]candidateEntry{}, cwd: cwd}
 }
 
+// LoadAliasMap builds the alias map from map.json: every registered full path
+// maps to itself and to its base name, so both `cd /full/path` and `cd zen-mcp`
+// resolve.
 func LoadAliasMap() map[string]string {
 	data, err := os.ReadFile(mcpcfg.MapFilePath())
 	if err != nil {
@@ -46,6 +49,9 @@ func LoadAliasMap() map[string]string {
 	return aliasMap
 }
 
+// orderedMapKeys returns the top-level keys of a JSON object in file order.
+// Object key order in map.json is significant: duplicate base names resolve to
+// the last registered path.
 func orderedMapKeys(data []byte) []string {
 	dec := json.NewDecoder(strings.NewReader(string(data)))
 	tok, err := dec.Token()
@@ -69,6 +75,9 @@ func orderedMapKeys(data []byte) []string {
 	return keys
 }
 
+// Resolve mirrors the TS PathResolver heuristic: exact alias, absolute path,
+// base-name alias, then scored fuzzy matching against registered basenames.
+// Equal-scoring candidates are broken deterministically by path order.
 func (p *PathResolver) Resolve(input string) (string, bool) {
 	if exact, ok := p.aliasMap[input]; ok && exists(exact) {
 		return exact, true
@@ -118,7 +127,12 @@ func (p *PathResolver) Resolve(input string) (string, bool) {
 		}
 	}
 
-	sort.Slice(scored, func(i, j int) bool { return scored[i].score > scored[j].score })
+	sort.Slice(scored, func(i, j int) bool {
+		if scored[i].score != scored[j].score {
+			return scored[i].score > scored[j].score
+		}
+		return scored[i].path < scored[j].path
+	})
 	for _, c := range scored {
 		if c.score > 0 && exists(c.path) {
 			return c.path, true
@@ -131,10 +145,12 @@ func (p *PathResolver) Resolve(input string) (string, bool) {
 	return "", false
 }
 
+// tokenize splits a query into lowercase word tokens. Spaces are separators so
+// multi-word queries like `server mcp` can match tokenized basenames.
 func (p *PathResolver) tokenize(input string) []string {
 	parts := strings.FieldsFunc(strings.ToLower(input), func(r rune) bool {
 		switch r {
-		case '-', '_', '/', '\\':
+		case '-', '_', '/', '\\', ' ':
 			return true
 		}
 		return false
