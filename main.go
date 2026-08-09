@@ -98,19 +98,20 @@ func main() {
 		mode = "stdio"
 	}
 	os.Setenv("MCP_TRANSPORT", mode)
-	server.SetupShutdownHandlers(mode, func(format string, args ...any) {
+	shutdownCh := server.SetupShutdownHandlers(mode, func(format string, args ...any) {
 		logfilter.Info(fmt.Sprintf(format, args...))
 	})
 
 	if isStdio {
 		logfilter.Info("[MCP] STDIO mode: session transport wiring lands in M4.")
+		<-shutdownCh
 		return
 	}
 
-	runHTTPServers(startTime, cfg, store)
+	runHTTPServers(startTime, cfg, store, shutdownCh)
 }
 
-func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.Store) {
+func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.Store, shutdownCh chan struct{}) {
 	mcpPort := cfg.McpPort
 	cliPort := cfg.CliPort
 	if p := os.Getenv("PORT"); p != "" {
@@ -224,7 +225,19 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 	terminal.SetDeps(deps)
 	terminal.StartTerminalCommander()
 
-	select {}
+	<-shutdownCh
+	terminal.WaitTerminalCommander()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := mcpSrv.Shutdown(ctx); err != nil {
+		logfilter.Debugf("[MCP] Filtered server shutdown error: %v", err)
+	}
+	if cliAvailable {
+		if err := cliSrv.Shutdown(ctx); err != nil {
+			logfilter.Debugf("[MCP] Unfiltered server shutdown error: %v", err)
+		}
+	}
 }
 
 func isAddrInUse(err error) bool {

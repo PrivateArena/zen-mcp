@@ -42,6 +42,15 @@ func GetDeps() tools.Deps {
 // LogOut is where [ZEN-CLI] log lines are written (stderr by default).
 var LogOut io.Writer = os.Stderr
 
+var (
+	commanderOnce sync.Once
+	commanderDone = make(chan struct{}, 1)
+)
+
+func init() {
+	close(commanderDone)
+}
+
 func init() {
 	Register("help", func(_ []string) error {
 		Logf("Available commands: %s", strings.Join(List(), ", "))
@@ -365,14 +374,30 @@ func restoreTerminal(fd int, old *unix.Termios) error {
 
 // StartTerminalCommander launches the REPL in a background goroutine.
 func StartTerminalCommander() {
-	go func() {
-		if runCommander(os.Stdin, os.Stdout) {
-			p, _ := os.FindProcess(os.Getpid())
-			if p != nil {
+	commanderOnce.Do(func() {
+		commanderDone = make(chan struct{}, 1)
+		go func() {
+			if runCommander(os.Stdin, os.Stdout) {
+				p, err := os.FindProcess(os.Getpid())
+				if err != nil {
+					Logf("WARN: failed to find process for shutdown signal: %v", err)
+					return
+				}
+				if err := p.Signal(syscall.SIGINT); err != nil {
+					Logf("WARN: failed to send shutdown signal: %v", err)
+					return
+				}
+				time.Sleep(50 * time.Millisecond)
 				_ = p.Signal(syscall.SIGINT)
 			}
-		}
-	}()
+			commanderDone <- struct{}{}
+		}()
+	})
+}
+
+// WaitTerminalCommander blocks until the REPL goroutine has exited.
+func WaitTerminalCommander() {
+	<-commanderDone
 }
 
 // MakeFakeRequest creates a fake mcp.CallToolRequest from args.

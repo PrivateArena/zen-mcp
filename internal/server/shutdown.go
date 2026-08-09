@@ -9,8 +9,10 @@ import (
 
 var shutdownOnce sync.Once
 
+var shutdownCh chan struct{}
+
 // SetupShutdownHandlers installs SIGINT/SIGTERM handlers. Idempotent.
-func SetupShutdownHandlers(mode string, logf func(format string, args ...any)) {
+func SetupShutdownHandlers(mode string, logf func(format string, args ...any)) chan struct{} {
 	shutdownOnce.Do(func() {
 		label := "SSE"
 		if mode == "stdio" {
@@ -18,12 +20,14 @@ func SetupShutdownHandlers(mode string, logf func(format string, args ...any)) {
 		}
 		ch := make(chan os.Signal, 1)
 		signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+		shutdownCh = make(chan struct{})
 		go func() {
 			<-ch
 			if logf != nil {
 				logf("\n🛑 Graceful Shutdown (%s)...", label)
 			}
-			os.Exit(0)
+			close(shutdownCh)
 		}()
 	})
+	return shutdownCh
 }
