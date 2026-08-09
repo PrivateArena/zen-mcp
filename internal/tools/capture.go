@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"zen-mcp/internal/mcpcfg"
@@ -83,17 +84,18 @@ func HandleCollaborateCapture(ctx context.Context, apiAddr, targetPath string, s
 
 	resolveCh := make(chan string, 1)
 	if deps.PendingCollaborations != nil {
-		deps.PendingCollaborations[collabID] = func(path string) {
+		deps.PendingCollaborations.Register(collabID, func(path string) {
 			resolveCh <- path
-		}
+		})
 	}
+	// Expire is idempotent: if the HTTP POST already resolved this id, the
+	// entry is gone and this is a no-op (F5/F11 single-owner state machine).
+	defer deps.PendingCollaborations.Expire(collabID)
 
 	select {
 	case savedPath := <-resolveCh:
-		delete(deps.PendingCollaborations, collabID)
 		return toolresponse.WrapSuccess(ctx, "capture", map[string]any{"path": savedPath, "mode": "collaborate"}, start)
 	case <-time.After(60 * time.Second):
-		delete(deps.PendingCollaborations, collabID)
 		return toolresponse.WrapErrorWithContext(ctx, "capture", fmt.Errorf("Collaborate screenshot timed out after 60 seconds."), start)
 	}
 }
@@ -157,7 +159,28 @@ func HandleStandardCapture(ctx context.Context, apiAddr, targetPath, mode string
 	return toolresponse.WrapSuccess(ctx, "capture", map[string]any{"path": data["path"], "status": "success"}, start)
 }
 
+var (
+	zenCapAddrMu       sync.Mutex
+	zenCapAddrCache    string
+	zenCapAddrLoadedAt time.Time
+	zenCapAddrCacheTTL = time.Minute
+)
+
+// getZenCapAPIAddress returns the zen-cap API address, re-reading the config
+// at most once per minute (F12: the old code hit disk on every capture call).
 func getZenCapAPIAddress() string {
+	zenCapAddrMu.Lock()
+	defer zenCapAddrMu.Unlock()
+	if zenCapAddrCache != "" && time.Since(zenCapAddrLoadedAt) < zenCapAddrCacheTTL {
+		return zenCapAddrCache
+	}
+	addr := readZenCapAPIAddress()
+	zenCapAddrCache = addr
+	zenCapAddrLoadedAt = time.Now()
+	return addr
+}
+
+func readZenCapAPIAddress() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "localhost:4444"

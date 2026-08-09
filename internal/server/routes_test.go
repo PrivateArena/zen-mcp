@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -18,6 +19,7 @@ import (
 
 	"zen-mcp/internal/shared"
 	"zen-mcp/internal/toolregistry"
+	"zen-mcp/internal/tools"
 )
 
 func echoHandler(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -39,7 +41,7 @@ func testDeps() (RouteDeps, *http.ServeMux) {
 		},
 		Registry:              reg,
 		Shared:                shared.NewStore(),
-		PendingCollaborations: map[string]func(string){},
+		PendingCollaborations: tools.NewCollaborationRegistry(),
 		StartTime:             start,
 		Tag:                   "test",
 	}
@@ -143,20 +145,32 @@ func TestRejectionRoutes(t *testing.T) {
 	_, mux := testDeps()
 	cases := []struct {
 		method, target, want string
+		wantCode             int
 	}{
-		{http.MethodGet, "/sse", "SSE sessions not supported in stateless mode"},
-		{http.MethodPost, "/sse/message", "SSE sessions not supported in stateless mode"},
-		{http.MethodGet, "/mcp", "Streamable HTTP requires POST"},
-		{http.MethodDelete, "/mcp", "Session termination not supported in stateless mode"},
+		{http.MethodGet, "/sse", "SSE sessions not supported in stateless mode", http.StatusBadRequest},
+		{http.MethodPost, "/sse/message", "SSE sessions not supported in stateless mode", http.StatusBadRequest},
+		{http.MethodGet, "/mcp", "Method Not Allowed: Streamable HTTP requires POST", http.StatusMethodNotAllowed},
+		{http.MethodDelete, "/mcp", "Session termination not supported in stateless mode", http.StatusBadRequest},
 	}
 	for _, tc := range cases {
 		rec := doRequest(mux, tc.method, tc.target, nil, "")
-		if rec.Code != http.StatusBadRequest {
-			t.Errorf("%s %s status = %d", tc.method, tc.target, rec.Code)
+		if rec.Code != tc.wantCode {
+			t.Errorf("%s %s status = %d, want %d", tc.method, tc.target, rec.Code, tc.wantCode)
 		}
 		if strings.TrimSpace(rec.Body.String()) != tc.want {
 			t.Errorf("%s %s body = %q", tc.method, tc.target, rec.Body.String())
 		}
+	}
+}
+
+func TestGetMcpReturns405WithAllowHeader(t *testing.T) {
+	_, mux := testDeps()
+	rec := doRequest(mux, http.MethodGet, "/mcp", nil, "")
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET /mcp status = %d, want 405", rec.Code)
+	}
+	if allow := rec.Header().Get("Allow"); allow != "POST" {
+		t.Errorf("Allow header = %q, want POST", allow)
 	}
 }
 
@@ -196,7 +210,7 @@ func TestCollaborateRoute(t *testing.T) {
 func TestCollaborateResolve(t *testing.T) {
 	deps, mux := testDeps()
 	received := make(chan string, 1)
-	deps.PendingCollaborations["abc"] = func(p string) { received <- p }
+	deps.PendingCollaborations.Register("abc", func(p string) { received <- p })
 
 	rec := doRequest(mux, http.MethodPost, "/api/collaborate?id=abc", []byte(`{"path":"/tmp/shot.png"}`), "application/json")
 	if rec.Code != http.StatusOK {
@@ -210,8 +224,14 @@ func TestCollaborateResolve(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("callback not invoked")
 	}
-	if _, still := deps.PendingCollaborations["abc"]; still {
+	if deps.PendingCollaborations.Contains("abc") {
 		t.Error("pending entry should be removed after resolve")
+	}
+
+	// A duplicate POST must not double-resolve (F11): return 404, no second callback.
+	rec = doRequest(mux, http.MethodPost, "/api/collaborate?id=abc", []byte(`{"path":"/tmp/shot.png"}`), "application/json")
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("duplicate resolve status = %d, want 404", rec.Code)
 	}
 }
 
@@ -338,6 +358,36 @@ func TestReadBodyOnce(t *testing.T) {
 	rec := doRequest(mux, http.MethodPost, "/mcp?projectPath=/tmp/q", body, "application/json")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("initialize after body rewind failed: %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// countingBody tracks total bytes consumed to pin F4: postMCP must materialize
+// the request body exactly once, then hand a rewound buffer to the mcp-go
+// handler (which reads the buffer, not the original body).
+type countingBody struct {
+	io.ReadCloser
+	total int64
+}
+
+func (c *countingBody) Read(p []byte) (int, error) {
+	n, err := c.ReadCloser.Read(p)
+	c.total += int64(n)
+	return n, err
+}
+
+func TestPostMCPReadsBodyOnce(t *testing.T) {
+	_, mux := testDeps()
+	body := []byte(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"rootUri":"file:///tmp/p"}}`)
+	cb := &countingBody{ReadCloser: io.NopCloser(bytes.NewReader(body))}
+	req := httptest.NewRequest(http.MethodPost, "/mcp", cb)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("initialize: %d: %s", rec.Code, rec.Body.String())
+	}
+	if cb.total != int64(len(body)) {
+		t.Errorf("request body consumed %d bytes, want %d (materialized more than once, F4)", cb.total, len(body))
 	}
 }
 
@@ -499,7 +549,7 @@ func TestPostMCPLongRunningRequestDoesNotBlockNewRequests(t *testing.T) {
 		},
 		Registry:              toolregistry.Create(),
 		Shared:                shared.NewStore(),
-		PendingCollaborations: map[string]func(string){},
+		PendingCollaborations: tools.NewCollaborationRegistry(),
 		StartTime:             time.Now(),
 		Tag:                   "test",
 	}
@@ -630,7 +680,7 @@ func TestPostMCPExtremeConcurrency200Clients(t *testing.T) {
 		},
 		Registry:              toolregistry.Create(),
 		Shared:                shared.NewStore(),
-		PendingCollaborations: map[string]func(string){},
+		PendingCollaborations: tools.NewCollaborationRegistry(),
 		StartTime:             time.Now(),
 		Tag:                   "test",
 	}
@@ -692,7 +742,7 @@ func TestPostMCP500ConcurrentToolsList(t *testing.T) {
 		},
 		Registry:              toolregistry.Create(),
 		Shared:                shared.NewStore(),
-		PendingCollaborations: map[string]func(string){},
+		PendingCollaborations: tools.NewCollaborationRegistry(),
 		StartTime:             time.Now(),
 		Tag:                   "test",
 	}
@@ -771,7 +821,7 @@ func TestPostMCPLongCallWith200ConcurrentClients(t *testing.T) {
 		},
 		Registry:              toolregistry.Create(),
 		Shared:                shared.NewStore(),
-		PendingCollaborations: map[string]func(string){},
+		PendingCollaborations: tools.NewCollaborationRegistry(),
 		StartTime:             time.Now(),
 		Tag:                   "test",
 	}
@@ -848,5 +898,157 @@ func TestPostMCPLongCallWith200ConcurrentClients(t *testing.T) {
 
 	if factoryCalls != 1 {
 		t.Fatalf("factory called %d times, expected 1", factoryCalls)
+	}
+}
+
+func newTestServerCache(maxSize int, ttl time.Duration) *serverCache {
+	return &serverCache{
+		servers:  make(map[string]*mcpserver.MCPServer),
+		lastUsed: make(map[string]time.Time),
+		handlers: make(map[string]*mcpserver.StreamableHTTPServer),
+		maxSize:  maxSize,
+		ttl:      ttl,
+	}
+}
+
+func TestServerCacheCapEvictsLRU(t *testing.T) {
+	cache := newTestServerCache(2, time.Hour)
+	factory := func(id string) *mcpserver.MCPServer {
+		return mcpserver.NewMCPServer("cap-"+id, "1.0")
+	}
+
+	cache.getOrCreate("a", factory, nil)
+	time.Sleep(time.Millisecond)
+	cache.getOrCreate("b", factory, nil)
+	time.Sleep(time.Millisecond)
+	cache.getOrCreate("c", factory, nil)
+
+	cache.mu.RLock()
+	defer cache.mu.RUnlock()
+	if len(cache.servers) != 2 {
+		t.Fatalf("cache should hold %d entries, got %d", 2, len(cache.servers))
+	}
+	if _, ok := cache.servers["a"]; ok {
+		t.Error("least-recently-used entry 'a' should have been evicted")
+	}
+	if _, ok := cache.servers["b"]; !ok {
+		t.Error("entry 'b' should survive")
+	}
+	if _, ok := cache.servers["c"]; !ok {
+		t.Error("entry 'c' should survive")
+	}
+}
+
+func TestServerCacheIdleReap(t *testing.T) {
+	cache := newTestServerCache(0, time.Hour)
+	cache.getOrCreate("stale", func(id string) *mcpserver.MCPServer {
+		return mcpserver.NewMCPServer("reap", "1.0")
+	}, nil)
+	cache.mu.Lock()
+	cache.lastUsed["stale"] = time.Now().Add(-2 * time.Hour)
+	cache.mu.Unlock()
+
+	cache.reapIdle(time.Now())
+	cache.mu.RLock()
+	_, ok := cache.servers["stale"]
+	cache.mu.RUnlock()
+	if ok {
+		t.Error("idle entry should be reaped")
+	}
+}
+
+func TestServerCacheIdleReapDisabled(t *testing.T) {
+	cache := newTestServerCache(0, 0)
+	cache.getOrCreate("keep", func(id string) *mcpserver.MCPServer {
+		return mcpserver.NewMCPServer("keep", "1.0")
+	}, nil)
+	cache.mu.Lock()
+	cache.lastUsed["keep"] = time.Now().Add(-2 * time.Hour)
+	cache.mu.Unlock()
+
+	cache.reapIdle(time.Now())
+	cache.mu.RLock()
+	_, ok := cache.servers["keep"]
+	cache.mu.RUnlock()
+	if !ok {
+		t.Error("reapIdle must no-op when ttl <= 0")
+	}
+}
+
+func TestServerCacheHandlerReuse(t *testing.T) {
+	cache := newTestServerCache(4, time.Hour)
+	factory := func(id string) *mcpserver.MCPServer {
+		return mcpserver.NewMCPServer("hdl-"+id, "1.0")
+	}
+
+	h1 := cache.getOrCreateHandler("ws", factory, nil)
+	h2 := cache.getOrCreateHandler("ws", factory, nil)
+	if h1 != h2 {
+		t.Error("streamable handler should be constructed once per cached server (F6)")
+	}
+}
+
+func TestGetOrCreateDoesNotClobberToolState(t *testing.T) {
+	reg := toolregistry.Create()
+	reg.Track(toolregistry.ToolRegistration{Name: "foo", DefaultEnabled: true})
+	if !reg.SetToolEnabled("foo", false) {
+		t.Fatal("failed to disable tool")
+	}
+	cache := newTestServerCache(4, time.Hour)
+	cache.getOrCreate("ws", func(id string) *mcpserver.MCPServer {
+		return mcpserver.NewMCPServer("t", "1.0")
+	}, reg)
+
+	if reg.IsToolEnabled("foo") {
+		t.Error("getOrCreate must not clobber per-workspace tool state with a global re-apply (F14)")
+	}
+}
+
+// TestPostMCPWorkspaceFollowUpSequence pins F3: an initialize carrying
+// rootUri must bind subsequent hint-less calls to the same cached server
+// instead of silently falling back to the "default" workspace.
+func TestPostMCPWorkspaceFollowUpSequence(t *testing.T) {
+	factoryCalls := 0
+	deps := RouteDeps{
+		CreateMCPServer: func(id string) *mcpserver.MCPServer {
+			factoryCalls++
+			return mcpserver.NewMCPServer("zen-tools", "2.4.1",
+				mcpserver.WithToolCapabilities(true),
+				mcpserver.WithResourceCapabilities(false, false),
+				mcpserver.WithPromptCapabilities(false),
+			)
+		},
+		Registry:              toolregistry.Create(),
+		Shared:                shared.NewStore(),
+		PendingCollaborations: tools.NewCollaborationRegistry(),
+		StartTime:             time.Now(),
+		Tag:                   "test",
+	}
+	mux := http.NewServeMux()
+	SetupRoutes(mux, deps)
+
+	doReq := func(body []byte) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, r)
+		return rec
+	}
+
+	initBody := []byte(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","rootUri":"file:///tmp/f3-ws","capabilities":{}}}`)
+	if rec := doReq(initBody); rec.Code != http.StatusOK {
+		t.Fatalf("initialize: %d: %s", rec.Code, rec.Body.String())
+	}
+	if factoryCalls != 1 {
+		t.Fatalf("factory calls after initialize = %d, want 1", factoryCalls)
+	}
+
+	// No workspace hint on the follow-up: it must reuse the initialize server.
+	rec := doReq([]byte(`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("tools/list follow-up: %d: %s", rec.Code, rec.Body.String())
+	}
+	if factoryCalls != 1 {
+		t.Fatalf("factory calls after follow-up = %d, want 1 (server must be reused, not re-created for 'default')", factoryCalls)
 	}
 }

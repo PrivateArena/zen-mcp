@@ -12,7 +12,7 @@ type Deps struct {
 	Store                 *shared.Store
 	Reg                   *toolregistry.ToolRegistry
 	Gatekeeper            *gatekeeper.Gatekeeper
-	PendingCollaborations map[string]func(string)
+	PendingCollaborations *CollaborationRegistry
 }
 
 // ToolDef describes one MCP tool. The Schema is the exact JSON Schema served

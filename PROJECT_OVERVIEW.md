@@ -8,7 +8,7 @@ A stateless MCP (Model Context Protocol) server that exposes a codebase-research
 ## Architecture
 ```
 HTTP (stateless MCP: POST /mcp) → server/routes.go (SetupRoutes, 12 routes)
-  → serverCache → pool.AcquireServer → mcpserver.MCPServer (mark3labs/mcp-go)
+  → serverCache.getOrCreate → mcpserver.MCPServer (mark3labs/mcp-go)
       → RegisterAllTools → toolregistry → tools.AllDefs (16 tool defs)
           → subsystems: codegraph engine · shell exec · bridge · whiteboard · projectmemory
 ```
@@ -56,10 +56,10 @@ zen-mcp/
 | File / Module | Role | LOC | Key Exports (with signatures) |
 |---|---|---|---|
 | cmd/zen/main.go | Entry point: stdio/HTTP modes, dual filtered+unfiltered listeners, idle reaper, REPL start | 224 | `newMcpServer(id string, reg *toolregistry.ToolRegistry, deps tools.Deps) *mcpserver.MCPServer`; `main()`; `runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.Store)` |
-| internal/server/routes.go | 12 stateless HTTP routes incl. `POST /mcp`, shared-key store, collaborate, health | 307 | `SetupRoutes(mux *http.ServeMux, deps RouteDeps)`; `autoDetectWorkspace(r *http.Request, st *shared.Store) string`; `writeJSON(w, code, v)` |
+| internal/server/routes.go | 12 stateless HTTP routes incl. `POST /mcp`, shared-key store, collaborate, health | 320 | `SetupRoutes(mux *http.ServeMux, deps RouteDeps)`; `autoDetectWorkspace(r *http.Request, st *shared.Store) string`; `detectWorkspace(msg rpcMessage, r, st) string`; `writeJSON(w, code, v)` |
 | internal/server/tools.go | Register all tools on an MCPServer, apply filter, publish catalog | 82 | `RegisterAllTools(ctx, srv *mcpserver.MCPServer, reg *toolregistry.ToolRegistry, deps tools.Deps, workspace string) error`; `FilterEnabled(reg *toolregistry.ToolRegistry) func(ctx, []mcp.Tool) []mcp.Tool` |
 | internal/server/catalog.go | `tools:catalog` resource content | 82 | `registerToolCatalogResource(srv *mcpserver.MCPServer, reg *toolregistry.ToolRegistry, deps tools.Deps)`; `buildToolCatalog(reg *toolregistry.ToolRegistry) string` |
-| internal/server/pool.go | Cached MCPServer pool: acquire/release, inflight tracking, idle reaper, swap | 460 | `AcquireServer(cacheTag, logicalID string, factory Factory, registry *toolregistry.ToolRegistry, acquireTimeout ...time.Duration) (*mcpserver.MCPServer, error)`; `ReleaseServer(...)`; `SwapServer(...)`; `StartIdleReaper() func()`; `PoolServerFrom(ctx) *mcpserver.MCPServer` |
+| internal/server/pool.go | serverCache registry + idle reaper (cap + TTL eviction) | 46 | `StartIdleReaper() func()` |
 | internal/server/patch.go | Registration-time handler patches (timeout wrap, param summary) | 96 | `WrapHandlerWithTimeout(name string, inner toolregistry.Handler, getTimeout func(string) time.Duration) toolregistry.Handler`; `SummarizeParams(args map[string]any) string` |
 | internal/server/shutdown.go | SIGINT/SIGTERM handling, idempotent | 13 | `SetupShutdownHandlers(mode string, logf func(format string, args ...any))` |
 | internal/server/toolslist.go | Rewrite `tools/list` responses to annotate tools | 112 | `rewriteToolsListJSON(body []byte) ([]byte, bool)`; `toolsListRewriter(w http.ResponseWriter) *bufferingWriter` |
@@ -153,7 +153,7 @@ zen-mcp/
 MCP client ──POST /mcp (JSON-RPC, stateless)──► SetupRoutes (server/routes.go)
    │  initialize · tools/list · tools/call · prompts/list
    ▼
-serverCache.getOrCreate → pool.AcquireServer → newMcpServer → RegisterAllTools
+serverCache.getOrCreate → newMcpServer → RegisterAllTools
    │                                                        (toolregistry → tools.AllDefs)
    ▼
 tool handler (defX + HandleXAction)
@@ -165,7 +165,7 @@ CLI port (unfiltered registry): same routes; terminal REPL (stdin) + exported CL
 ```
 
 ## Key Architectural Patterns
-1. Stateless MCP transport: every `POST /mcp` is a fresh session (SSE and DELETE `/mcp` explicitly rejected); a pool of cached `MCPServer` instances keyed by workspace (`AcquireServer`/`ReleaseServer`, inflight-aware `SwapServer`, idle reaper) is reused across calls.
+1. Stateless MCP transport: every `POST /mcp` is a fresh session (SSE and `DELETE /mcp` explicitly rejected); a bounded `serverCache` keyed by workspace (LRU cap `serverCacheMaxSize=32`, idle TTL `serverCacheTTL=10m`, reaped by `StartIdleReaper`) reuses one `MCPServer` + one streamable HTTP handler per workspace across calls. The legacy AcquireServer/SwapServer pool was removed — it had no production callers.
 2. Dual-server, filtered vs unfiltered registries: identical `SetupRoutes` served on `mcpPort` (filtered) and `cliPort` (unfiltered); `FilterEnabled` closure + per-workspace `ApplyToolStates` gate the MCP surface while CLI wrappers hit the unfiltered one.
 3. `defX` + `HandleXAction` tool convention: each tool is a `ToolDef` (JSON schema) plus a handler; `tools.AllDefs` fixes TS registration order; `toolresponse.WrapSuccess/WrapError` normalizes every result/error.
 4. Registration-time patching: `server/patch.go` `WrapHandlerWithTimeout` + `SummarizeParams` mirror the TS `patch-mcp.ts`, applied when tools are registered.
@@ -212,7 +212,7 @@ CLI port (unfiltered registry): same routes; terminal REPL (stdin) + exported CL
 ## Build & Run
 | Command | Purpose |
 |---|---|
-| `go build -tags fts5 -o zen-mcp ./cmd/zen` | Build the server binary (tags required for FTS5) |
+| `go build -tags fts5 -o zen-mcp .` | Build the server binary (tags required for FTS5) |
 | `air` | Auto-restart dev loop per .air.toml (rebuild + run) |
 | `./run.sh` | Build, watch-rebuild, and run the binary |
 | `./zen-mcp --stdio` | Run in stdio transport mode |

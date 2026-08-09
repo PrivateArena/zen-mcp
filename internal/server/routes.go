@@ -18,7 +18,7 @@ import (
 
 	"zen-mcp/internal/shared"
 	"zen-mcp/internal/toolregistry"
-	"zen-mcp/internal/toolstate"
+	"zen-mcp/internal/tools"
 )
 
 const (
@@ -30,36 +30,119 @@ type RouteDeps struct {
 	CreateMCPServer       func(id string) *mcpserver.MCPServer
 	Registry              *toolregistry.ToolRegistry
 	Shared                *shared.Store
-	PendingCollaborations map[string]func(string)
+	PendingCollaborations *tools.CollaborationRegistry
 	StartTime             time.Time
 	Tag                   string
 	ServerCache           *serverCache
 }
 
+type rpcMessage struct {
+	Method string         `json:"method"`
+	Params map[string]any `json:"params"`
+}
+
+// serverCache maps a logical workspace ID to a cached MCPServer, its
+// per-server streamable HTTP handler, and its last-use time. It is bounded by
+// serverCacheMaxSize (LRU eviction) and serverCacheTTL (idle reaping) so a
+// client-controlled logicalID space cannot grow memory without bound (F2).
 type serverCache struct {
-	mu      sync.RWMutex
-	servers map[string]*mcpserver.MCPServer
+	mu       sync.RWMutex
+	servers  map[string]*mcpserver.MCPServer
+	lastUsed map[string]time.Time
+	handlers map[string]*mcpserver.StreamableHTTPServer
+	maxSize  int
+	ttl      time.Duration
+}
+
+func newServerCache() *serverCache {
+	c := &serverCache{
+		servers:  make(map[string]*mcpserver.MCPServer),
+		lastUsed: make(map[string]time.Time),
+		handlers: make(map[string]*mcpserver.StreamableHTTPServer),
+		maxSize:  serverCacheMaxSize,
+		ttl:      serverCacheTTL,
+	}
+	registerServerCache(c)
+	return c
 }
 
 func (c *serverCache) getOrCreate(logicalID string, factory func(string) *mcpserver.MCPServer, registry *toolregistry.ToolRegistry) *mcpserver.MCPServer {
-	c.mu.RLock()
-	if srv, ok := c.servers[logicalID]; ok {
-		c.mu.RUnlock()
-		return srv
-	}
-	c.mu.RUnlock()
-
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.initLocked()
 	if srv, ok := c.servers[logicalID]; ok {
+		c.lastUsed[logicalID] = time.Now()
 		return srv
 	}
 	srv := factory(logicalID)
-	if registry != nil {
-		toolstate.ApplyToolStates("", registry)
-	}
 	c.servers[logicalID] = srv
+	c.lastUsed[logicalID] = time.Now()
+	// F6/F13: construct the stateless streamable HTTP handler exactly once per
+	// cached server instead of per request, so future StreamableHTTPOption
+	// configuration cannot silently no-op.
+	c.handlers[logicalID] = mcpserver.NewStreamableHTTPServer(srv, mcpserver.WithStateLess(true))
+	c.evictLocked()
 	return srv
+}
+
+func (c *serverCache) getOrCreateHandler(logicalID string, factory func(string) *mcpserver.MCPServer, registry *toolregistry.ToolRegistry) *mcpserver.StreamableHTTPServer {
+	c.getOrCreate(logicalID, factory, registry)
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.handlers[logicalID]
+}
+
+// initLocked lazily initializes maps so struct literals created without the
+// helper still work (kept for backward compatibility with existing callers).
+func (c *serverCache) initLocked() {
+	if c.servers == nil {
+		c.servers = make(map[string]*mcpserver.MCPServer)
+	}
+	if c.lastUsed == nil {
+		c.lastUsed = make(map[string]time.Time)
+	}
+	if c.handlers == nil {
+		c.handlers = make(map[string]*mcpserver.StreamableHTTPServer)
+	}
+}
+
+// evictLocked drops the least-recently-used entries while over maxSize.
+// Caller holds c.mu.
+func (c *serverCache) evictLocked() {
+	if c.maxSize <= 0 {
+		return
+	}
+	for len(c.servers) > c.maxSize {
+		var oldest string
+		var oldestT time.Time
+		for id, t := range c.lastUsed {
+			if oldest == "" || t.Before(oldestT) {
+				oldest, oldestT = id, t
+			}
+		}
+		if oldest == "" {
+			return
+		}
+		delete(c.servers, oldest)
+		delete(c.lastUsed, oldest)
+		delete(c.handlers, oldest)
+	}
+}
+
+// reapIdle evicts entries idle longer than ttl. No-op when ttl <= 0.
+func (c *serverCache) reapIdle(now time.Time) {
+	if c.ttl <= 0 {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for id, t := range c.lastUsed {
+		if now.Sub(t) > c.ttl {
+			delete(c.servers, id)
+			delete(c.lastUsed, id)
+			delete(c.handlers, id)
+		}
+	}
 }
 
 // SetupRoutes registers the 12 stateless HTTP routes (Go 1.22 ServeMux).
@@ -71,9 +154,7 @@ func SetupRoutes(mux *http.ServeMux, deps RouteDeps) {
 		deps.StartTime = time.Now()
 	}
 	if deps.ServerCache == nil {
-		deps.ServerCache = &serverCache{
-			servers: make(map[string]*mcpserver.MCPServer),
-		}
+		deps.ServerCache = newServerCache()
 	}
 
 	mux.HandleFunc("GET /sse", func(w http.ResponseWriter, _ *http.Request) {
@@ -148,21 +229,24 @@ func SetupRoutes(mux *http.ServeMux, deps RouteDeps) {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Missing body parameter: path"})
 			return
 		}
-		resolve, ok := deps.PendingCollaborations[id]
-		if !ok {
-			writeJSON(w, http.StatusNotFound, map[string]any{"error": fmt.Sprintf("Session not found or expired: %s", id)})
+		// F5/F11: Resolve claims the pending collaboration atomically; the
+		// resolve callback fires exactly once and a duplicate or late POST
+		// (after timeout) is answered with 404 instead of a spurious 200.
+		if deps.PendingCollaborations.Resolve(id, body.Path) {
+			log.Printf("[API] Resolved collaborative capture session: %s with path: %s", id, body.Path)
+			writeJSON(w, http.StatusOK, map[string]any{"status": "success"})
 			return
 		}
-		delete(deps.PendingCollaborations, id)
-		resolve(body.Path)
-		log.Printf("[API] Resolved collaborative capture session: %s with path: %s", id, body.Path)
-		writeJSON(w, http.StatusOK, map[string]any{"status": "success"})
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": fmt.Sprintf("Session not found or expired: %s", id)})
 	})
 	mux.HandleFunc("POST /mcp", func(w http.ResponseWriter, r *http.Request) {
 		deps.postMCP(w, r)
 	})
 	mux.HandleFunc("GET /mcp", func(w http.ResponseWriter, _ *http.Request) {
-		writeText(w, http.StatusBadRequest, "Streamable HTTP requires POST")
+		// F7: Streamable HTTP spec requires 405 (not 400) when GET has no SSE
+		// support; the Allow header advertises the supported method.
+		w.Header().Set("Allow", "POST")
+		writeText(w, http.StatusMethodNotAllowed, "Method Not Allowed: Streamable HTTP requires POST")
 	})
 	mux.HandleFunc("DELETE /mcp", func(w http.ResponseWriter, _ *http.Request) {
 		writeText(w, http.StatusBadRequest, "Session termination not supported in stateless mode")
@@ -170,38 +254,50 @@ func SetupRoutes(mux *http.ServeMux, deps RouteDeps) {
 }
 
 func (d RouteDeps) postMCP(w http.ResponseWriter, r *http.Request) {
-	workspace := autoDetectWorkspace(r, d.Shared)
+	// F4: read the body exactly once. The parsed method/params drive both
+	// workspace detection and the tools/list rewrite; the body is rewound once
+	// for the mcp-go handler.
+	body, err := io.ReadAll(io.LimitReader(r.Body, 50<<20))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Failed to read request body"})
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+
+	var msg rpcMessage
+	_ = json.Unmarshal(body, &msg)
+
+	workspace := detectWorkspace(msg, r, d.Shared)
 	logicalID := workspace
 	if logicalID == "" {
 		logicalID = "default"
 	}
 
-	srv := d.ServerCache.getOrCreate(logicalID, d.CreateMCPServer, d.Registry)
-
-	handler := mcpserver.NewStreamableHTTPServer(srv, mcpserver.WithStateLess(true))
-	ctx := WithPoolServer(r.Context(), srv)
-	if jsonBodyMethod(r) == "tools/list" {
+	handler := d.ServerCache.getOrCreateHandler(logicalID, d.CreateMCPServer, d.Registry)
+	if msg.Method == "tools/list" {
 		bw := toolsListRewriter(w)
-		handler.ServeHTTP(bw, r.WithContext(ctx))
+		handler.ServeHTTP(bw, r)
 		_ = bw.finish()
 		return
 	}
-	handler.ServeHTTP(w, r.WithContext(ctx))
+	handler.ServeHTTP(w, r)
 }
 
 // autoDetectWorkspace resolves a workspace root from initialize params, query,
 // shared state, then headers — in that order, matching routes.ts.
 func autoDetectWorkspace(r *http.Request, st *shared.Store) string {
-	var projectPath string
-
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 50<<20))
 	r.Body = io.NopCloser(bytes.NewReader(body))
 
-	var msg struct {
-		Method string         `json:"method"`
-		Params map[string]any `json:"params"`
-	}
+	var msg rpcMessage
 	_ = json.Unmarshal(body, &msg)
+	return detectWorkspace(msg, r, st)
+}
+
+// detectWorkspace resolves the workspace for an already-decoded request.
+func detectWorkspace(msg rpcMessage, r *http.Request, st *shared.Store) string {
+	var projectPath string
+
 	if msg.Method == "initialize" {
 		if params := msg.Params; params != nil {
 			if rootURI, ok := params["rootUri"].(string); ok && strings.HasPrefix(rootURI, "file://") {
@@ -220,6 +316,13 @@ func autoDetectWorkspace(r *http.Request, st *shared.Store) string {
 					}
 				}
 			}
+		}
+		if projectPath != "" && st != nil {
+			// F3: carry the initialize-detected workspace to subsequent
+			// stateless requests that arrive without an explicit hint, so a
+			// follow-up tools/call binds to the same cached server instead of
+			// silently falling back to "default".
+			st.Set("workspace-root", projectPath)
 		}
 	}
 
@@ -253,19 +356,6 @@ func autoDetectWorkspace(r *http.Request, st *shared.Store) string {
 		}
 	}
 	return ""
-}
-
-func jsonBodyMethod(r *http.Request) string {
-	body, _ := io.ReadAll(io.LimitReader(r.Body, 50<<20))
-	r.Body = io.NopCloser(bytes.NewReader(body))
-	var msg struct {
-		Method string `json:"method"`
-	}
-	_ = json.Unmarshal(body, &msg)
-	if msg.Method == "" {
-		return "(unknown)"
-	}
-	return msg.Method
 }
 
 func fileURLToPath(uri string) string {

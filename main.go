@@ -93,7 +93,7 @@ func main() {
 		return tokenoptimizer.CheckAndVirtualizeOutput(tool, text, ws), nil
 	})
 
-	mode := "sse"
+	mode := "streamable-http"
 	if isStdio {
 		mode = "stdio"
 	}
@@ -128,7 +128,7 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 	unfilteredReg := toolregistry.Create()
 
 	gk := gatekeeper.New(store)
-	pendingCollabs := map[string]func(string){}
+	pendingCollabs := tools.NewCollaborationRegistry()
 	deps := tools.Deps{
 		Store:                 store,
 		Reg:                   filteredReg,
@@ -167,8 +167,16 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 		Tag:                   fmt.Sprintf("%d", cliPort),
 	})
 
-	mcpSrv := &http.Server{Addr: fmt.Sprintf(":%d", mcpPort), Handler: mcpMux}
-	cliSrv := &http.Server{Addr: fmt.Sprintf(":%d", cliPort), Handler: cliMux}
+	// F9: bind the configured host explicitly. config.json's "host" defaults
+	// to 127.0.0.1 so both listeners stay loopback-only unless widened.
+	host := cfg.Host
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	mcpAddr := net.JoinHostPort(host, strconv.Itoa(mcpPort))
+	cliAddr := net.JoinHostPort(host, strconv.Itoa(cliPort))
+	mcpSrv := &http.Server{Addr: mcpAddr, Handler: mcpMux}
+	cliSrv := &http.Server{Addr: cliAddr, Handler: cliMux}
 
 	mcpLn, err := net.Listen("tcp", mcpSrv.Addr)
 	if err != nil {

@@ -54,11 +54,6 @@ func WrapHandlerWithTimeout(name string, inner toolregistry.Handler, getTimeout 
 			}
 		}
 
-		if srv := PoolServerFrom(ctx); srv != nil {
-			BeginToolCall(srv)
-			defer EndToolCall(srv)
-		}
-
 		type result struct {
 			res *mcp.CallToolResult
 			err error
