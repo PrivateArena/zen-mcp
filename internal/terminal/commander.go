@@ -15,6 +15,8 @@ import (
 	"zen-mcp/internal/tools"
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
+
+	"golang.org/x/sys/unix"
 )
 
 // Handler is a terminal command handler.
@@ -156,6 +158,114 @@ func ParseCodegraphArgs(args []string) ParsedCodegraphArgs {
 // runCommander is the line REPL loop. Split for testability.
 func runCommander(r io.Reader, prompt io.Writer) {
 	Logf("Human-in-the-Loop Active. Available: type help for commands.")
+
+	var useRaw bool
+	var rawFile *os.File
+	if f, ok := r.(*os.File); ok {
+		useRaw = isTerminal(int(f.Fd()))
+		if useRaw {
+			rawFile = f
+		}
+	}
+
+	if !useRaw {
+		runCommanderScanner(r, prompt)
+		return
+	}
+
+	fd := rawFile.Fd()
+	oldTermios, err := setRawMode(int(fd))
+	if err != nil {
+		Logf("WARN: failed to set raw mode: %v", err)
+		runCommanderScanner(r, prompt)
+		return
+	}
+	defer restoreTerminal(int(fd), oldTermios)
+
+	history := []string{}
+	historyIdx := -1
+	var currentLine []byte
+	buf := make([]byte, 1)
+
+	for {
+		fmt.Fprint(prompt, "> ")
+		n, err := rawFile.Read(buf)
+		if err != nil || n == 0 {
+			fmt.Fprint(prompt, "\r\n")
+			return
+		}
+		b := buf[0]
+
+		switch b {
+		case '\r', '\n':
+			line := strings.TrimSpace(string(currentLine))
+			if line == "" {
+				continue
+			}
+			history = append(history, line)
+			historyIdx = len(history)
+			currentLine = nil
+			fmt.Fprint(prompt, "\r\n")
+			if dispatch(line, prompt) {
+				return
+			}
+		case 127, 8:
+			if len(currentLine) > 0 {
+				currentLine = currentLine[:len(currentLine)-1]
+				redraw(prompt, currentLine)
+			}
+		case 3:
+			fmt.Fprint(prompt, "\r\n")
+			Logf("Shutting down terminal commander.")
+			return
+		case 4:
+			if len(currentLine) == 0 {
+				fmt.Fprint(prompt, "\r\n")
+				Logf("Shutting down terminal commander.")
+				return
+			}
+		case '\x1b':
+			seq := make([]byte, 2)
+			_, err := rawFile.Read(seq)
+			if err != nil {
+				return
+			}
+			if seq[0] == '[' {
+				switch seq[1] {
+				case 'A':
+					if len(history) == 0 {
+					} else if historyIdx == -1 {
+						historyIdx = len(history) - 1
+						currentLine = []byte(history[historyIdx])
+						redraw(prompt, currentLine)
+					} else if historyIdx > 0 {
+						historyIdx--
+						currentLine = []byte(history[historyIdx])
+						redraw(prompt, currentLine)
+					}
+				case 'B':
+					if historyIdx >= 0 && historyIdx < len(history)-1 {
+						historyIdx++
+						currentLine = []byte(history[historyIdx])
+						redraw(prompt, currentLine)
+					} else if historyIdx >= 0 {
+						historyIdx = -1
+						currentLine = nil
+						redraw(prompt, currentLine)
+					}
+				}
+			}
+		default:
+			if b >= 32 && b <= 126 {
+				currentLine = append(currentLine, b)
+				redraw(prompt, currentLine)
+			}
+		}
+	}
+}
+
+// runCommanderScanner handles non-TTY input using bufio.Scanner.
+func runCommanderScanner(r io.Reader, prompt io.Writer) {
 	scanner := bufio.NewScanner(r)
 	for {
 		fmt.Fprint(prompt, "> ")
@@ -181,6 +291,65 @@ func runCommander(r io.Reader, prompt io.Writer) {
 		if err := h(parts[1:]); err != nil {
 			Logf("ERROR: %v", err)
 		}
+	}
+}
+
+// dispatch executes a command line and reports whether the REPL should exit.
+func dispatch(line string, prompt io.Writer) bool {
+	parts := strings.Fields(line)
+	cmd := parts[0]
+	if cmd == "exit" || cmd == "quit" {
+		Logf("Shutting down terminal commander.")
+		return true
+	}
+	h, ok := Get(cmd)
+	if !ok {
+		Logf("Unknown command: %s (type help)", cmd)
+		return false
+	}
+	Logf("START: %s...", cmd)
+	if err := h(parts[1:]); err != nil {
+		Logf("ERROR: %v", err)
+	}
+	return false
+}
+
+// redraw clears the current line and rewrites the prompt with the current input.
+func redraw(prompt io.Writer, line []byte) {
+	fmt.Fprint(prompt, "\r")
+	fmt.Fprint(prompt, "\033[2K")
+	fmt.Fprint(prompt, "> ")
+	fmt.Fprint(prompt, string(line))
+}
+
+// isTerminal reports whether fd is a terminal.
+func isTerminal(fd int) bool {
+	_, err := unix.IoctlGetTermios(fd, unix.TCGETS)
+	return err == nil
+}
+
+// setRawMode puts the terminal into raw mode.
+func setRawMode(fd int) (*unix.Termios, error) {
+	old, err := unix.IoctlGetTermios(fd, unix.TCGETS)
+	if err != nil {
+		return nil, err
+	}
+	new := *old
+	new.Iflag &^= unix.ICRNL | unix.INLCR | unix.IGNCR
+	new.Iflag &^= unix.IXON
+	new.Lflag &^= unix.ECHO | unix.ICANON | unix.ISIG | unix.IEXTEN
+	new.Cc[unix.VMIN] = 1
+	new.Cc[unix.VTIME] = 0
+	if err := unix.IoctlSetTermios(fd, unix.TCSETS, &new); err != nil {
+		return nil, err
+	}
+	return old, nil
+}
+
+// restoreTerminal restores the terminal to its previous settings.
+func restoreTerminal(fd int, old *unix.Termios) {
+	if old != nil {
+		unix.IoctlSetTermios(fd, unix.TCSETS, old)
 	}
 }
 
