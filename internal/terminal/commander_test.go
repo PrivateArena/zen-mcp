@@ -66,7 +66,9 @@ func TestHandlerErrorLogged(t *testing.T) {
 
 func TestExitStops(t *testing.T) {
 	var prompt bytes.Buffer
-	runCommander(strings.NewReader("hello\nhelp\nexit\n"), &prompt)
+	if !runCommander(strings.NewReader("hello\nhelp\nexit\n"), &prompt) {
+		t.Error("exit should stop the REPL")
+	}
 	// No panic means exit/quit handled; help is registered.
 	if !strings.Contains(prompt.String(), "> ") {
 		t.Error("prompt expected")

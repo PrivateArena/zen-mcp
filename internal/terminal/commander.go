@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"zen-mcp/internal/tools"
@@ -156,7 +157,7 @@ func ParseCodegraphArgs(args []string) ParsedCodegraphArgs {
 }
 
 // runCommander is the line REPL loop. Split for testability.
-func runCommander(r io.Reader, prompt io.Writer) {
+func runCommander(r io.Reader, prompt io.Writer) bool {
 	Logf("Human-in-the-Loop Active. Available: type help for commands.")
 
 	var useRaw bool
@@ -169,30 +170,32 @@ func runCommander(r io.Reader, prompt io.Writer) {
 	}
 
 	if !useRaw {
-		runCommanderScanner(r, prompt)
-		return
+		return runCommanderScanner(r, prompt)
 	}
 
 	fd := rawFile.Fd()
 	oldTermios, err := setRawMode(int(fd))
 	if err != nil {
 		Logf("WARN: failed to set raw mode: %v", err)
-		runCommanderScanner(r, prompt)
-		return
+		return runCommanderScanner(r, prompt)
 	}
-	defer restoreTerminal(int(fd), oldTermios)
+	defer func() {
+		if err := restoreTerminal(int(fd), oldTermios); err != nil {
+			Logf("WARN: failed to restore terminal: %v", err)
+		}
+	}()
 
 	history := []string{}
 	historyIdx := -1
 	var currentLine []byte
 	buf := make([]byte, 1)
 
+	fmt.Fprint(prompt, "> ")
 	for {
-		fmt.Fprint(prompt, "> ")
 		n, err := rawFile.Read(buf)
 		if err != nil || n == 0 {
 			fmt.Fprint(prompt, "\r\n")
-			return
+			return false
 		}
 		b := buf[0]
 
@@ -200,15 +203,21 @@ func runCommander(r io.Reader, prompt io.Writer) {
 		case '\r', '\n':
 			line := strings.TrimSpace(string(currentLine))
 			if line == "" {
+				fmt.Fprint(prompt, "\r\n> ")
 				continue
 			}
 			history = append(history, line)
 			historyIdx = len(history)
 			currentLine = nil
 			fmt.Fprint(prompt, "\r\n")
-			if dispatch(line, prompt) {
-				return
+			oldLogOut := LogOut
+			LogOut = prompt
+			shouldExit := dispatch(line, prompt)
+			LogOut = oldLogOut
+			if shouldExit {
+				return true
 			}
+			fmt.Fprint(prompt, "> ")
 		case 127, 8:
 			if len(currentLine) > 0 {
 				currentLine = currentLine[:len(currentLine)-1]
@@ -217,18 +226,18 @@ func runCommander(r io.Reader, prompt io.Writer) {
 		case 3:
 			fmt.Fprint(prompt, "\r\n")
 			Logf("Shutting down terminal commander.")
-			return
+			return true
 		case 4:
 			if len(currentLine) == 0 {
 				fmt.Fprint(prompt, "\r\n")
 				Logf("Shutting down terminal commander.")
-				return
+				return true
 			}
 		case '\x1b':
 			seq := make([]byte, 2)
 			_, err := rawFile.Read(seq)
 			if err != nil {
-				return
+				return false
 			}
 			if seq[0] == '[' {
 				switch seq[1] {
@@ -265,12 +274,12 @@ func runCommander(r io.Reader, prompt io.Writer) {
 }
 
 // runCommanderScanner handles non-TTY input using bufio.Scanner.
-func runCommanderScanner(r io.Reader, prompt io.Writer) {
+func runCommanderScanner(r io.Reader, prompt io.Writer) bool {
 	scanner := bufio.NewScanner(r)
 	for {
 		fmt.Fprint(prompt, "> ")
 		if !scanner.Scan() {
-			return
+			return false
 		}
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -280,7 +289,7 @@ func runCommanderScanner(r io.Reader, prompt io.Writer) {
 		cmd := parts[0]
 		if cmd == "exit" || cmd == "quit" {
 			Logf("Shutting down terminal commander.")
-			return
+			return true
 		}
 		h, ok := Get(cmd)
 		if !ok {
@@ -347,15 +356,23 @@ func setRawMode(fd int) (*unix.Termios, error) {
 }
 
 // restoreTerminal restores the terminal to its previous settings.
-func restoreTerminal(fd int, old *unix.Termios) {
+func restoreTerminal(fd int, old *unix.Termios) error {
 	if old != nil {
-		unix.IoctlSetTermios(fd, unix.TCSETS, old)
+		return unix.IoctlSetTermios(fd, unix.TCSETS, old)
 	}
+	return nil
 }
 
 // StartTerminalCommander launches the REPL in a background goroutine.
 func StartTerminalCommander() {
-	go runCommander(os.Stdin, os.Stdout)
+	go func() {
+		if runCommander(os.Stdin, os.Stdout) {
+			p, _ := os.FindProcess(os.Getpid())
+			if p != nil {
+				_ = p.Signal(syscall.SIGINT)
+			}
+		}
+	}()
 }
 
 // MakeFakeRequest creates a fake mcp.CallToolRequest from args.
