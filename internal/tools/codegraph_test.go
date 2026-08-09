@@ -65,6 +65,103 @@ func Add(a int, b int) int {
 	}
 }
 
+// writeFixture writes a small source file under dir and returns its rel path.
+func writeFixture(t *testing.T, dir, rel, src string) {
+	t.Helper()
+	p := filepath.Join(dir, rel)
+	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		t.Fatalf("mkdir fixture: %v", err)
+	}
+	if err := os.WriteFile(p, []byte(src), 0644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+}
+
+const goFixture = `package foo
+
+func Add(a int, b int) int {
+	return a + b
+}
+`
+
+// TestFilesListsSubgraphScopes reproduces the reported bug: with a workspace
+// root that contains a sub-directory holding its own .zenmcp/codegraph.db
+// (a sub-graph), the files action must list that sub-graph's indexed files,
+// not only the root scope.
+func TestFilesListsSubgraphScopes(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "main.go", goFixture)
+	writeFixture(t, ws, filepath.Join("www", "handler.go"), goFixture)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	// Index the www sub-graph independently (it gets its own .zenmcp/codegraph.db).
+	res := HandleCodegraphAction(ctx, filepath.Join(ws, "www"), deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("www index failed: %s", toolText(res))
+	}
+	ClearSessionGraphByWorkspace(filepath.Join(ws, "www"))
+
+	// Now use the root workspace: files must surface both scopes.
+	res = HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "files"}))
+	text := toolText(res)
+	t.Logf("files output:\n%s", text)
+
+	if !strings.Contains(text, "[scope: ROOT]") {
+		t.Fatalf("expected a ROOT scope, got:\n%s", text)
+	}
+	if !strings.Contains(text, "[scope: www]") {
+		t.Fatalf("expected a www sub-graph scope, got:\n%s", text)
+	}
+	if !strings.Contains(text, "handler.go") {
+		t.Fatalf("expected www sub-graph files to be listed, got:\n%s", text)
+	}
+	ClearSessionGraphByWorkspace(ws)
+}
+
+// TestSubgraphDiscoveredAfterInitialSession guards the stale-session hazard:
+// a session cached before a sub-graph was indexed must pick the sub-graph up
+// on a later call instead of forever serving the root-only snapshot.
+func TestSubgraphDiscoveredAfterInitialSession(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "main.go", goFixture)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("root index failed: %s", toolText(res))
+	}
+	ClearSessionGraphByWorkspace(ws)
+
+	// First files call: only ROOT exists at this point. The session stays
+	// cached (no ClearSessionGraphByWorkspace) so the stale hazard is real.
+	res = HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "files"}))
+	first := toolText(res)
+	if strings.Contains(first, "[scope: www]") {
+		t.Fatalf("unexpected www scope before it exists:\n%s", first)
+	}
+
+	// Create + index a www sub-graph, then re-list files WITHOUT clearing the
+	// cached root session. The session must re-discover the new sub-graph.
+	writeFixture(t, ws, filepath.Join("www", "handler.go"), goFixture)
+	res = HandleCodegraphAction(ctx, filepath.Join(ws, "www"), deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("www index failed: %s", toolText(res))
+	}
+	ClearSessionGraphByWorkspace(filepath.Join(ws, "www"))
+
+	res = HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "files"}))
+	second := toolText(res)
+	t.Logf("files after adding www:\n%s", second)
+	if !strings.Contains(second, "[scope: www]") {
+		t.Fatalf("sub-graph created after the root session was cached is not listed:\n%s", second)
+	}
+	ClearSessionGraphByWorkspace(ws)
+}
+
 func makeFakeRequest(args map[string]any) mcp.CallToolRequest {
 	return mcp.CallToolRequest{
 		Params: mcp.CallToolParams{

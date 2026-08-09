@@ -21,10 +21,11 @@ import (
 )
 
 type layeredGraphEntry struct {
-	graph *codegraph.CodeGraph
-	root  string
-	label string
-	index int
+	graph   *codegraph.CodeGraph
+	root    string
+	label   string
+	index   int
+	dbMTime time.Time
 }
 
 type layeredGraphSession struct {
@@ -96,7 +97,7 @@ func getSessionByWorkspace(workspace string) (*layeredGraphSession, error) {
 
 	if s, ok := graphRegistry.Load(workspace); ok {
 		session := s.(*layeredGraphSession)
-		if session.workspaceRoot == root {
+		if session.workspaceRoot == root && !sessionStale(session) {
 			return session, nil
 		}
 		ClearSessionGraph(session)
@@ -126,11 +127,17 @@ func getSessionByWorkspace(workspace string) (*layeredGraphSession, error) {
 			rel, _ := filepath.Rel(root, r)
 			label = rel
 		}
+		dbPath := filepath.Join(r, ".zenmcp", "codegraph.db")
+		var dbMTime time.Time
+		if st, err := os.Stat(dbPath); err == nil {
+			dbMTime = st.ModTime()
+		}
 		entries = append(entries, layeredGraphEntry{
-			graph: g,
-			root:  r,
-			label: label,
-			index: i + 1,
+			graph:   g,
+			root:    r,
+			label:   label,
+			index:   i + 1,
+			dbMTime: dbMTime,
 		})
 	}
 
@@ -151,6 +158,41 @@ func getSessionByWorkspace(workspace string) (*layeredGraphSession, error) {
 	}
 
 	return session, nil
+}
+
+// sessionStale reports whether a cached layered session no longer matches the
+// on-disk graph layout: a sub-graph root appeared/disappeared, or any
+// sub-graph's codegraph.db was recreated/re-indexed since the session opened
+// its handles. Stale sessions are rebuilt so actions always query the current
+// root + sub-graph databases in parallel, mirroring the TypeScript behavior.
+func sessionStale(session *layeredGraphSession) bool {
+	roots := discoverGraphRoots(session.workspaceRoot)
+	if len(roots) != len(session.entries) {
+		return true
+	}
+	for _, r := range roots {
+		matched := false
+		for _, e := range session.entries {
+			if e.root == r {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return true
+		}
+	}
+	for _, e := range session.entries {
+		dbPath := filepath.Join(e.root, ".zenmcp", "codegraph.db")
+		st, err := os.Stat(dbPath)
+		if err != nil {
+			return true
+		}
+		if !st.ModTime().Equal(e.dbMTime) {
+			return true
+		}
+	}
+	return false
 }
 
 func ClearSessionGraph(session *layeredGraphSession) {

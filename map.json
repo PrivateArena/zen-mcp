@@ -1,6 +1,23 @@
 {
+  "/media/jang/home/Deve/worldproxy/zendes/zen-webserver": {
+    "description": "ZenServer is multi-purpose webserver that hosts the ZenECO system (ZenNote whiteboard note taking app, ZenRAG) and can multiply itself.",
+    "lastVisited": "2026-08-09T03:07:31.296Z",
+    "scopes": {
+      "news": [
+        "www/news.yaml",
+        "www/web/themes/news"
+      ],
+      "note": [
+        "www/web/themes/note",
+        "www/web/pages/note-article.html",
+        "www/web/pages/note-home.html",
+        "www/web/pages/note-whiteboard.html",
+        "www/note.yaml"
+      ]
+    }
+  },
   "/media/jang/home/Deve/zen-mcp": {
-    "lastVisited": "2026-08-09T00:24:38.589Z"
+    "lastVisited": "2026-08-09T02:49:55.592Z"
   },
   "/media/jang/home/Deve/worldproxy/zendes/zen2": {
     "description": "ZenProxy is uBO-like adblock proxy with higher capabilities like Tagging  (from Privoxy), header filtering, download accelerating, proxying, leeching and bandwidth controlling.",
@@ -66,23 +83,6 @@
       "test-scope-xyz": [
         "src/index.ts",
         "src/tools/project-memory.ts"
-      ]
-    }
-  },
-  "/media/jang/home/Deve/worldproxy/zendes/zen-webserver": {
-    "description": "ZenServer is multi-purpose webserver that hosts the ZenECO system (ZenNote whiteboard note taking app, ZenRAG) and can multiply itself.",
-    "lastVisited": "2026-08-03T09:12:20.886Z",
-    "scopes": {
-      "news": [
-        "www/news.yaml",
-        "www/web/themes/news"
-      ],
-      "note": [
-        "www/web/themes/note",
-        "www/web/pages/note-article.html",
-        "www/web/pages/note-home.html",
-        "www/web/pages/note-whiteboard.html",
-        "www/note.yaml"
       ]
     }
   },
