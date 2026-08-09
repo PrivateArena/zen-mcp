@@ -74,7 +74,7 @@ func (s *Scanner) GetFilesToProcess() ([]FileRecord, error) {
 		}
 		fullPath := filepath.Join(s.rootDir, relPath)
 
-		if !isSupported(relPath) {
+		if !s.IsSupported(relPath) {
 			continue
 		}
 
@@ -144,6 +144,9 @@ func (s *Scanner) getDiskFiles() ([]string, error) {
 			return nil
 		}
 		if s.IsIgnored(relPath, false) {
+			return nil
+		}
+		if !s.IsSupported(relPath) {
 			return nil
 		}
 		files = append(files, relPath)
