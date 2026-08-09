@@ -45,8 +45,15 @@ var transformRules []TransformRule
 
 func init() {
 	transformRules = []TransformRule{
-		// Rule 7 — MCP skill activation (injected block) — most specific
-		{re: regexp.MustCompile("Activate MCP skill id=([a-zA-Z0-9_-]+)"), replacement: "Activate skill id=$1 via `zen-skill --action get --id=$1`"},
+		// Rule 7 — MCP skill activation (injected block) — handles both
+		// "Activate MCP skill id=X" and "Activate MCP `skill id=X`" forms.
+		{
+			re:      regexp.MustCompile("Activate MCP (`?)skill id=([a-zA-Z0-9_-]+)(`?)"),
+			useFunc: true,
+			replFunc: func(matches []string) string {
+				return "Activate skill id=" + matches[2] + " via `zen-skill --action get --id=" + matches[2] + "`"
+			},
+		},
 		// Rule 8 — MCP Tool skill reference
 		{re: regexp.MustCompile("Please use MCP Tool skill id="), replacement: "Please use `zen-skill --action get --id="},
 		// Rule 9 — Inline skill id backticks
@@ -58,14 +65,15 @@ func init() {
 		// Rule 5 — MCP tool bare reference
 		{re: regexp.MustCompile("MCP ([a-zA-Z_][a-zA-Z0-9_-]*) tool"), replacement: "zen-$1 CLI"},
 		// Rule 1 — Functional notation in backticks (prompts)
+		// Inner content regex allows one level of nested {} pairs (e.g. arrays).
 		{
-			re: regexp.MustCompile("`([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*([^}]+)\\s*\\}\\)`"),
+			re: regexp.MustCompile("`([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*((?:[^{}]|\\{[^{}]*\\})*)\\s*\\}\\)`"),
 			useFunc:  true,
 			replFunc: func(matches []string) string { return "`" + renderCLIFlags(matches[1], matches[2]) + "`" },
 		},
 		// Rule 2 — Functional notation without backticks (skills code blocks)
 		{
-			re:      regexp.MustCompile("(?m)^([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*([^}]+)\\s*\\}\\)$"),
+			re: regexp.MustCompile("(?m)^([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*((?:[^{}]|\\{[^{}]*\\})*)\\s*\\}\\)$"),
 			useFunc: true,
 			replFunc: func(matches []string) string {
 				return renderCLIFlags(matches[1], matches[2])
@@ -73,7 +81,7 @@ func init() {
 		},
 		// Rule 3 — Object-dot notation (skills TypeScript)
 		{
-			re:      regexp.MustCompile("mcp\\.([a-zA-Z_][a-zA-Z0-9_-]*)\\.([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*([^}]+)\\s*\\}\\)"),
+			re: regexp.MustCompile("mcp\\.([a-zA-Z_][a-zA-Z0-9_-]*)\\.([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*((?:[^{}]|\\{[^{}]*\\})*)\\s*\\}\\)"),
 			useFunc: true,
 			replFunc: func(matches []string) string {
 				tool := matches[1]
