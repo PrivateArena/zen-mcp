@@ -30,7 +30,7 @@
     - **Under the Hood** (optional, only if useful): a short, slightly more technical note for a reader who already knows some code, with the concrete anchor from step 5.
 
     **OPTIONAL — Save Session Memory**:
-    Only if this explanation surfaced a durable decision, gotcha, or fact worth remembering for future sessions (not just "explained X"), call `memory({ action: 'save', name: 'brain', session_title: '<one-line summary>', objective: '<what was clarified>', what_is_done: '<the durable fact learned>', episodic: [], semantic: { facts: [{ key: '<fact key>', value: '<fact value>' }], preferences: [] } })`. Skip this step entirely for routine explanations.
+    Only if this explanation surfaced a durable decision, gotcha, or fact worth remembering for future sessions (not just "explained X"), call `memory({ action: 'save', session_notes: <the markdown above>, session_title: <session title>, objective: <what we have achieved> })`. Skip this step entirely for routine explanations.
   enabledSkills:
     - codebase-research
   suggestSkills: false

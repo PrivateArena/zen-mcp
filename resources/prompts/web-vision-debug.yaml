@@ -17,9 +17,9 @@
 
     Please follow this High-Signal Visual Audit protocol:
 
-    1. **State Acquisition**: Use `browser({ action: 'navigate', url: '{{url}}' })` to load the interface.
+    1. **State Acquisition**: Use `browser({ action: 'navigate', url: <target url> })` to load the interface.
     2. **Visual Capture**: 
-       - If a selector is provided ('{{selector}}'), use `browser({ action: 'screenshot', screenshot: 'selector', selector: '{{selector}}' })`.
+       - If a selector is provided ('{{selector}}'), use `browser({ action: 'screenshot', screenshot: 'selector', selector: <css selector> })`.
        - Otherwise, use `browser({ action: 'screenshot', screenshot: 'full' })` for a comprehensive view.
     3. **AI Vision Analysis**: 
        - Use `browser({ action: 'chat', provider: 'gemini', screenshot: true, message: 'AUDIT: <your question>. MANDATE: Be brief and informative. Use bullet points for layout collisions, clipping, or spacing errors. Output a final [Usable/Broken] verdict.' })` to get the ground truth.

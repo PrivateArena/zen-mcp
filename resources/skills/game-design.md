@@ -147,4 +147,6 @@ When verifying code behavior using the browser test loop, I will systematically 
 
 * **Memory Leak Detection:** If `activeEnemies` drops to zero but `activeProjectiles` keeps rising exponentially, immediately re-verify projectile lifespan deletion loops.
 * **Collision De-synchronization:** If an enemy's internal HP reduces but its visual sprite doesn't flash or change coordinate positions, check if the engine-render loop lost its link to the data array index.
-* **Framerate Optimization Strategy:** If FPS drops under 60 during simulation runs, switch projectile tracking from independent entity objects to canvas-level particle system arrays.
+*   **Framerate Optimization Strategy:** If FPS drops under 60 during simulation runs, switch projectile tracking from independent entity objects to canvas-level particle system arrays.
+
+Example reference: `browser({ action: 'screenshot', screenshot: 'full' })`

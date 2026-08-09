@@ -10,7 +10,7 @@
 
     Please execute the following High-Signal Product Research protocol:
 
-    1. **Load Skill**: Call `skills({ action: 'get', id: 'product-research' })` to retrieve the latest sourcing guides, platform rules, and geolocation workflows.
+    1. **Load Skill**: Call `skill({ action: 'get', id: 'product-research' })` to retrieve the latest sourcing guides, platform rules, and geolocation workflows.
     2. **Locate Country**: Call `browser({ action: 'request', url: 'https://ipinfo.io/json' })` to dynamically detect the target country code/name.
     3. **Platform & Store Search**: Identify best regional platforms based on the detected country, and search for it.
     4. **Affordability vs Quality Filter**: Select listings matching our optimization framework (minimum seller rating, review count, price/quality balance).

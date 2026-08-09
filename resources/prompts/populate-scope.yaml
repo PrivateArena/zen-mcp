@@ -9,7 +9,7 @@
 
     **STRICT WORKFLOW**:
     1. **Map Architecture**: Call `codegraph({ action: 'map' })` to grasp top directories, languages, and core files.
-    2. **Analyze Details**: Run `codegraph({ action: 'skeletons', query: '<top_files_or_directories>' })` to study the most frequently used or central files.
+    2. **Analyze Details**: Run `codegraph({ action: 'skeletons', query: <top_files_or_directories> })` to study the most frequently used or central files.
     3. **Partition Scopes**: Group related files/directories into 3-6 significant, meaningful modules (scopes). Follow any specific guidance: '{{i}}'.
     4. **Update map.json Safely**:
        - Check the absolute path of the current directory.
@@ -18,5 +18,5 @@
     5. **Verify**: Verify the updated `map.json` syntax and print the newly populated scopes.
 
     **MANDATORY FINAL STEP — Save Session Memory**:
-    Before closing this task, call `memory({ action: 'save', name: 'brain', session_title: '<one-line summary of what was planned>', objective: '<what we set out to achieve>', what_is_done: '<concrete outcomes completed this session>', episodic: [{ text: '<event description>', outcome: '<concrete result>' }], semantic: { facts: [{ key: '<decision or note key>', value: '<rationale or value>' }], preferences: [] })`.
+    Before closing this task, call `memory({ action: 'save', session_notes: <the markdown above>, session_title: <session title>, objective: <what we have achieved> })`.
     This save is **non-negotiable** — it ensures any future agent or compacted session can resume without losing context. Do NOT summarize the context field; write it thoroughly.

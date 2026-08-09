@@ -37,5 +37,5 @@
     - Open questions: points neither pass could resolve above 85% confidence, and why
 
     **MANDATORY FINAL STEP — Save Session Memory**:
-    Before closing this task, call `memory({ action: 'save', name: 'brain', session_title: '<one-line summary of what was reviewed>', objective: '<what we set out to achieve>', what_is_done: '<concrete outcomes completed this session>', episodic: [{ text: '<event description>', outcome: '<concrete result>' }], semantic: { facts: [{ key: '<decision or note key>', value: '<rationale or value>' }], preferences: [] })`.
+    Before closing this task, call `memory({ action: 'save', session_notes: <the markdown above>, session_title: <session title>, objective: <what we have achieved> })`.
     This save is **non-negotiable** — it ensures any future agent or compacted session can resume without losing context. Do NOT summarize the context field; write it thoroughly.

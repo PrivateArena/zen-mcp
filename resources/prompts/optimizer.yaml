@@ -18,7 +18,7 @@
        - **Maintainability**: duplication, tight coupling, god objects/functions, missing abstractions, inconsistent patterns across the codebase.
        - **Technical debt**: stale dependencies, dead code, weak test coverage guarding critical paths.
     3. **Draft v1**: Produce an initial optimization plan using Markdown, Mermaid diagrams, and pseudocode ONLY — no functional code. Rank findings by impact vs. effort. For each finding, state: current behavior, proposed change, and expected measurable improvement (latency, memory, complexity, etc.) — or what would need to be profiled/benchmarked to confirm it.
-    4. **Red-Team via browser.chat**: Before finalizing, call `browser({ action: 'chat', provider: 'claude', message: 'Critique this optimization plan for: <concise plan summary>. Identify risky assumptions, regressions the changes could introduce, benchmarking gaps, and simpler alternatives. Be adversarial, not agreeable.' })` to stress-test the plan against an independent perspective.
+    4. **Red-Team via browser**: Before finalizing, call `browser({ action: 'chat', provider: 'claude', upload_files: [<up to 9 relevant file paths>], message: 'Critique this optimization plan for: <concise plan summary>. Identify risky assumptions, regressions the changes could introduce, benchmarking gaps, and simpler alternatives. Be adversarial, not agreeable.' })` to stress-test the plan against an independent perspective.
     5. **Revise**: For each critique returned, either fold it into the plan or explicitly reject it with a one-line rationale. Do not silently ignore feedback.
 
     **STRICT CONSTRAINTS**:
@@ -29,7 +29,7 @@
     5. **SURFACE TRADEOFFS**: For every major recommendation, name at least one alternative considered and why it was rejected (including "do nothing" where relevant).
 
     **MANDATORY FINAL STEP — Save Session Memory**:
-    Before closing this task, call `memory({ action: 'save', name: 'brain', session_title: '<one-line summary of what was optimized>', objective: '<what we set out to achieve>', what_is_done: '<concrete outcomes completed this session>', episodic: [{ text: '<event description>', outcome: '<concrete result>' }], semantic: { facts: [{ key: '<decision or note key>', value: '<rationale or value>' }], preferences: [] })`.
+    Before closing this task, call `memory({ action: 'save', session_notes: <the markdown above>, session_title: <session title>, objective: <what we have achieved> })`.
     This save is **non-negotiable** — it ensures any future agent or compacted session can resume without losing context. Do NOT summarize the context field; write it thoroughly.
   enabledSkills:
     - codebase-research

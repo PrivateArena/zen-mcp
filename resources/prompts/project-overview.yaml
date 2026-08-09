@@ -16,8 +16,8 @@
      WORKFLOW (per scope being written):
      1. **List files**: `codegraph({ action: 'files' })` — skip if PROJECT_OVERVIEW.md (or the relevant scoped file) already exists AND the file count matches within 5% of last run; otherwise this run is stale, do not skip.
      2. **Map dependencies**: `codegraph({ action: 'map' })` or `codegraph({ action: 'mermaid' })`.
-     3. **Skeleton key files**: `codegraph({ action: 'skeletons', query: '<entry points, tool registrations, core lib files identified in 1-2>' })`. Extract not just names but FULL signatures (param types, return types) — this is required, see Key Exports rules below.
-     4. **Find cross-links**: `codegraph({ action: 'related', query: '<entry point path>' })` for each of the top 5-6 highest-fan-in/fan-out files. This output is REQUIRED to populate `## Cross-References` — do not discard it.
+     3. **Skeleton key files**: `codegraph({ action: 'skeletons', query: <entry points, tool registrations, core lib files identified in 1-2> })`. Extract not just names but FULL signatures (param types, return types) — this is required, see Key Exports rules below.
+     4. **Find cross-links**: `codegraph({ action: 'related', query: <entry point path> })` for each of the top 5-6 highest-fan-in/fan-out files. This output is REQUIRED to populate `## Cross-References` — do not discard it.
      5. **Manifest scan** (optional, capped at 5 reads): open package.json/go.mod/Makefile/etc. directly for build/test/run scripts and top-level dependency versions.
 
      OUTPUT SCHEMA — follow exactly. Prefer informative depth over artificial brevity. No Generated / Project Root / timestamp footers.

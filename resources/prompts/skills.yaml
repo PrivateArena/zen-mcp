@@ -5,4 +5,4 @@
       description: The skill ID (e.g., zen-mcp, firefox-bridge, tview-scroll)
       required: true
   template: |-
-    Please use MCP Tool `skill id="{{i}}"` to retrieve it manually.
+    Please use MCP Tool skill id="{{i}}" to retrieve it manually.

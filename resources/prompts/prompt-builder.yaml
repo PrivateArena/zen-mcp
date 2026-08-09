@@ -32,7 +32,7 @@
         - Call `browser({ action: 'chat', message: 'Research it thoroughly. Cover: core concepts, common implementation patterns, known pitfalls, standout examples in the wild, and any domain-specific terminology a developer must know. Be specific and technical.' })` to gather a high-signal knowledge base.
 
     1b. **Deepen on key references found**:
-        - If the browser returns specific product names, libraries, or articles worth reading in full, call `browser({ action: 'navigate', url: '<url>' })` then `browser({ action: 'chat', message: 'Extract all technically relevant details from this page that are useful for implementing it.' })` for up to 2 of the highest-signal sources.
+        - If the browser returns specific product names, libraries, or articles worth reading in full, call `browser({ action: 'navigate', url: <url> })` then `browser({ action: 'chat', message: 'Extract all technically relevant details from this page that are useful for implementing it.' })` for up to 2 of the highest-signal sources.
 
     1c. **Synthesize external findings** into a structured knowledge block:
         - Core concepts and definitions
@@ -54,7 +54,7 @@
         - Call `codegraph({ action: 'mermaid' })` to get a dependency diagram and identify integration points.
 
     2c. **Deep-read critical files**:
-        - For up to 5 most relevant files, call `codegraph({ action: 'summarize', path: '<file>' })` to map function signatures and logic blocks.
+        - For up to 5 most relevant files, call `codegraph({ action: 'summarize', path: <file> })` to map function signatures and logic blocks.
         - Use `file({ action: 'read_range' })` for surgical inspection of key functions that the new feature must interact with or extend.
 
     2d. **Synthesize codebase findings** into a structured knowledge block:

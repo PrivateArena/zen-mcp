@@ -13,36 +13,16 @@ This skill provides a standardized workflow for performing vision-based analysis
 
 ### A. Viewport Screenshot Analysis
 When you need to analyze what the user is currently looking at in the browser:
-```typescript
-browser({ 
-  action: "chat", 
-  provider: "gemini", // Preferred for multimodal
-  message: "Describe the layout and key elements of this page.",
-  take_screenshot: true 
-})
-```
+Use `browser({ action: 'chat', provider: 'gemini', upload_files: [<up to 9 relevant file paths>], message: 'Describe the layout and key elements of this page.', take_screenshot: true })`.
 
 ### B. Local Image Analysis
 When the user provides a path to a local image or a specific screenshot file:
-```typescript
-browser({
-  action: "chat",
-  provider: "gemini",
-  message: "Analyze the contents of this image: [Your specific question]",
-  upload_files: ["/path/to/image.png"]
-})
-```
+Use `browser({ action: 'chat', provider: 'gemini', upload_files: [<up to 9 relevant file paths>], message: 'Analyze the contents of this image: <your specific question>', upload_files: ['/path/to/image.png'] })`.
 
 ### C. Application UI screenshots
 Use this when you need to analyze the UI of an application running on the desktop, for example zen-midi.
 
-```typescript
-browser({
-  action: "ui-vision",
-  path: ["/path/to/application"]
-  message: "Analyze the contents of this application: [Your specific question]",
-})
-```
+Use `browser({ action: 'ui-vision', path: '["/path/to/application"]', message: 'Analyze the contents of this application: <your specific question>' })`.
 
 ## 2. Provider Selection
 *   **Gemini (Preferred)**: Best for detailed UI breakdown, text extraction from images, and complex reasoning about visual elements. Use for 90% of vision tasks.
@@ -55,5 +35,5 @@ browser({
     *   Prompt: "Return the center coordinates of the [Element] as JSON: { 'relX': 0.5, 'relY': 0.5 }"
 
 ## 4. Troubleshooting
-*   **Bridge 500 Errors**: Often caused by a stale browser session or the provider's tab being closed. Use `browser({ action: "navigate", url: "https://gemini.google.com" })` to refresh if needed.
+*   **Bridge 500 Errors**: Often caused by a stale browser session or the provider's tab being closed. Use `browser({ action: 'navigate', url: 'https://gemini.google.com' })` to refresh if needed.
 *   **Empty Responses**: If the AI says it "cannot see," ensure the `screenshot: true` or `path` parameter was correctly passed and that the provider tab is active.

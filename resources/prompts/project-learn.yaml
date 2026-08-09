@@ -35,4 +35,4 @@
 
     Ensure that a developer reading this document "cold" receives the exact technical fidelity of the entire session without having to parse the original, conversational noise.
 
-    Then call `memory({ action: 'save', session_notes: <the markdown above>, session_title, objective })` using only the fields containing verified data.
+    Then call `memory({ action: 'save', session_notes: <the markdown above>, session_title: <session title>, objective: <what we have achieved> })` using only the fields containing verified data.

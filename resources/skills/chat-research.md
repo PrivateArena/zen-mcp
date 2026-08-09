@@ -45,7 +45,7 @@ Gather the minimal set:
 - **Avoid**: bulk uploads — needing more than ~9 files is a sign the question isn't scoped yet, not a sign the task is big.
 
 ### 3. Delegate to Sub-Agent
-Use `browser.chat` with `upload_files` and the message built via the quality gate above.
+Use `browser({ action: 'chat', provider: 'claude', upload_files: [<up to 9 relevant file paths>], message: <constrained question, per the quality gate> })`.
 ```bash
 # Multiple messages can be sent to the sub-agent in a single call if needed.
 browser.chat(

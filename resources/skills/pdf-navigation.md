@@ -60,3 +60,5 @@ You can also use the native toolbar input.
 ## 4. Troubleshooting
 *   **Empty Page**: If `read` returns an empty string but you know the page has text, call `scroll` on the page selector and wait a few hundred milliseconds before trying again.
 *   **Selector Not Found**: Ensure the URL matches `file://*.pdf` or a PDF content type. Some sites embed PDFs in iframes; if so, you may need to switch frames or target the iframe source directly.
+
+Example reference: `browser({ action: 'navigate', url: <pdf-url> })`

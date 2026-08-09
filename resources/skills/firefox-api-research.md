@@ -66,8 +66,10 @@ If a `userChrome.js` MCP bridge is running (e.g., `/media/jang/home/PortableApp/
        return results;
    })()
    ```
-   **Output:** `["jar:file:///path/to/firefox/browser/omni.ja!/chrome/browser/content/browser/browser.js", ...]`
-   *You can take any output path from this list and pass it straight to `fetch` (as shown in Step 4) to instantly dump the native C++/XUL/JS codebase source strings matching your result!* 
+    **Output:** `["jar:file:///path/to/firefox/browser/omni.ja!/chrome/browser/content/browser/browser.js", ...]`
+    *You can take any output path from this list and pass it straight to `fetch` (as shown in Step 4) to instantly dump the native C++/XUL/JS codebase source strings matching your result!* 
+
+    Example reference: `browser({ action: 'chrome_eval' })`
 
 This workflow instantly returns the exact LIVE objects Firefox is using right now. No CPU-heavy tasks or extraction required!
 

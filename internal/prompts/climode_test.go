@@ -322,13 +322,10 @@ func TestTransformRealPromptAndSkillFiles(t *testing.T) {
 			if err != nil {
 				continue
 			}
-			body := stripFrontmatter(string(data))
-			if !strings.Contains(body, "codegraph") && !strings.Contains(body, "browser") &&
-				!strings.Contains(body, "memory(") && !strings.Contains(body, "workspace(") &&
-				!strings.Contains(body, "skills(") && !strings.Contains(body, "MCP ") &&
-				!strings.Contains(body, "Activate MCP") && !strings.Contains(body, "`skill id=") {
-				continue
-			}
+		body := stripFrontmatter(string(data))
+		if !hasTransformablePattern(body) {
+			continue
+		}
 			totalFiles++
 			transformed := TransformMCPToCLI(body)
 			bodyChanged := transformed != body
@@ -403,4 +400,21 @@ func stripFrontmatter(content string) string {
 		return content
 	}
 	return content[3+idx+3:]
+}
+
+var transformablePattern = func() *regexp.Regexp {
+	// Match actual tool-call patterns, not plain-text mentions like "codegraph tools"
+	// or JS code like `registration.pushManager.subscribe({`.
+	// (?m) enables ^/$ to match line boundaries.
+	// Patterns:
+	//   - `toolname({...})` backtick functional notation
+	//   - MCP `toolname` reference
+	//   - Activate MCP `skill id=X` / Activate MCP skill id=X
+	//   - toolname({...}) bare functional notation at line start (skills code blocks)
+	reStr := "(?m)(`[a-zA-Z_][a-zA-Z0-9_-]*\\(`)|(\\bMCP\\s+[a-zA-Z_])|(\\bActivate\\s+MCP\\s+`?skill\\s+id=)|(^[a-zA-Z_][a-zA-Z0-9_-]*\\(\\s*\\{)"
+	return regexp.MustCompile(reStr)
+}()
+
+func hasTransformablePattern(body string) bool {
+	return transformablePattern.MatchString(body)
 }

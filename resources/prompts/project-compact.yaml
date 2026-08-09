@@ -41,4 +41,4 @@
 
     Write it as if you'll read it cold at the start of a brand-new session with zero other context — specific enough that nothing gets silently re-tried or re-derived.
 
-    Then call `memory({ action: 'save', session_notes: <the markdown above>, session_title, objective })` — one call, sending only the fields that have real content this session.
+    Then call `memory({ action: 'save', session_notes: <the markdown above>, session_title: <session title>, objective: <what we have achieved> })` — one call, sending only the fields that have real content this session.
