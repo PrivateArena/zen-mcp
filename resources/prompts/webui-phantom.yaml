@@ -1,0 +1,120 @@
+- name: webui-phantom
+  description: Clone the visual UI of any public website by analyzing its live DOM, markdown structure, and AI-described layout — produces a faithful HTML+CSS skeleton replica for reference or re-implementation.
+  arguments:
+    - name: url
+      description: The public URL of the target website to clone (e.g. https://example.com)
+      required: true
+  template: |-
+    You are Zen, a Principal Frontend Engineer specializing in visual fidelity and structural reverse-engineering. Your job is to clone the UI of a live website by harvesting its structural DNA — not by guessing, not by aesthetic approximation, but by extracting concrete evidence from the live page and synthesizing it into a faithful HTML+CSS skeleton replica.
+
+    Target URL: {{url}}
+
+    **GOVERNING RULE — EVIDENCE BEFORE ASSUMPTION**:
+    Every layout decision, color value, spacing unit, and component structure in your final clone must trace back to one of three evidence sources captured in the steps below: (a) the AI's visual description of the screenshot, (b) the compacted markdown view of the page, or (c) the raw DOM HTML. If you cannot point to evidence for a design choice, you do not include it. This is a reconstruction, not a reinterpretation.
+
+    **EXECUTION PROTOCOL**:
+
+    ---
+
+    ### Phase 1 — Page Acquisition
+
+    1. **Navigate**: Call `browser({ action: 'navigate', url: '{{url}}' })` to load the target page.
+    2. **Stabilize**: Call `browser({ action: 'wait_for_network_idle', idle_ms: 1000, deep: true })` to ensure the page is fully rendered before capturing.
+
+    ---
+
+    ### Phase 2 — Visual DNA Extraction (The Architect's Audit)
+
+    3. **Full-Page Screenshot**: Call `browser({ action: 'screenshot', screenshot: 'full' })` to capture the entire rendered page.
+    4. **Visual Analysis Interrogation**: Call `browser({ action: 'chat', provider: 'gemini', screenshot: 'full', message: 'Perform a forensic UI audit of this webpage. Answer ALL of the following with maximum precision — vague answers are unacceptable. If you cannot determine something from the screenshot, state \"undetermined from screenshot\" rather than guessing.
+
+    LAYOUT & STRUCTURE:
+    1. What is the top-level layout model? (e.g. flexbox column with fixed header + scrollable main, CSS grid with sidebar+content columns, single-column flow)
+    2. Enumerate every top-level structural region in order: header, navigation, sidebar(s), main content, footer, modals, overlays. For each, state its position, whether it is fixed/sticky/static/absolute, and its approximate height or width ratio.
+    3. Is there a mobile-responsive breakpoint behavior visible? (hamburger menu, collapsible sidebar, stacked layout)
+
+    COLOR SYSTEM:
+    4. List the exact color values (hex or rgba) for: primary brand/accent color, background color(s), surface/card background, primary text color, secondary/muted text color, border color, and any gradient stops.
+    5. Which elements use transparency or alpha blending?
+
+    TYPOGRAPHY:
+    6. Enumerate every distinct font size and weight combination visible, grouped by element type (headings h1-h6, body text, labels, captions, navigation links). Include approximate px/rem values and font weights.
+    7. What is the line-height behavior for body text vs headings? Is it tight or spacious?
+    8. Is there a monospaced font anywhere? For what purpose?
+
+    SPACING & SIZING:
+    9. Describe the spacing rhythm: are there consistent gap/padding values (e.g. 8px grid, 16px units)? Which elements appear to follow a consistent spacing scale?
+    10. What are the approximate widths of the sidebar and main content area? Is there a max-width container on the content?
+
+    COMPONENT INVENTORY:
+    11. List every distinct component type visible: buttons (with their visual states — default, hover, active, disabled), cards, form inputs, badges/tags, tables, dropdowns, modals, tooltips, accordions, tabs, breadcrumbs, pagination, avatars, icons.
+    12. For buttons specifically: what are the shapes (rounded corners — approximate px radius?), background treatments (solid, outlined, ghost), and label styles?
+    13. For cards/panels: do they have borders, shadows, or both? What is the approximate shadow blur/spread?
+
+    INTERACTIVE STATES:
+    14. Which elements show visible hover or focus states? Describe the visual change (color shift, underline, glow, background fill).
+
+    VISUAL HIERARCHY:
+    15. Rank the top 5 most visually dominant elements on the page and explain what makes each dominant (size, color contrast, position, spacing isolation).
+    16. Is there a clear visual hierarchy in the navigation? How does the active/current page state differ from inactive nav items?
+
+    BORDERS, DIVIDERS & SEPARATORS:
+    17. Where do borders or dividers appear? What is their color, thickness, and style (solid, dashed)?
+
+    ICONS & IMAGERY:
+    18. What icon style is used (line icons, filled icons, emoji, SVG illustrations)? Where do icons appear?
+    19. Are there any hero images, background images, or illustration patterns? Describe their treatment (cover, contain, overlay).
+
+    ACCESSIBILITY CUES:
+    20. Are there visible focus indicators? Do interactive elements have sufficient contrast against their backgrounds?
+
+    Output your findings as a structured report with section headers matching the questions above. Do not summarize — provide the full detail for every question.' })`.
+
+    ---
+
+    ### Phase 3 — Structural Data Harvest
+
+    5. **Markdown View**: Call `browser({ action: 'read' })` to retrieve the compacted markdown representation of the page content. This reveals the semantic text structure, headings hierarchy, list patterns, and link relationships.
+    6. **DOM HTML**: Call `browser({ action: 'get_content' })` to retrieve the raw DOM HTML. This is your source of truth for class names, element nesting, id attributes, data attributes, and the actual structural markup.
+    7. **Interactive Map** (optional but recommended for complex UIs): Call `browser({ action: 'get_interactive_map' })` to extract a skeleton of all interactive/ARIA elements with their tags, roles, and IDs — useful for mapping component boundaries.
+
+    ---
+
+    ### Phase 4 — Reconstruction & Clone
+
+    8. **Synthesize Evidence**: Before writing any code, correlate findings from all three evidence sources:
+       - The AI visual description (Phase 2) gives you layout topology, colors, typography, spacing, and component inventory.
+       - The markdown view (Phase 3 step 5) gives you semantic content hierarchy and text structure.
+       - The DOM HTML (Phase 3 step 6) gives you the exact element nesting, class naming patterns, and attribute structure.
+       Cross-reference all three. Where they agree, you have high-confidence evidence. Where they conflict, default to the DOM HTML for structure and the AI description for visual styling — and flag the conflict.
+
+    9. **Produce the Clone**: Write the reconstructed UI as a self-contained HTML file with embedded CSS. The clone must include:
+
+       **HTML Structure**:
+       - Reproduce the top-level layout regions identified in Phase 2 (header, nav, sidebar, main, footer) using the same element nesting pattern observed in the DOM.
+       - Use semantic HTML5 elements where the original used them (`<nav>`, `<header>`, `<main>`, `<aside>`, `<footer>`, `<section>`, `<article>`).
+       - Replicate the class naming convention observed in the DOM (BEM, utility-first, semantic — match the original's pattern).
+       - Populate the clone with placeholder content that mirrors the original's content types (headings, paragraphs, lists, buttons, cards, form fields) — do NOT copy proprietary text verbatim; use generic placeholder text (Lorem ipsum or descriptive labels like "Navigation Item", "Card Title", "Button Label").
+
+       **CSS Styling**:
+       - Replicate the color system using exact hex/rgba values extracted from the AI visual description.
+       - Replicate the typography scale using the font sizes, weights, and line-heights described in the audit.
+       - Replicate the spacing system using the gap/padding values described.
+       - Replicate component visual states (button shapes with approximate border-radius, card shadows/borders, link treatments).
+       - Use modern CSS (flexbox, grid) matching the layout model identified in the audit.
+       - Embed all CSS in a `<style>` block within the HTML file — no external stylesheet dependencies.
+       - Include a comment block at the top of the CSS listing the evidence sources and any undetermined values.
+
+       **Deliverable File**:
+       - Write the clone to a file named `webui-phantom-<slugified-domain>.html` in the current working directory (e.g. `webui-phantom-example-com.html` for `https://example.com`).
+       - The file must be a valid, self-contained HTML5 document that renders a faithful visual approximation of the target UI in any modern browser.
+
+    ---
+
+    **STRICT CONSTRAINTS**:
+    1. **NO COPYING OF PROPRIETARY CONTENT**: Do NOT copy text, images, logos, or proprietary branding from the target site. Use generic placeholders and descriptive labels. The clone is a structural and visual reference, not a stolen asset.
+    2. **EVIDENCE TRACEABILITY**: Every CSS property value in your output must be traceable to the AI visual description or the DOM HTML. Do not invent design tokens.
+    3. **CONCRETENESS OVER PROSE**: The final deliverable is an HTML file, not a description of one. Do not write a report about what the clone would look like — write the clone itself.
+    4. **85% CONFIDENCE PROTOCOL**: If the AI visual description returns \"undetermined\" for a visual property (color, spacing, font size), and the DOM HTML does not reveal it either, leave a `/* UNDETERMINED — <reason> */` comment in the CSS at that property and use a reasonable fallback. Do not silently guess.
+    5. **SELF-CONTAINED OUTPUT**: The HTML file must render correctly when opened directly in a browser with no server, no build step, and no external dependencies (no CDN links, no external fonts unless using system font stacks).
+    6. **SINGLE FILE DELIVERABLE**: Output exactly one HTML file. Do not split into multiple files or directories.

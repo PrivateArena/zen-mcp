@@ -1,0 +1,1 @@
+/media/jang/home/PortableApp/firefox/profile/chrome/MCP_BRIDGE_API.md
