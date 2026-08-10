@@ -17,7 +17,50 @@
     }
   },
   "/media/jang/home/Deve/zen-mcp": {
-    "lastVisited": "2026-08-09T13:55:56.616Z"
+    "lastVisited": "2026-08-09T13:55:56.616Z",
+    "scopes": {
+      "workspace": [
+        "internal/terminal/handlers/workspace.go",
+        "cli/zen-workspace",
+        "internal/workspace",
+        "internal/tools/workspace.go"
+      ],
+      "browser": [
+        "cli/zen-browser",
+        "internal/terminal/handlers/browser.go",
+        "internal/tools/browser.go",
+        "internal/bridge",
+        "internal/agentbridge"
+      ],
+      "prompt": [
+        "internal/prompts",
+        "internal/terminal/handlers/prompts.go",
+        "resources/prompts"
+      ],
+      "codegraph": [
+        "cli/zen-codegraph",
+        "internal/codegraph",
+        "internal/terminal/handlers/codegraph.go",
+        "internal/tools/codegraph.go"
+      ],
+      "memory": [
+        "internal/tools/memory.go",
+        "internal/terminal/handlers/memory.go",
+        "internal/projectmemory",
+        "cli/zen-memory",
+        "cli/zen-memory_isolate",
+        "cli/zen-memory_shared"
+      ],
+      "terminal": [
+        "internal/terminal"
+      ],
+      "skill": [
+        "cli/zen-skill",
+        "internal/terminal/handlers/skills.go",
+        "internal/tools/skills.go",
+        "resources/prompts/skills.yaml"
+      ]
+    }
   },
   "/media/jang/home/Deve/zen-ovpn": {
     "lastVisited": "2026-08-09T11:47:15.759Z"
