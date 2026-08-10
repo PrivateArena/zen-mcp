@@ -25,8 +25,7 @@
 
     ### Phase 2 — Visual DNA Extraction (The Architect's Audit)
 
-    3. **Full-Page Screenshot**: Call `browser({ action: 'screenshot', screenshot: 'full' })` to capture the entire rendered page.
-    4. **Visual Analysis Interrogation**: Call `browser({ action: 'chat', provider: 'gemini', screenshot: 'full', message: 'Perform a forensic UI audit of this webpage. Answer ALL of the following with maximum precision — vague answers are unacceptable. If you cannot determine something from the screenshot, state \"undetermined from screenshot\" rather than guessing.
+    3. **Combined Screenshot + Visual Analysis**: Call `browser({ action: 'chat', provider: 'gemini', take_screenshot: 'full', message: 'Perform a forensic UI audit of this webpage. Answer ALL of the following with maximum precision — vague answers are unacceptable. If you cannot determine something from the screenshot, state \"undetermined from screenshot\" rather than guessing.
 
     LAYOUT & STRUCTURE:
     1. What is the top-level layout model? (e.g. flexbox column with fixed header + scrollable main, CSS grid with sidebar+content columns, single-column flow)
@@ -74,21 +73,21 @@
 
     ### Phase 3 — Structural Data Harvest
 
-    5. **Markdown View**: Call `browser({ action: 'read' })` to retrieve the compacted markdown representation of the page content. This reveals the semantic text structure, headings hierarchy, list patterns, and link relationships.
-    6. **DOM HTML**: Call `browser({ action: 'get_content' })` to retrieve the raw DOM HTML. This is your source of truth for class names, element nesting, id attributes, data attributes, and the actual structural markup.
-    7. **Interactive Map** (optional but recommended for complex UIs): Call `browser({ action: 'get_interactive_map' })` to extract a skeleton of all interactive/ARIA elements with their tags, roles, and IDs — useful for mapping component boundaries.
+    4. **Markdown View**: Call `browser({ action: 'read' })` to retrieve the compacted markdown representation of the page content. This reveals the semantic text structure, headings hierarchy, list patterns, and link relationships.
+    5. **DOM HTML**: Call `browser({ action: 'get_content' })` to retrieve the raw DOM HTML. This is your source of truth for class names, element nesting, id attributes, data attributes, and the actual structural markup.
+    6. **Interactive Map** (optional but recommended for complex UIs): Call `browser({ action: 'get_interactive_map' })` to extract a skeleton of all interactive/ARIA elements with their tags, roles, and IDs — useful for mapping component boundaries.
 
     ---
 
     ### Phase 4 — Reconstruction & Clone
 
-    8. **Synthesize Evidence**: Before writing any code, correlate findings from all three evidence sources:
+    7. **Synthesize Evidence**: Before writing any code, correlate findings from all three evidence sources:
        - The AI visual description (Phase 2) gives you layout topology, colors, typography, spacing, and component inventory.
-       - The markdown view (Phase 3 step 5) gives you semantic content hierarchy and text structure.
-       - The DOM HTML (Phase 3 step 6) gives you the exact element nesting, class naming patterns, and attribute structure.
+       - The markdown view (Phase 3 step 4) gives you semantic content hierarchy and text structure.
+       - The DOM HTML (Phase 3 step 5) gives you the exact element nesting, class naming patterns, and attribute structure.
        Cross-reference all three. Where they agree, you have high-confidence evidence. Where they conflict, default to the DOM HTML for structure and the AI description for visual styling — and flag the conflict.
 
-    9. **Produce the Clone**: Write the reconstructed UI as a self-contained HTML file with embedded CSS. The clone must include:
+    8. **Produce the Clone**: Write the reconstructed UI as a self-contained HTML file with embedded CSS. The clone must include:
 
        **HTML Structure**:
        - Reproduce the top-level layout regions identified in Phase 2 (header, nav, sidebar, main, footer) using the same element nesting pattern observed in the DOM.
