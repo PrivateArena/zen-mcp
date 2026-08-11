@@ -41,6 +41,7 @@ func AllDefs(workspace string, deps Deps) []ToolDef {
 		defColab(workspace, deps),
 		defCapture(workspace, deps),
 		defUiVision(workspace, deps),
+		defPool(deps),
 		defSkills(workspace, deps),
 		defCodegraph(workspace, deps),
 	}

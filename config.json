@@ -37,6 +37,13 @@
     "/dev/null",
     "/tmp/"
   ],
+  "pooling": {
+    "enabled": true,
+    "tools": ["shell"],
+    "elapsedMs": 2000,
+    "ttlMinutes": 60,
+    "maxJobs": 256
+  },
   "codegraph_watcher_debounce_ms": 300000,
   "codegraph_skip_embeddings": true,
   "codegraph_markdown_files": true,

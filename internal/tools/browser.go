@@ -35,7 +35,7 @@ func defBrowser(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "browser",
 		Title:       "browser Controller (Firefox Bridge)",
-		Description: "Control Firefox via userChrome.js MCP Bridge. Categories: Navigation & Tabs, Interaction, Extraction & State, Execution & Waiting, Vision & AI, Storage & Misc, Recording.",
+		Description: "Control Firefox via userChrome.js MCP Bridge. Categories: Navigation & Tabs, Interaction, Extraction & State, Execution & Waiting, Vision & AI, Storage & Misc, Recording. Long-running jobs (> 60s by default) return {\"status\":\"running\",\"pool_id\":...} — poll with the pool tool (action=\"poll\").",
 		Schema: jsonSchema(map[string]any{
 			"action": strEnumProp("Browser action.", []string{
 				"list_containers", "active_tab", "restart", "refresh", "web_logs", "chrome_logs",

@@ -83,6 +83,17 @@ type WikiConfig struct {
 	Domains map[string]WikiFilter `json:"domains"`
 }
 
+// PoolingConfig controls the opt-in tool-level job pool. When Enabled, a
+// wrapped tool call that outlives ElapsedMs returns a {status,pool_id} payload
+// instead of blocking forever; the pool tool long-polls the in-memory registry.
+type PoolingConfig struct {
+	Enabled    bool     `json:"enabled"`
+	Tools      []string `json:"tools,omitempty"`
+	ElapsedMs  int      `json:"elapsedMs"`
+	TTLMinutes int      `json:"ttlMinutes,omitempty"`
+	MaxJobs    int      `json:"maxJobs,omitempty"`
+}
+
 type ZenConfig struct {
 	DaemonPort                   int                        `json:"daemonPort"`
 	McpPort                      int                        `json:"mcpPort"`
@@ -106,6 +117,7 @@ type ZenConfig struct {
 	Sandbox                      SandboxConfig              `json:"sandbox"`
 	ToolConfigs                  map[string]json.RawMessage `json:"toolConfigs,omitempty"`
 	ToolTimeouts                 map[string]int             `json:"toolTimeouts,omitempty"`
+	Pooling                      PoolingConfig              `json:"pooling"`
 	CodegraphIgnore              []string                   `json:"codegraph_ignore,omitempty"`
 	CodegraphSkipEmbeddings      bool                       `json:"codegraph_skip_embeddings"`
 	CodegraphDumpDir             string                     `json:"codegraph_dump_dir,omitempty"`
@@ -182,6 +194,13 @@ func defaultConfig() ZenConfig {
 			"codegraph": 60000, "server": 90000, "capture": 60000,
 			"memory": 30000, "memory_isolate": 30000, "memory_shared": 30000,
 			"skills": 30000, "workspace": 30000, "think": 30000, "session": 30000,
+		},
+		Pooling: PoolingConfig{
+			Enabled:    false,
+			Tools:      []string{"shell", "browser", "run", "ui-vision"},
+			ElapsedMs:  60000,
+			TTLMinutes: 60,
+			MaxJobs:    256,
 		},
 		CodegraphSkipEmbeddings:      true,
 		CodegraphMermaidAlpha:        false,
@@ -377,7 +396,7 @@ func mergeConfig(def ZenConfig, user map[string]any) (ZenConfig, error) {
 	for k, v := range user {
 		merged[k] = v
 	}
-	for _, key := range []string{"token_optimization", "sandbox", "toolConfigs", "toolTimeouts", "prompt_features", "prompt_memory_context", "enabled_tools"} {
+	for _, key := range []string{"token_optimization", "sandbox", "toolConfigs", "toolTimeouts", "pooling", "prompt_features", "prompt_memory_context", "enabled_tools"} {
 		if uv, ok := user[key].(map[string]any); ok {
 			dv, _ := defMap[key].(map[string]any)
 			merged[key] = mergeNested(dv, uv)

@@ -23,7 +23,7 @@ func defUiVision(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "ui-vision",
 		Title:       "UI Vision (Gemini via zen-cap)",
-		Description: "Launch a GUI app, capture its window via zen-cap, and get a Gemini description of the UI. Requires zen-cap running at the configured port.",
+		Description: "Launch a GUI app, capture its window via zen-cap, and get a Gemini description of the UI. Requires zen-cap running at the configured port. Long-running jobs (> 60s by default) return {\"status\":\"running\",\"pool_id\":...} — poll with the pool tool (action=\"poll\").",
 		Schema: jsonSchema(map[string]any{
 			"path":    strProp("Absolute path to the GUI executable to launch and capture"),
 			"message": strProp("Natural-language prompt for Gemini to describe the GUI state"),

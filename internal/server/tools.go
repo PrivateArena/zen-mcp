@@ -7,6 +7,7 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
+	"zen-mcp/internal/pooling"
 	"zen-mcp/internal/prompts"
 	"zen-mcp/internal/toolregistry"
 	"zen-mcp/internal/toolresponse"
@@ -41,7 +42,7 @@ func RegisterAllTools(ctx context.Context, srv *mcpserver.MCPServer, reg *toolre
 			Execution: &mcp.ToolExecution{TaskSupport: mcp.TaskSupportForbidden},
 		}
 
-		handler := def.Handler
+		handler := wrapIfPooled(def.Name, def.Handler)
 		srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			ctx = toolresponse.WithToolContext(ctx, toolresponse.ToolContext{
 				ToolName: def.Name,
@@ -70,6 +71,20 @@ func RegisterAllTools(ctx context.Context, srv *mcpserver.MCPServer, reg *toolre
 }
 
 func boolPtr(b bool) *bool { return &b }
+
+// wrapIfPooled applies the tool-call pooling wrapper. Every tool except the
+// pool tool itself is wrapped at registration, but Wrap re-reads config per
+// call and is a pass-through unless pooling is enabled AND name is in the
+// configured Tools list. This makes the config.json toggle fully live: enabling
+// pooling never requires a restart (the per-workspace server cache would
+// otherwise pin the pre-enable registration decision). The pool tool is never
+// wrapped — a wrapped pool poll would spawn a job and mint a second pool_id.
+func wrapIfPooled(name string, handler toolregistry.Handler) toolregistry.Handler {
+	if name == "pool" {
+		return handler
+	}
+	return pooling.Wrap(name, pooling.Global(), handler)
+}
 
 // FilterEnabled returns an mcp-go ToolFilterFunc that hides tools whose
 // registry entry is currently disabled.

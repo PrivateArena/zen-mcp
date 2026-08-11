@@ -323,6 +323,64 @@ func TestConfigFilePath(t *testing.T) {
 	}
 }
 
+func TestPoolingConfigDefaults(t *testing.T) {
+	withConfig(t, `{}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	c := Get().Pooling
+	if c.Enabled {
+		t.Error("pooling should default to disabled")
+	}
+	if len(c.Tools) != 4 || c.Tools[0] != "shell" {
+		t.Errorf("pooling tools default wrong: %v", c.Tools)
+	}
+	if c.ElapsedMs != 60000 {
+		t.Errorf("elapsedMs default = %d, want 60000", c.ElapsedMs)
+	}
+	if c.TTLMinutes != 60 {
+		t.Errorf("ttlMinutes default = %d, want 60", c.TTLMinutes)
+	}
+	if c.MaxJobs != 256 {
+		t.Errorf("maxJobs default = %d, want 256", c.MaxJobs)
+	}
+}
+
+func TestPoolingConfigPartialMerge(t *testing.T) {
+	// Partial override: tools replaced, elapsedMs/ttl/max preserved from defaults.
+	withConfig(t, `{"pooling":{"enabled":true,"tools":["shell","run"]}}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	c := Get().Pooling
+	if !c.Enabled {
+		t.Error("pooling should be enabled")
+	}
+	if len(c.Tools) != 2 || c.Tools[0] != "shell" || c.Tools[1] != "run" {
+		t.Errorf("pooling tools should be replaced, got %v", c.Tools)
+	}
+	if c.ElapsedMs != 60000 {
+		t.Errorf("elapsedMs should keep default, got %d", c.ElapsedMs)
+	}
+	if c.TTLMinutes != 60 || c.MaxJobs != 256 {
+		t.Errorf("ttl/max should keep defaults, got %d/%d", c.TTLMinutes, c.MaxJobs)
+	}
+}
+
+func TestPoolingConfigFullOverride(t *testing.T) {
+	withConfig(t, `{"pooling":{"enabled":true,"tools":["browser"],"elapsedMs":5000,"ttlMinutes":5,"maxJobs":8}}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	c := Get().Pooling
+	if !c.Enabled || c.ElapsedMs != 5000 || c.TTLMinutes != 5 || c.MaxJobs != 8 {
+		t.Errorf("full pooling override wrong: %+v", c)
+	}
+	if len(c.Tools) != 1 || c.Tools[0] != "browser" {
+		t.Errorf("pooling tools wrong: %v", c.Tools)
+	}
+}
+
 func TestCliModeConfigMerge(t *testing.T) {
 	withConfig(t, `{"climode_prefix":"zn-","climode_short":true}`)
 	if err := Load(); err != nil {
