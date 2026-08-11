@@ -19,7 +19,7 @@ func defShell(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "shell",
 		Title:       "Smart Shell Command (Token-Optimized)",
-		Description: "Execute shell commands with token optimization (60-80% savings). ALWAYS prefer over raw command exec.",
+		Description: "Execute shell commands with token optimization (60-80% savings). ALWAYS prefer over raw command exec.\nLong-running jobs (>60s) return {\"status\":\"running\",\"pool_id\":...} — poll with the pool tool (action=\"poll\").",
 		Schema: jsonSchema(map[string]any{
 			"command": strProp("Shell command"),
 		}, []string{"command"}),

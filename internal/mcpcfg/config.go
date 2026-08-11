@@ -72,6 +72,14 @@ type PromptFeatureConfig struct {
 	SkillStatic            *bool `json:"skill_static,omitempty"`
 }
 
+type PoolingConfig struct {
+	Enabled    bool     `json:"enabled"`
+	Tools      []string `json:"tools,omitempty"`
+	ElapsedMs  int      `json:"elapsedMs"`
+	TTLMinutes int      `json:"ttlMinutes,omitempty"`
+	MaxJobs    int      `json:"maxJobs,omitempty"`
+}
+
 type WikiFilter struct {
 	WhitelistUsername []string `json:"whitelist_username,omitempty"`
 	MinChar           int      `json:"min_char,omitempty"`
@@ -106,6 +114,7 @@ type ZenConfig struct {
 	Sandbox                      SandboxConfig              `json:"sandbox"`
 	ToolConfigs                  map[string]json.RawMessage `json:"toolConfigs,omitempty"`
 	ToolTimeouts                 map[string]int             `json:"toolTimeouts,omitempty"`
+	Pooling                      PoolingConfig              `json:"pooling"`
 	CodegraphIgnore              []string                   `json:"codegraph_ignore,omitempty"`
 	CodegraphSkipEmbeddings      bool                       `json:"codegraph_skip_embeddings"`
 	CodegraphDumpDir             string                     `json:"codegraph_dump_dir,omitempty"`
@@ -210,6 +219,13 @@ func defaultConfig() ZenConfig {
 			AutoProjectScopesLimit: intPtr(5),
 			MaxSkills:              intPtr(3),
 			SkillStatic:            boolPtr(true),
+		},
+		Pooling: PoolingConfig{
+			Enabled:    false,
+			Tools:      []string{"shell", "browser", "run", "ui-vision"},
+			ElapsedMs:  60000,
+			TTLMinutes: 60,
+			MaxJobs:    256,
 		},
 		TelemetryEnabled:    true,
 		ChatFileThresholdKb: 200,
@@ -377,7 +393,7 @@ func mergeConfig(def ZenConfig, user map[string]any) (ZenConfig, error) {
 	for k, v := range user {
 		merged[k] = v
 	}
-	for _, key := range []string{"token_optimization", "sandbox", "toolConfigs", "toolTimeouts", "prompt_features", "prompt_memory_context", "enabled_tools"} {
+	for _, key := range []string{"token_optimization", "sandbox", "toolConfigs", "toolTimeouts", "prompt_features", "prompt_memory_context", "enabled_tools", "pooling"} {
 		if uv, ok := user[key].(map[string]any); ok {
 			dv, _ := defMap[key].(map[string]any)
 			merged[key] = mergeNested(dv, uv)
@@ -407,6 +423,9 @@ func mergeConfig(def ZenConfig, user map[string]any) (ZenConfig, error) {
 	}
 	if out.BypassTools == nil {
 		out.BypassTools = def.BypassTools
+	}
+	if out.Pooling.Enabled == false && out.Pooling.Tools == nil && out.Pooling.ElapsedMs == 0 && out.Pooling.TTLMinutes == 0 && out.Pooling.MaxJobs == 0 {
+		out.Pooling = def.Pooling
 	}
 	return out, nil
 }

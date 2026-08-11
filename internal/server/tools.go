@@ -3,10 +3,13 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"slices"
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/pooling"
 	"zen-mcp/internal/prompts"
 	"zen-mcp/internal/toolregistry"
 	"zen-mcp/internal/toolresponse"
@@ -42,6 +45,9 @@ func RegisterAllTools(ctx context.Context, srv *mcpserver.MCPServer, reg *toolre
 		}
 
 		handler := def.Handler
+		if mcpcfg.Get().Pooling.Enabled && slices.Contains(mcpcfg.Get().Pooling.Tools, def.Name) {
+			handler = pooling.Wrap(def.Name, handler)
+		}
 		srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			ctx = toolresponse.WithToolContext(ctx, toolresponse.ToolContext{
 				ToolName: def.Name,

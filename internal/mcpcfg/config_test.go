@@ -351,6 +351,46 @@ func TestCliModeConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestPoolingConfigDefaults(t *testing.T) {
+	withConfig(t, `{}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	c := Get()
+	if c.Pooling.Enabled {
+		t.Error("default pooling.enabled should be false")
+	}
+	if len(c.Pooling.Tools) != 4 {
+		t.Errorf("default pooling.tools = %v, want 4 tools", c.Pooling.Tools)
+	}
+	if c.Pooling.ElapsedMs != 60000 {
+		t.Errorf("default pooling.elapsedMs = %d, want 60000", c.Pooling.ElapsedMs)
+	}
+	if c.Pooling.TTLMinutes != 60 {
+		t.Errorf("default pooling.ttlMinutes = %d, want 60", c.Pooling.TTLMinutes)
+	}
+	if c.Pooling.MaxJobs != 256 {
+		t.Errorf("default pooling.maxJobs = %d, want 256", c.Pooling.MaxJobs)
+	}
+}
+
+func TestPoolingConfigPartialMerge(t *testing.T) {
+	withConfig(t, `{"pooling":{"enabled":true,"tools":["shell"]}}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	c := Get()
+	if !c.Pooling.Enabled {
+		t.Error("pooling.enabled should be true when explicitly set")
+	}
+	if len(c.Pooling.Tools) != 1 || c.Pooling.Tools[0] != "shell" {
+		t.Errorf("pooling.tools = %v, want [shell]", c.Pooling.Tools)
+	}
+	if c.Pooling.ElapsedMs != 60000 {
+		t.Errorf("pooling.elapsedMs = %d, want default 60000 when omitted", c.Pooling.ElapsedMs)
+	}
+}
+
 func TestCliModePrefixOrDefault(t *testing.T) {
 	withConfig(t, `{}`)
 	if err := Load(); err != nil {
