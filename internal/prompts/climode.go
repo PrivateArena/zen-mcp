@@ -4,33 +4,19 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"zen-mcp/internal/mcpcfg"
 )
 
-// CLIToolMap maps MCP tool names to their CLI wrapper script names.
-var CLIToolMap = map[string]string{
-	"browser":        "zen-browser",
-	"capture":        "zen-capture",
-	"codegraph":      "zen-codegraph",
-	"colab":          "zen-colab",
-	"context":        "zen-context",
-	"memory":         "zen-memory",
-	"memory_isolate": "zen-memory_isolate",
-	"memory_shared":  "zen-memory_shared",
-	"run":            "zen-run",
-	"shell":          "zen-shell",
-	"skill":          "zen-skill",
-	"think":          "zen-think",
-	"ui-vision":      "zen-ui-vision",
-	"workspace":      "zen-workspace",
+// cliPrefix returns the configured CLI wrapper prefix (default "zen-").
+func cliPrefix() string {
+	return mcpcfg.CliModePrefixOrDefault()
 }
 
-// CLITool returns the CLI wrapper name for an MCP tool name.
-// Unknown tools fall back to "zen-" + name.
+// CLITool returns the CLI wrapper name for an MCP tool name, honoring the
+// configured climode_prefix. Unknown tools fall back to "<prefix>" + name.
 func CLITool(mcpName string) string {
-	if cli, ok := CLIToolMap[mcpName]; ok {
-		return cli
-	}
-	return "zen-" + mcpName
+	return cliPrefix() + mcpName
 }
 
 // TransformRule pairs a compiled regexp with its replacement.
@@ -51,29 +37,59 @@ func init() {
 			re:      regexp.MustCompile("Activate MCP (`?)skill id=([a-zA-Z0-9_-]+)(`?)"),
 			useFunc: true,
 			replFunc: func(matches []string) string {
-				return "Activate skill id=" + matches[2] + " via `zen-skill --action get --id=" + matches[2] + "`"
+				return "Activate skill id=" + matches[2] + " via `" + CLITool("skill") + " --action get --id=" + matches[2] + "`"
 			},
 		},
 		// Rule 8 — MCP Tool skill reference
-		{re: regexp.MustCompile("Please use MCP Tool skill id="), replacement: "Please use `zen-skill --action get --id="},
+		{
+			re:      regexp.MustCompile("Please use MCP Tool skill id="),
+			useFunc: true,
+			replFunc: func(matches []string) string {
+				return "Please use `" + CLITool("skill") + " --action get --id="
+			},
+		},
 		// Rule 9 — Inline skill id backticks
-		{re: regexp.MustCompile("`skill id=([a-zA-Z0-9_-]+)`"), replacement: "`zen-skill --action get --id=$1`"},
+		{
+			re:      regexp.MustCompile("`skill id=([a-zA-Z0-9_-]+)`"),
+			useFunc: true,
+			replFunc: func(matches []string) string {
+				return "`" + CLITool("skill") + " --action get --id=" + matches[1] + "`"
+			},
+		},
 		// Rule 6 — MCP shell reference (specific prefix)
-		{re: regexp.MustCompile("Always use the MCP `([^`]+)`"), replacement: "Always use the `zen-$1` CLI"},
+		{
+			re:      regexp.MustCompile("Always use the MCP `([^`]+)`"),
+			useFunc: true,
+			replFunc: func(matches []string) string {
+				return "Always use the `" + cliPrefix() + matches[1] + "` CLI"
+			},
+		},
 		// Rule 4 — MCP tool backtick reference
-		{re: regexp.MustCompile("MCP `([a-zA-Z_][a-zA-Z0-9_-]*)`"), replacement: "`zen-$1`"},
+		{
+			re:      regexp.MustCompile("MCP `([a-zA-Z_][a-zA-Z0-9_-]*)`"),
+			useFunc: true,
+			replFunc: func(matches []string) string {
+				return "`" + cliPrefix() + matches[1] + "`"
+			},
+		},
 		// Rule 5 — MCP tool bare reference
-		{re: regexp.MustCompile("MCP ([a-zA-Z_][a-zA-Z0-9_-]*) tool"), replacement: "zen-$1 CLI"},
+		{
+			re:      regexp.MustCompile("MCP ([a-zA-Z_][a-zA-Z0-9_-]*) tool"),
+			useFunc: true,
+			replFunc: func(matches []string) string {
+				return cliPrefix() + matches[1] + " CLI"
+			},
+		},
 		// Rule 1 — Functional notation in backticks (prompts)
 		// Inner content regex allows one level of nested {} pairs (e.g. arrays).
 		{
-			re: regexp.MustCompile("`([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*((?:[^{}]|\\{[^{}]*\\})*)\\s*\\}\\)`"),
+			re:       regexp.MustCompile("`([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*((?:[^{}]|\\{[^{}]*\\})*)\\s*\\}\\)`"),
 			useFunc:  true,
 			replFunc: func(matches []string) string { return "`" + renderCLIFlags(matches[1], matches[2]) + "`" },
 		},
 		// Rule 2 — Functional notation without backticks (skills code blocks)
 		{
-			re: regexp.MustCompile("(?m)^([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*((?:[^{}]|\\{[^{}]*\\})*)\\s*\\}\\)$"),
+			re:      regexp.MustCompile("(?m)^([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*((?:[^{}]|\\{[^{}]*\\})*)\\s*\\}\\)$"),
 			useFunc: true,
 			replFunc: func(matches []string) string {
 				return renderCLIFlags(matches[1], matches[2])
@@ -81,7 +97,7 @@ func init() {
 		},
 		// Rule 3 — Object-dot notation (skills TypeScript)
 		{
-			re: regexp.MustCompile("mcp\\.([a-zA-Z_][a-zA-Z0-9_-]*)\\.([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*((?:[^{}]|\\{[^{}]*\\})*)\\s*\\}\\)"),
+			re:      regexp.MustCompile("mcp\\.([a-zA-Z_][a-zA-Z0-9_-]*)\\.([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*((?:[^{}]|\\{[^{}]*\\})*)\\s*\\}\\)"),
 			useFunc: true,
 			replFunc: func(matches []string) string {
 				tool := matches[1]
@@ -120,7 +136,13 @@ func init() {
 // TransformMCPToCLI transforms MCP RPC tool-call examples in text to their CLI equivalents.
 // It is idempotent: if the text already contains CLI form and no MCP RPC patterns, it returns the input unchanged.
 func TransformMCPToCLI(text string) string {
-	if strings.Contains(text, "zen-") && !strings.Contains(text, "mcp.") && !strings.Contains(text, "MCP ") && !strings.Contains(text, "Activate MCP") && !strings.Contains(text, "Please use MCP") && !strings.Contains(text, "({") {
+	prefix := cliPrefix()
+	legacy := mcpcfg.DefaultCliModePrefix
+	// The configured prefix is checked first; a legacy text that already used the
+	// default "zen-" prefix is also skipped so changing climode_prefix keeps the
+	// transformation idempotent across a config switch.
+	if (strings.Contains(text, prefix) || (prefix != legacy && strings.Contains(text, legacy))) &&
+		!strings.Contains(text, "mcp.") && !strings.Contains(text, "MCP ") && !strings.Contains(text, "Activate MCP") && !strings.Contains(text, "Please use MCP") && !strings.Contains(text, "({") {
 		return text
 	}
 

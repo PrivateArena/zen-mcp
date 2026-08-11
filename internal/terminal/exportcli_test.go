@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"zen-mcp/internal/mcpcfg"
 )
 
 var sampleSchema = map[string]any{
@@ -436,5 +438,153 @@ func TestExportCLIEndToEnd(t *testing.T) {
 	}
 	if _, err := os.Lstat(link); !os.IsNotExist(err) {
 		t.Errorf("symlink %s should be removed, stat err=%v", link, err)
+	}
+}
+
+func withCliConfig(t *testing.T, prefix string, short bool) {
+	t.Helper()
+	old := mcpcfg.Get()
+	t.Cleanup(func() { mcpcfg.Config.Store(old) })
+	cfg := *old
+	cfg.CliModePrefix = prefix
+	cfg.CliModeShort = short
+	mcpcfg.Config.Store(&cfg)
+}
+
+func chdirTemp(t *testing.T) string {
+	t.Helper()
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(origWd) })
+	work := t.TempDir()
+	if err := os.Chdir(work); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", t.TempDir())
+	return work
+}
+
+func TestExportCLIWithCustomPrefix(t *testing.T) {
+	withCliConfig(t, "zn-", false)
+	work := chdirTemp(t)
+
+	var out bytes.Buffer
+	ExportCLI(&out, 2999, 3001)
+	if !strings.Contains(out.String(), "Exported") {
+		t.Fatalf("unexpected output: %s", out.String())
+	}
+
+	// New-prefix wrappers are generated...
+	if _, err := os.Stat(filepath.Join(work, "cli", "zn-browser")); err != nil {
+		t.Fatalf("zn-browser missing: %v", err)
+	}
+	// ...and legacy zen-* wrappers are cleaned up by the prefix change.
+	entries, _ := os.ReadDir(filepath.Join(work, "cli"))
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "zen-") {
+			t.Errorf("legacy zen-* wrapper survived prefix change: %s", e.Name())
+		}
+	}
+	link := filepath.Join(os.Getenv("HOME"), ".local", "bin", "zn-browser")
+	if _, err := os.Lstat(link); err != nil {
+		t.Errorf("symlink zn-browser missing: %v", err)
+	}
+	if _, err := os.ReadFile(filepath.Join(work, "cli", "zn-browser")); err != nil {
+		t.Errorf("zn-browser not readable: %v", err)
+	}
+}
+
+func TestExportCLIWithShortRespectsCustomPrefix(t *testing.T) {
+	withCliConfig(t, "zn-", false)
+	work := chdirTemp(t)
+
+	var out bytes.Buffer
+	ExportCLIWithShort(&out, 2999, 3001, false)
+	script, err := os.ReadFile(filepath.Join(work, "cli", "zn-browser"))
+	if err != nil {
+		t.Fatalf("zn-browser missing: %v", err)
+	}
+	if !strings.Contains(string(script), "#!/usr/bin/env bash") {
+		t.Error("zn-browser not a valid wrapper")
+	}
+}
+
+func TestExportCLIRespectsConfigShort(t *testing.T) {
+	withCliConfig(t, "zen-", true)
+	work := chdirTemp(t)
+
+	var out bytes.Buffer
+	// ExportCLI has no explicit short flag; the climode_short config must apply.
+	ExportCLI(&out, 2999, 3001)
+	script, err := os.ReadFile(filepath.Join(work, "cli", "zen-browser"))
+	if err != nil {
+		t.Fatalf("zen-browser missing: %v", err)
+	}
+	for _, want := range []string{
+		`-a) key="action"`,
+		`-mes) key="message"`,
+		`-he) key="headers"`,
+	} {
+		if !strings.Contains(string(script), want) {
+			t.Errorf("short alias %q missing when climode_short=true", want)
+		}
+	}
+	if strings.Contains(string(script), `-h) key=`) {
+		t.Errorf("reserved -h must never be emitted as a param alias")
+	}
+}
+
+func TestRemoveStaleZenMixedPrefixes(t *testing.T) {
+	withCliConfig(t, "zn-", false)
+	dir := t.TempDir()
+	for _, n := range []string{"zen-old", "zn-new", "unrelated"} {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	removeStaleZen(dir, map[string]bool{"zn-new": true}, "zn-", mcpcfg.DefaultCliModePrefix)
+	leftover, _ := os.ReadDir(dir)
+	names := map[string]bool{}
+	for _, e := range leftover {
+		names[e.Name()] = true
+	}
+	if names["zen-old"] {
+		t.Error("legacy prefixed artifact should be removed as stale")
+	}
+	if !names["zn-new"] {
+		t.Error("kept wrapper should survive")
+	}
+	if !names["unrelated"] {
+		t.Error("non-wrapper file must not be touched")
+	}
+}
+
+func TestExportCliCleanMixedPrefixes(t *testing.T) {
+	withCliConfig(t, "zn-", false)
+	work := chdirTemp(t)
+	cliDir := filepath.Join(work, "cli")
+	if err := os.MkdirAll(cliDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"zen-old", "zn-new", "keep.txt"} {
+		if err := os.WriteFile(filepath.Join(cliDir, n), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var out bytes.Buffer
+	ExportCliClean(&out)
+	leftover, _ := os.ReadDir(cliDir)
+	names := map[string]bool{}
+	for _, e := range leftover {
+		names[e.Name()] = true
+	}
+	if names["zen-old"] || names["zn-new"] {
+		t.Errorf("wrapper artifacts not cleaned: %v", names)
+	}
+	if !names["keep.txt"] {
+		t.Error("non-wrapper file should be left untouched")
 	}
 }

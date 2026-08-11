@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"zen-mcp/internal/mcpcfg"
 	"zen-mcp/internal/tools"
 )
 
@@ -27,15 +28,22 @@ type cliParam struct {
 	values   []string
 }
 
-// ExportCLI generates CLI wrapper scripts for all tools using full --param names.
+// ExportCLI generates CLI wrapper scripts for all tools using full --param names,
+// honoring the climode_short config as the default for short aliases.
 func ExportCLI(w io.Writer, cliPort, mcpPort int) {
-	ExportCLIWithShort(w, cliPort, mcpPort, false)
+	short := false
+	if c := mcpcfg.Get(); c != nil {
+		short = c.CliModeShort
+	}
+	ExportCLIWithShort(w, cliPort, mcpPort, short)
 }
 
 // ExportCLIWithShort generates CLI wrapper scripts. When short is true each
 // param also gets its shortest unambiguous -alias (--message -> -m) so callers
-// can save tokens; full --param names remain accepted either way.
+// can save tokens; full --param names remain accepted either way. Wrapper
+// files are named with the configured climode_prefix (default "zen-").
 func ExportCLIWithShort(w io.Writer, cliPort, mcpPort int, short bool) {
+	prefix := mcpcfg.CliModePrefixOrDefault()
 	host := "127.0.0.1"
 	port := cliPort
 	if port == 0 {
@@ -58,17 +66,18 @@ func ExportCLIWithShort(w io.Writer, cliPort, mcpPort int, short bool) {
 	generated := map[string]bool{}
 	for _, t := range toolList {
 		script := buildWrapperScriptOpt(t, url, short)
-		path := filepath.Join(cliDir, "zen-"+t.name)
+		path := filepath.Join(cliDir, prefix+t.name)
 		if err := writeAtomic(path, script); err != nil {
 			fmt.Fprintf(w, "WARN: failed to write %s: %v\n", path, err)
 			continue
 		}
 		_ = os.Chmod(path, 0o755)
-		generated["zen-"+t.name] = true
+		generated[prefix+t.name] = true
 	}
 
-	// Remove stale zen-* wrappers no longer generated.
-	removeStaleZen(cliDir, generated)
+	// Remove stale wrappers no longer generated, honoring the active and
+	// legacy ("zen-") prefixes so a prefix change is self-cleaning.
+	removeStaleZen(cliDir, generated, prefix, mcpcfg.DefaultCliModePrefix)
 
 	// Symlink into ~/.local/bin so the tools are reachable on PATH. The link
 	// target must be absolute, otherwise links break when binDir is remote.
@@ -83,7 +92,7 @@ func ExportCLIWithShort(w io.Writer, cliPort, mcpPort int, short bool) {
 					symlinked = binDir
 				}
 			}
-			removeStaleZen(binDir, generated)
+			removeStaleZen(binDir, generated, prefix, mcpcfg.DefaultCliModePrefix)
 		}
 	}
 
@@ -96,13 +105,17 @@ func ExportCLIWithShort(w io.Writer, cliPort, mcpPort int, short bool) {
 	}
 }
 
-// ExportCliClean removes generated CLI wrappers and their ~/.local/bin links.
+// ExportCliClean removes generated CLI wrappers and their ~/.local/bin links,
+// matching both the configured climode_prefix and the legacy "zen-" prefix so
+// artifacts from a prefix change are also removed.
 func ExportCliClean(w io.Writer) {
+	prefix := mcpcfg.CliModePrefixOrDefault()
+	legacy := mcpcfg.DefaultCliModePrefix
 	removed := 0
 	cliDir := filepath.Join(".", "cli")
 	entries, _ := os.ReadDir(cliDir)
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), "zen-") {
+		if hasWrapperPrefix(entry.Name(), prefix, legacy) {
 			if os.Remove(filepath.Join(cliDir, entry.Name())) == nil {
 				removed++
 			}
@@ -111,7 +124,7 @@ func ExportCliClean(w io.Writer) {
 	if binDir := localBinDir(); binDir != "" {
 		if entries, err := os.ReadDir(binDir); err == nil {
 			for _, entry := range entries {
-				if strings.HasPrefix(entry.Name(), "zen-") {
+				if hasWrapperPrefix(entry.Name(), prefix, legacy) {
 					if os.Remove(filepath.Join(binDir, entry.Name())) == nil {
 						removed++
 					}
@@ -119,7 +132,18 @@ func ExportCliClean(w io.Writer) {
 			}
 		}
 	}
-	fmt.Fprintf(w, "Cleaned %d zen-* artifacts from cli/ and %s\n", removed, localBinDirLabel())
+	fmt.Fprintf(w, "Cleaned %d wrapper artifacts from cli/ and %s\n", removed, localBinDirLabel())
+}
+
+// hasWrapperPrefix reports whether name starts with any of the given wrapper
+// prefixes.
+func hasWrapperPrefix(name string, prefixes ...string) bool {
+	for _, p := range prefixes {
+		if p != "" && strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // collectTools resolves the tool set from the registry, falling back to the
@@ -446,21 +470,21 @@ func writeAtomic(dest, content string) error {
 	return os.Rename(tmp, dest)
 }
 
-// removeStaleZen deletes zen-* artifacts in dir that are not in keep.
-func removeStaleZen(dir string, keep map[string]bool) {
+// removeStaleZen deletes wrapper artifacts in dir whose name starts with one
+// of prefixes and that is not in keep.
+func removeStaleZen(dir string, keep map[string]bool, prefixes ...string) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
 	}
 	for _, entry := range entries {
 		name := entry.Name()
-		if !strings.HasPrefix(name, "zen-") {
-			continue
-		}
 		if keep[name] {
 			continue
 		}
-		_ = os.Remove(filepath.Join(dir, name))
+		if hasWrapperPrefix(name, prefixes...) {
+			_ = os.Remove(filepath.Join(dir, name))
+		}
 	}
 }
 

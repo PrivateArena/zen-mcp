@@ -322,3 +322,70 @@ func TestConfigFilePath(t *testing.T) {
 		t.Errorf("PromptDir = %q", got)
 	}
 }
+
+func TestCliModeConfigMerge(t *testing.T) {
+	withConfig(t, `{"climode_prefix":"zn-","climode_short":true}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	c := Get()
+	if c.CliModePrefix != "zn-" {
+		t.Errorf("climode_prefix = %q, want zn-", c.CliModePrefix)
+	}
+	if !c.CliModeShort {
+		t.Error("climode_short should be true when configured")
+	}
+}
+
+func TestCliModeConfigDefaults(t *testing.T) {
+	withConfig(t, `{}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	c := Get()
+	if c.CliModePrefix != DefaultCliModePrefix {
+		t.Errorf("default climode_prefix = %q, want %q", c.CliModePrefix, DefaultCliModePrefix)
+	}
+	if c.CliModeShort {
+		t.Error("default climode_short should be false")
+	}
+}
+
+func TestCliModePrefixOrDefault(t *testing.T) {
+	withConfig(t, `{}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := CliModePrefixOrDefault(); got != DefaultCliModePrefix {
+		t.Errorf("default prefix = %q, want %q", got, DefaultCliModePrefix)
+	}
+
+	// Explicitly empty prefixes are unsafe (empty match deletes every file),
+	// so they must fall back to the default rather than being used.
+	withConfig(t, `{"climode_prefix":""}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := CliModePrefixOrDefault(); got != DefaultCliModePrefix {
+		t.Errorf("empty prefix should fall back to %q, got %q", DefaultCliModePrefix, got)
+	}
+	if got := Get().CliModePrefix; got != "" {
+		t.Errorf("raw config field should stay empty after merge, got %q", got)
+	}
+
+	withConfig(t, `{"climode_prefix":"  zn-  "}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := CliModePrefixOrDefault(); got != "zn-" {
+		t.Errorf("whitespace-trimmed prefix = %q, want zn-", got)
+	}
+
+	withConfig(t, `{"climode_prefix":"zn-"}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := CliModePrefixOrDefault(); got != "zn-" {
+		t.Errorf("custom prefix = %q, want zn-", got)
+	}
+}

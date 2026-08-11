@@ -131,7 +131,13 @@ type ZenConfig struct {
 	ChatOutputPath               *string                    `json:"chat_output_path,omitempty"`
 	EnabledTools                 map[string]bool            `json:"enabled_tools,omitempty"`
 	Mcp2Cli                      bool                       `json:"mcp2cli,omitempty"`
+	CliModePrefix                string                     `json:"climode_prefix,omitempty"`
+	CliModeShort                 bool                       `json:"climode_short"`
 }
+
+// DefaultCliModePrefix is the CLI wrapper script prefix applied when the
+// climode_prefix config is unset, empty, or whitespace-only.
+const DefaultCliModePrefix = "zen-"
 
 func defaultConfig() ZenConfig {
 	return ZenConfig{
@@ -208,6 +214,8 @@ func defaultConfig() ZenConfig {
 		TelemetryEnabled:    true,
 		ChatFileThresholdKb: 200,
 		Mcp2Cli:             false,
+		CliModePrefix:       DefaultCliModePrefix,
+		CliModeShort:        false,
 	}
 }
 
@@ -248,6 +256,18 @@ func init() {
 
 func Get() *ZenConfig {
 	return Config.Load()
+}
+
+// CliModePrefixOrDefault returns the configured CLI wrapper prefix, falling
+// back to the default "zen-" when unset, empty, or whitespace-only. An empty
+// prefix is unsafe (trim logic would match every file), so it is never used.
+func CliModePrefixOrDefault() string {
+	if c := Get(); c != nil {
+		if p := strings.TrimSpace(c.CliModePrefix); p != "" {
+			return p
+		}
+	}
+	return DefaultCliModePrefix
 }
 
 func GetToolConfig(toolName string) ToolConfig {

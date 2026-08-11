@@ -1,5 +1,7 @@
 {
   "mcp2cli": false,
+  "climode_prefix": "z",
+  "climode_short": true,
   "daemonPort": 31337,
   "proxyPort": 31313,
   "firefoxBridgePort": 9999,

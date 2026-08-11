@@ -121,12 +121,20 @@ func init() {
 	})
 
 	terminal.Register("export-cli", func(args []string) error {
-		clean, short := parseExportCLIArgs(args)
+		clean, _ := parseExportCLIArgs(args)
 		if clean {
 			terminal.ExportCliClean(terminal.LogOut)
 			return nil
 		}
 		c := mcpcfg.Get()
+		short := false
+		if c != nil {
+			short = c.CliModeShort
+		}
+		// An explicit --short/--long flag overrides the climode_short config default.
+		if on, set := exportShortFlag(args); set {
+			short = on
+		}
 		cliPort := 0
 		mcpPort := 0
 		if c != nil {
@@ -140,7 +148,9 @@ func init() {
 
 // parseExportCLIArgs extracts the --clean/clean and --short/short flags from
 // export-cli args; unknown args are ignored. It returns clean=false, short=false
-// when no flag is present (the plain export default).
+// when no flag is present (the plain export default). The short default is
+// decided by the climode_short config in the calling handler; this function
+// only reports whether the flag was explicitly given.
 func parseExportCLIArgs(args []string) (clean, short bool) {
 	for _, a := range args {
 		switch a {
@@ -151,6 +161,22 @@ func parseExportCLIArgs(args []string) (clean, short bool) {
 		}
 	}
 	return clean, short
+}
+
+// exportShortFlag reports whether short mode was explicitly forced by an
+// export-cli argument (--short/short => on, --long/long => off). When no flag
+// is present the second return is false and the caller falls back to the
+// climode_short config default; the last flag wins.
+func exportShortFlag(args []string) (on, set bool) {
+	for _, a := range args {
+		switch a {
+		case "--short", "short":
+			on, set = true, true
+		case "--long", "long":
+			on, set = false, true
+		}
+	}
+	return on, set
 }
 
 func buildToolCost() string {

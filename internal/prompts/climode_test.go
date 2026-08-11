@@ -10,16 +10,52 @@ import (
 	"zen-mcp/internal/mcpcfg"
 )
 
+// clitoolMap documents the MCP tool names that currently have CLI wrappers.
+// Test-only: CLITool derives the live wrapper name from the configured
+// climode_prefix, so this registry is purely a drift guard / documentation aid.
+var clitoolMap = map[string]string{
+	"browser":        "zen-browser",
+	"capture":        "zen-capture",
+	"codegraph":      "zen-codegraph",
+	"colab":          "zen-colab",
+	"context":        "zen-context",
+	"memory":         "zen-memory",
+	"memory_isolate": "zen-memory_isolate",
+	"memory_shared":  "zen-memory_shared",
+	"run":            "zen-run",
+	"shell":          "zen-shell",
+	"skill":          "zen-skill",
+	"think":          "zen-think",
+	"ui-vision":      "zen-ui-vision",
+	"workspace":      "zen-workspace",
+}
+
 func TestCLIToolMapCoversAllTools(t *testing.T) {
-	// Sanity: all 14 tools defined in tools.AllDefs have a CLI mapping.
+	// Sanity: all 14 tools defined in tools.AllDefs have a CLI wrapper,
+	// and CLITool must resolve every one of them to a prefixed name.
 	expected := []string{
 		"browser", "capture", "codegraph", "colab", "context",
 		"memory", "memory_isolate", "memory_shared", "run", "shell",
 		"skill", "think", "ui-vision", "workspace",
 	}
 	for _, name := range expected {
-		if got := CLIToolMap[name]; got == "" {
-			t.Errorf("CLIToolMap missing entry for %q", name)
+		if got := clitoolMap[name]; got == "" {
+			t.Errorf("clitoolMap missing entry for %q", name)
+		}
+		if got := CLITool(name); got != mcpcfg.DefaultCliModePrefix+name {
+			t.Errorf("CLITool(%q) = %q, want prefix %q + name", name, got, mcpcfg.DefaultCliModePrefix)
+		}
+	}
+	for k := range clitoolMap {
+		found := false
+		for _, name := range expected {
+			if name == k {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("clitoolMap has unexpected tool %q", k)
 		}
 	}
 }
@@ -322,10 +358,10 @@ func TestTransformRealPromptAndSkillFiles(t *testing.T) {
 			if err != nil {
 				continue
 			}
-		body := stripFrontmatter(string(data))
-		if !hasTransformablePattern(body) {
-			continue
-		}
+			body := stripFrontmatter(string(data))
+			if !hasTransformablePattern(body) {
+				continue
+			}
 			totalFiles++
 			transformed := TransformMCPToCLI(body)
 			bodyChanged := transformed != body
@@ -333,13 +369,13 @@ func TestTransformRealPromptAndSkillFiles(t *testing.T) {
 				untransformed = append(untransformed, name)
 				continue
 			}
-		withMatches++
-		for _, tc := range mustTransform {
-			if strings.Contains(body, tc.pattern) && !strings.Contains(transformed, tc.want) {
-				t.Logf("%s: pattern %q not transformed to %q (regex limitation — nested/array value)",
-					name, tc.pattern, tc.want)
+			withMatches++
+			for _, tc := range mustTransform {
+				if strings.Contains(body, tc.pattern) && !strings.Contains(transformed, tc.want) {
+					t.Logf("%s: pattern %q not transformed to %q (regex limitation — nested/array value)",
+						name, tc.pattern, tc.want)
+				}
 			}
-		}
 			// Detect patterns with nested objects/arrays that the regex parser
 			// cannot flatten — these need manual standardization or a deeper parser.
 			nestedRe := regexp.MustCompile(`[a-zA-Z_][a-zA-Z0-9_-]*\(\{\s*[^}]*[\[{][^}]*\}\s*[^}]*\}`)
@@ -417,4 +453,128 @@ var transformablePattern = func() *regexp.Regexp {
 
 func hasTransformablePattern(body string) bool {
 	return transformablePattern.MatchString(body)
+}
+
+func withCliPrefix(t *testing.T, prefix string) {
+	t.Helper()
+	old := mcpcfg.Get()
+	t.Cleanup(func() { mcpcfg.Config.Store(old) })
+	cfg := *old
+	cfg.CliModePrefix = prefix
+	mcpcfg.Config.Store(&cfg)
+}
+
+func TestCLIToolCustomPrefix(t *testing.T) {
+	withCliPrefix(t, "zn-")
+	if got := CLITool("codegraph"); got != "zn-codegraph" {
+		t.Errorf("CLITool(codegraph) = %q, want zn-codegraph", got)
+	}
+	if got := CLITool("skill"); got != "zn-skill" {
+		t.Errorf("CLITool(skill) = %q, want zn-skill", got)
+	}
+	if got := CLITool("nonexistent"); got != "zn-nonexistent" {
+		t.Errorf("CLITool(nonexistent) = %q, want zn-nonexistent", got)
+	}
+}
+
+func TestTransformCustomPrefix(t *testing.T) {
+	withCliPrefix(t, "zn-")
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "functional notation",
+			in:   "Use `codegraph({ action: 'files' })` to list files.",
+			want: "Use `zn-codegraph --action files` to list files.",
+		},
+		{
+			name: "MCP tool backtick reference",
+			in:   "Use MCP `codegraph` to inspect.",
+			want: "Use `zn-codegraph` to inspect.",
+		},
+		{
+			name: "MCP tool bare reference",
+			in:   "Use the MCP codegraph tool.",
+			want: "Use the zn-codegraph CLI.",
+		},
+		{
+			name: "MCP shell reference",
+			in:   "Always use the MCP `codegraph` for indexing.",
+			want: "Always use the `zn-codegraph` CLI for indexing.",
+		},
+		{
+			name: "skill activation",
+			in:   "Activate MCP skill id=grill-me and interview me.",
+			want: "Activate skill id=grill-me via `zn-skill --action get --id=grill-me` and interview me.",
+		},
+		{
+			name: "MCP Tool skill reference",
+			in:   "Please use MCP Tool skill id=grill-me",
+			want: "Please use `zn-skill --action get --id=grill-me",
+		},
+		{
+			name: "inline skill id backticks",
+			in:   "Use `skill id=grill-me` to proceed.",
+			want: "Use `zn-skill --action get --id=grill-me` to proceed.",
+		},
+		{
+			name: "bare functional notation",
+			in:   "codegraph({ action: 'files' })",
+			want: "zn-codegraph --action files",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := TransformMCPToCLI(tc.in)
+			if got != tc.want {
+				t.Errorf("TransformMCPToCLI(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTransformCustomPrefixIdempotent(t *testing.T) {
+	withCliPrefix(t, "zn-")
+	in := "Use `zn-codegraph --action files` to list files."
+	got := TransformMCPToCLI(in)
+	if got != in {
+		t.Errorf("already-CLI custom-prefix text should pass through unchanged, got %q", got)
+	}
+}
+
+func TestTransformCustomPrefixSkipsLegacyCLI(t *testing.T) {
+	// Text already transformed under the default prefix must stay unchanged
+	// after the config is switched to a custom prefix (no double-transform).
+	withCliPrefix(t, "zn-")
+	in := "Use `zen-codegraph --action files` to list files."
+	got := TransformMCPToCLI(in)
+	if got != in {
+		t.Errorf("legacy-prefix CLI text should pass through unchanged, got %q", got)
+	}
+}
+
+func TestResolvePromptCustomPrefix(t *testing.T) {
+	dir := setupSkills(t)
+	mcpcfg.ProjectRoot = dir
+	oldCfg := mcpcfg.Get()
+	defer func() { mcpcfg.Config.Store(oldCfg) }()
+
+	cfg := *oldCfg
+	cfg.Mcp2Cli = true
+	cfg.CliModePrefix = "zn-"
+	mcpcfg.Config.Store(&cfg)
+
+	p := PromptDefinition{
+		Name:     "test",
+		Template: "Run `codegraph({ action: 'files' })`.",
+	}
+	result, err := ResolvePrompt(p, nil, "/ws")
+	if err != nil {
+		t.Fatalf("ResolvePrompt() error = %v", err)
+	}
+	if !strings.Contains(result, "zn-codegraph --action files") {
+		t.Errorf("expected zn-codegraph --action files in result, got:\n%s", result)
+	}
 }
