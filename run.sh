@@ -48,36 +48,46 @@ src_hash() {
 exec 3>&1 4>&2 5<&0
 
 SERVER_PID=""
+SERVER_DEAD_AT=""
 
 start_server() {
   echo "🚀 Starting ${BIN} ${ARGS[*]}" >&3
-  # Prefer the controlling tty if one exists (handles the case where fd 5
-  # itself came from a pipe rather than a real terminal); fall back to the
-  # preserved original stdin (fd 5) otherwise.
   if [[ -r /dev/tty ]] && [[ -t 0 || -e /dev/tty ]]; then
     "./${BIN}" "${ARGS[@]}" </dev/tty >&3 2>&4 &
   else
     "./${BIN}" "${ARGS[@]}" <&5 >&3 2>&4 &
   fi
   SERVER_PID=$!
+  SERVER_DEAD_AT=""
 }
 
 stop_server() {
   if [[ -n "${SERVER_PID:-}" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
     echo "⏹  Stopping ${BIN} (pid ${SERVER_PID})" >&3
     kill -TERM "$SERVER_PID" 2>/dev/null || true
-    for i in $(seq 1 50); do
+    for i in $(seq 1 30); do
       kill -0 "$SERVER_PID" 2>/dev/null || break
       sleep 0.1
     done
     if kill -0 "$SERVER_PID" 2>/dev/null; then
-      echo "⚠️  ${BIN} did not exit after 5s — sending SIGKILL" >&3
+      echo "⚠️  ${BIN} did not exit after 3s — sending SIGKILL" >&3
       kill -9 "$SERVER_PID" 2>/dev/null || true
-      wait "$SERVER_PID" 2>/dev/null || true
-    else
-      wait "$SERVER_PID" 2>/dev/null || true
+      for i in $(seq 1 20); do
+        kill -0 "$SERVER_PID" 2>/dev/null || break
+        sleep 0.1
+      done
+      if kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo "🚨 ${BIN} is zombie — killing run.sh self" >&3
+        kill -TERM "$$" 2>/dev/null || true
+        sleep 1
+        kill -9 "$$" 2>/dev/null || true
+        return
+      fi
     fi
+    wait "$SERVER_PID" 2>/dev/null || true
   fi
+  SERVER_PID=""
+  SERVER_DEAD_AT=""
 }
 
 build_and_run() {
@@ -121,6 +131,20 @@ build_and_run
 LAST_HASH="$(src_hash)"
 
 while true; do
+  if [[ -n "${SERVER_PID:-}" ]] && ! kill -0 "$SERVER_PID" 2>/dev/null; then
+    if [[ -z "${SERVER_DEAD_AT:-}" ]]; then
+      SERVER_DEAD_AT=$(date +%s)
+      echo "⚠️  ${BIN} died unexpectedly (pid ${SERVER_PID})" >&3
+    else
+      now=$(date +%s)
+      if (( now - SERVER_DEAD_AT > 10 )); then
+        echo "🚨 ${BIN} dead for >10s — killing run.sh" >&3
+        kill -TERM "$$" 2>/dev/null || true
+        sleep 1
+        kill -9 "$$" 2>/dev/null || true
+      fi
+    fi
+  fi
   HASH="$(src_hash)"
   if [[ "$HASH" != "$LAST_HASH" ]]; then
     echo "" >&3

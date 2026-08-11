@@ -190,6 +190,15 @@ func runCommander(r io.Reader, prompt io.Writer) bool {
 		return runCommanderScanner(r, prompt)
 	}
 
+	dupFd, err := syscall.Dup(int(fd))
+	if err != nil {
+		Logf("WARN: failed to dup stdin fd: %v", err)
+		dupFd = -1
+	}
+	if dupFd >= 0 {
+		defer syscall.Close(dupFd)
+	}
+
 	history := []string{}
 	historyIdx := -1
 	var currentLine []byte
@@ -197,8 +206,8 @@ func runCommander(r io.Reader, prompt io.Writer) bool {
 
 	exited := runCommanderLoop(prompt, rawFile, &history, &historyIdx, &currentLine, buf)
 
-	if oldTermios != nil {
-		_ = restoreTerminal(int(fd), oldTermios)
+	if oldTermios != nil && dupFd >= 0 {
+		_ = unix.IoctlSetTermios(dupFd, unix.TCSETS, oldTermios)
 	}
 	return exited
 }
