@@ -43,6 +43,10 @@ func RegisterAllTools(ctx context.Context, srv *mcpserver.MCPServer, reg *toolre
 
 		handler := def.Handler
 		srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			ctx = toolresponse.WithToolContext(ctx, toolresponse.ToolContext{
+				ToolName: def.Name,
+				Params:   req.GetArguments(),
+			})
 			return handler(ctx, req)
 		})
 

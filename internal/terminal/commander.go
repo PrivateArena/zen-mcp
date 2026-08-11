@@ -13,9 +13,10 @@ import (
 	"syscall"
 	"time"
 
-	"zen-mcp/internal/tools"
-
 	mcp "github.com/mark3labs/mcp-go/mcp"
+
+	"zen-mcp/internal/toolresponse"
+	"zen-mcp/internal/tools"
 
 	"golang.org/x/sys/unix"
 )
@@ -418,6 +419,7 @@ func ExecuteTool(name string, args map[string]any) string {
 	}
 
 	ctx := context.Background()
+	ctx = toolresponse.WithToolContext(ctx, toolresponse.ToolContext{ToolName: name, Params: args})
 	req := MakeFakeRequest(args)
 	ws := Ws()
 

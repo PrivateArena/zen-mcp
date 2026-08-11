@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	_ "modernc.org/sqlite"
 
+	"zen-mcp/internal/gatekeeper"
 	"zen-mcp/internal/mcpcfg"
 	"zen-mcp/internal/shared"
 	"zen-mcp/internal/telemetry"
@@ -372,6 +374,109 @@ func TestClientAbortTelemetryFaithful(t *testing.T) {
 	}
 	if !strings.HasPrefix(got[0], "blocker|0|Tool 'blocker' interrupted: client_disconnect_cancel|") {
 		t.Errorf("unexpected row: %q", got[0])
+	}
+}
+
+// TestToolCallRecordsActionTelemetry pins the actions-telemetry faithfulness
+// fix: the production registration boundary (RegisterAllTools) must inject the
+// request ToolContext so that every tools/call carries its action into the
+// telemetry action column. Before the fix, WithToolContext was only applied by
+// the test-only WrapHandlerWithTimeout wrapper, so the action was NULL for
+// nearly all tools (e.g. codegraph: 789 calls but only 4 actionable rows).
+func TestToolCallRecordsActionTelemetry(t *testing.T) {
+	old := mcpcfg.ProjectRoot
+	mcpcfg.ProjectRoot = t.TempDir()
+	t.Cleanup(func() {
+		mcpcfg.ProjectRoot = old
+		_ = telemetry.Close()
+	})
+	_ = telemetry.Close()
+
+	ws := filepath.Join(mcpcfg.ProjectRoot, "workspace")
+	if err := os.MkdirAll(ws, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	reg := toolregistry.Create()
+	gk := gatekeeper.New(shared.NewStore())
+	deps := tools.Deps{
+		Store:                 shared.NewStore(),
+		Reg:                   reg,
+		Gatekeeper:            gk,
+		PendingCollaborations: tools.NewCollaborationRegistry(),
+	}
+	depsWithReg := deps
+	depsWithReg.Reg = reg
+
+	depsRoute := RouteDeps{
+		CreateMCPServer: func(id string) *mcpserver.MCPServer {
+			s := mcpserver.NewMCPServer("zen-tools", "2.4.1",
+				mcpserver.WithToolCapabilities(true),
+				mcpserver.WithResourceCapabilities(false, false),
+				mcpserver.WithPromptCapabilities(false),
+			)
+			if err := RegisterAllTools(context.Background(), s, reg, depsWithReg, ws); err != nil {
+				panic(err)
+			}
+			return s
+		},
+		Registry:              reg,
+		Shared:                shared.NewStore(),
+		PendingCollaborations: tools.NewCollaborationRegistry(),
+		StartTime:             time.Now(),
+		Tag:                   "test",
+	}
+	mux := http.NewServeMux()
+	SetupRoutes(mux, depsRoute)
+
+	do := func(body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader([]byte(body)))
+		r.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, r)
+		return rec
+	}
+	do(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{}}}`)
+
+	res := do(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"skill","arguments":{"action":"list"}}}`)
+	if res.Code != http.StatusOK {
+		t.Fatalf("tools/call status = %d, body = %s", res.Code, res.Body.String())
+	}
+
+	_ = telemetry.Close()
+	d, err := sql.Open("sqlite", "file:"+filepath.Join(mcpcfg.ProjectRoot, "telemetry", "telemetry.db")+"?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	var rows []string
+	q, err := d.Query(`SELECT tool, action, success, error_message FROM tool_calls ORDER BY id`)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer q.Close()
+	for q.Next() {
+		var tool, action string
+		var success int
+		var msg sql.NullString
+		if err := q.Scan(&tool, &action, &success, &msg); err != nil {
+			t.Fatal(err)
+		}
+		rows = append(rows, fmt.Sprintf("%s|%s|%d|%s", tool, action, success, msg.String))
+	}
+	var skillRows []string
+	for _, r := range rows {
+		if strings.HasPrefix(r, "skill|") {
+			skillRows = append(skillRows, r)
+		}
+	}
+	if len(skillRows) == 0 {
+		t.Fatalf("no skill telemetry rows recorded, got %v", rows)
+	}
+	for _, r := range skillRows {
+		if !strings.HasPrefix(r, "skill|list|") {
+			t.Errorf("skill row did not record action 'list': %q", r)
+		}
 	}
 }
 
