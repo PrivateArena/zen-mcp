@@ -278,6 +278,114 @@ func mcpInitializeRequest(id int) []byte {
 	return []byte(`{"jsonrpc":"2.0","id":` + strconv.Itoa(id) + `,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0"}}}`)
 }
 
+func TestPostMCPNoAbortOnNormalCompletion(t *testing.T) {
+	_, mux := testDeps()
+	var mu sync.Mutex
+	aborts := 0
+	SetRequestAbortObserver(func(string, int64, string) {
+		mu.Lock()
+		aborts++
+		mu.Unlock()
+	})
+	t.Cleanup(func() { SetRequestAbortObserver(nil) })
+
+	rec := doRequest(mux, http.MethodPost, "/mcp", mcpInitializeRequest(1), "application/json")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("initialize failed: %d: %s", rec.Code, rec.Body.String())
+	}
+
+	mu.Lock()
+	n := aborts
+	mu.Unlock()
+	if n != 0 {
+		t.Fatalf("abort observer fired %d times on a normally-completing request, want 0", n)
+	}
+}
+
+func TestPostMCPRequestAbortLogged(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	deps := RouteDeps{
+		CreateMCPServer: func(id string) *mcpserver.MCPServer {
+			s := mcpserver.NewMCPServer("zen-tools", "2.4.1",
+				mcpserver.WithToolCapabilities(true),
+				mcpserver.WithResourceCapabilities(false, false),
+				mcpserver.WithPromptCapabilities(false),
+			)
+			s.AddTool(mcp.NewTool("block", mcp.WithString("x")), func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				close(started)
+				<-release
+				return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "done"}}}, nil
+			})
+			return s
+		},
+		Registry:              toolregistry.Create(),
+		Shared:                shared.NewStore(),
+		PendingCollaborations: tools.NewCollaborationRegistry(),
+		StartTime:             time.Now(),
+		Tag:                   "test",
+	}
+	mux := http.NewServeMux()
+	SetupRoutes(mux, deps)
+
+	var mu sync.Mutex
+	aborts := make([]string, 0)
+	SetRequestAbortObserver(func(method string, _ int64, reason string) {
+		if reason == "" {
+			t.Error("abort observer received empty reason")
+		}
+		mu.Lock()
+		aborts = append(aborts, method)
+		mu.Unlock()
+	})
+	t.Cleanup(func() { SetRequestAbortObserver(nil) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	body := []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"block","arguments":{}}}`)
+	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(body)).WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	serveDone := make(chan struct{})
+	go func() {
+		mux.ServeHTTP(rec, req)
+		close(serveDone)
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("blocking handler did not start")
+	}
+	cancel()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := len(aborts)
+		mu.Unlock()
+		if n >= 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	close(release)
+	select {
+	case <-serveDone:
+	case <-time.After(3 * time.Second):
+		t.Fatal("serve did not finish after handler release")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(aborts) != 1 {
+		t.Fatalf("abort observer fired %v, want exactly [tools/call]", aborts)
+	}
+	if aborts[0] != "tools/call" {
+		t.Errorf("abort method = %q, want tools/call", aborts[0])
+	}
+}
+
 func TestMCPInitializeHandshake(t *testing.T) {
 	_, mux := testDeps()
 	rec := doRequest(mux, http.MethodPost, "/mcp", mcpInitializeRequest(1), "application/json")

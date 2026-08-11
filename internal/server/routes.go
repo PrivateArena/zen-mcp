@@ -16,6 +16,7 @@ import (
 
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
+	"zen-mcp/internal/logfilter"
 	"zen-mcp/internal/shared"
 	"zen-mcp/internal/toolregistry"
 	"zen-mcp/internal/tools"
@@ -276,11 +277,51 @@ func (d RouteDeps) postMCP(w http.ResponseWriter, r *http.Request) {
 	handler := d.ServerCache.getOrCreateHandler(logicalID, d.CreateMCPServer, d.Registry)
 	if msg.Method == "tools/list" {
 		bw := toolsListRewriter(w)
-		handler.ServeHTTP(bw, r)
+		serveWithAbortLog(r, msg, handler, bw)
 		_ = bw.finish()
 		return
 	}
+	serveWithAbortLog(r, msg, handler, w)
+}
+
+// serveWithAbortLog runs the streamable MCP handler while watching the client
+// request context. If the client disconnects or cancels before the handler
+// finishes (e.g., Opencode/Kilocode giving up on a slow handshake or tool
+// call), the abort is logged with the method and elapsed duration so
+// client-side timeouts are attributable. It never touches the ResponseWriter
+// itself, so there is no race with the handler's own writes.
+func serveWithAbortLog(r *http.Request, msg rpcMessage, handler *mcpserver.StreamableHTTPServer, w http.ResponseWriter) {
+	start := time.Now()
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-r.Context().Done():
+			select {
+			case <-done:
+				return
+			default:
+				elapsed := time.Since(start).Milliseconds()
+				reason := abortReason(r.Context())
+				logfilter.Errorf("[MCP] CLIENT-ABORT method %q after %dms reason=%s", msg.Method, elapsed, reason)
+				if onRequestAbort != nil {
+					onRequestAbort(msg.Method, elapsed, reason)
+				}
+			}
+		case <-done:
+		}
+	}()
 	handler.ServeHTTP(w, r)
+	close(done)
+}
+
+// onRequestAbort is a test-only observer, invoked after a client-request abort
+// is logged.
+var onRequestAbort func(method string, elapsedMs int64, reason string)
+
+// SetRequestAbortObserver registers a callback invoked whenever an in-flight
+// MCP request is cancelled by the client. Intended for tests; nil by default.
+func SetRequestAbortObserver(fn func(method string, elapsedMs int64, reason string)) {
+	onRequestAbort = fn
 }
 
 // autoDetectWorkspace resolves a workspace root from initialize params, query,

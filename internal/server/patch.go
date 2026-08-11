@@ -87,6 +87,33 @@ func WrapHandlerWithTimeout(name string, inner toolregistry.Handler, getTimeout 
 			logfilter.Errorf("[MCP] TIMER Tool '%s' timed out after %dms (elapsed %dms) — action %q params: %s",
 				name, timeout.Milliseconds(), elapsed, actionLabel, SummarizeParams(params))
 			return toolresponse.WrapErrorWithContext(ctx, name, fmt.Errorf("Tool '%s' timed out after %dms", name, timeout.Milliseconds()), start), nil
+		case <-ctx.Done():
+			elapsed := time.Since(start).Milliseconds()
+			actionLabel := action
+			if actionLabel == "" {
+				actionLabel = "(none)"
+			}
+			reason := abortReason(ctx)
+			logfilter.Errorf("[MCP] CLIENT-ABORT Tool '%s' cancelled after %dms — action %q reason=%s (timeout %dms)",
+				name, elapsed, actionLabel, reason, timeout.Milliseconds())
+			return toolresponse.WrapErrorWithContext(ctx, name, fmt.Errorf("Tool '%s' interrupted: %s", name, reason), start), nil
 		}
+	}
+}
+
+// abortReason classifies why a request context ended: a client disconnect or
+// cancel surfaces as context.Canceled, a configured deadline as
+// DeadlineExceeded, and a WithCancelCause parent may surface a specific cause.
+func abortReason(ctx context.Context) string {
+	if cause := context.Cause(ctx); cause != nil && cause != context.Canceled && cause != context.DeadlineExceeded {
+		return "cause:" + cause.Error()
+	}
+	switch ctx.Err() {
+	case context.DeadlineExceeded:
+		return "deadline_exceeded"
+	case context.Canceled:
+		return "client_disconnect_cancel"
+	default:
+		return "unknown"
 	}
 }

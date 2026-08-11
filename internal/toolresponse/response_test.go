@@ -134,6 +134,84 @@ func TestToolContext(t *testing.T) {
 	}
 }
 
+func TestTimedOutKind(t *testing.T) {
+	cases := []struct {
+		name string
+		data any
+		want string
+	}{
+		{"map hard", map[string]any{"stdout": "x", "timedOut": "hard"}, "hard"},
+		{"map activity", map[string]any{"stdout": "x", "timedOut": "activity"}, "activity"},
+		{"map empty", map[string]any{"stdout": "x", "timedOut": ""}, ""},
+		{"map nil timeout", map[string]any{"stdout": "x", "timedOut": nil}, ""},
+		{"plain map", map[string]any{"a": 1}, ""},
+		{"struct hard", CommandResult{Stdout: "x", TimedOut: "hard"}, "hard"},
+		{"struct ptr activity", &CommandResult{Stdout: "x", TimedOut: "activity"}, "activity"},
+		{"struct no timeout", CommandResult{Stdout: "x"}, ""},
+		{"string payload", "hello", ""},
+	}
+	for _, c := range cases {
+		if got := timedOutKind(c.data); got != c.want {
+			t.Errorf("%s: timedOutKind = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestWrapSuccessLogsExecTimeout(t *testing.T) {
+	setupMCPConfig(t)
+	var got []string
+	SetTimeoutObserver(func(tool, kind string, _ int64) {
+		got = append(got, tool+":"+kind)
+	})
+	t.Cleanup(func() { SetTimeoutObserver(nil) })
+
+	ctx := WithToolContext(context.Background(), ToolContext{ToolName: "shell", Params: map[string]any{"action": "long.task"}})
+	start := time.Now().Add(-3 * time.Minute)
+	res := WrapSuccess(ctx, "shell", map[string]any{
+		"command":  "long task",
+		"stdout":   "partial",
+		"stderr":   "",
+		"exitCode": 0,
+		"aborted":  true,
+		"timedOut": "hard",
+		"timeout":  nil,
+	}, start)
+
+	if len(got) != 1 || got[0] != "shell:hard" {
+		t.Fatalf("timeout observer = %v, want [shell:hard]", got)
+	}
+	if len(res.Content) != 1 {
+		t.Fatalf("expected 1 content item, got %d", len(res.Content))
+	}
+	text := res.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "hard ceiling") {
+		t.Errorf("timeout annotation missing from response: %q", text)
+	}
+}
+
+func TestWrapSuccessNoTimeoutNoObserver(t *testing.T) {
+	setupMCPConfig(t)
+	fired := false
+	SetTimeoutObserver(func(_, _ string, _ int64) { fired = true })
+	t.Cleanup(func() { SetTimeoutObserver(nil) })
+
+	ctx := WithToolContext(context.Background(), ToolContext{ToolName: "shell", Params: map[string]any{}})
+	res := WrapSuccess(ctx, "shell", map[string]any{
+		"command":  "ls",
+		"stdout":   "a\nb",
+		"stderr":   "",
+		"exitCode": 0,
+		"timedOut": nil,
+	}, time.Now())
+
+	if fired {
+		t.Fatal("timeout observer fired for a non-timed-out result")
+	}
+	if len(res.Content) != 1 || res.Content[0].(mcp.TextContent).Text == "" {
+		t.Fatalf("successful result should be rendered unchanged: %+v", res.Content)
+	}
+}
+
 func setupMCPConfig(t *testing.T) {
 	t.Helper()
 	old := mcpcfg.ProjectRoot

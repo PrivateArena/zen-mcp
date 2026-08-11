@@ -103,3 +103,51 @@ func TestWrapHandlerValidationPassesWithValidParams(t *testing.T) {
 		t.Error("valid call should reach inner handler")
 	}
 }
+
+func TestWrapHandlerClientAbort(t *testing.T) {
+	withSuggestionConfig(t, false)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	inner := func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		close(entered)
+		<-ctx.Done()
+		<-release
+		return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "late"}}}, nil
+	}
+	wrapped := WrapHandlerWithTimeout("browser", inner, func(string) time.Duration { return time.Hour })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	type out struct {
+		res *mcp.CallToolResult
+		err error
+	}
+	resultCh := make(chan out, 1)
+	go func() {
+		res, err := wrapped(ctx, makePatchRequest(map[string]any{"action": "navigate"}))
+		resultCh <- out{res, err}
+	}()
+
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("inner handler did not start")
+	}
+	cancel()
+
+	select {
+	case o := <-resultCh:
+		if o.err != nil {
+			t.Fatalf("wrapped returned err: %v", o.err)
+		}
+		if len(o.res.Content) != 1 {
+			t.Fatalf("expected error content, got %d items", len(o.res.Content))
+		}
+		text := o.res.Content[0].(mcp.TextContent).Text
+		if !strings.Contains(text, "interrupted") {
+			t.Errorf("expected interruption error, got: %s", text)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("wrapped did not return on client cancel")
+	}
+	close(release)
+}

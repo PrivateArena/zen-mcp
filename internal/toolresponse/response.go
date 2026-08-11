@@ -282,7 +282,11 @@ func WrapSuccess(ctx context.Context, tool string, data any, start time.Time) *m
 	text := RenderOutput(string(toolCfg.Format), data)
 
 	action := ToolActionFromContext(ctx)
-	_ = telemetry.LogToolCall(tool, action, true, "")
+	if kind := timedOutKind(data); kind != "" {
+		reportCommandTimeout(tool, action, kind, time.Since(start).Milliseconds())
+	} else {
+		_ = telemetry.LogToolCall(tool, action, true, "")
+	}
 
 	bypass := mcpcfg.Get().BypassTools
 	if len(bypass) == 0 {
@@ -297,6 +301,44 @@ func WrapSuccess(ctx context.Context, tool string, data any, start time.Time) *m
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{mcp.TextContent{Type: "text", Text: text}},
 	}
+}
+
+// timedOutKind extracts the exec-level timeout kind ("hard" or "activity")
+// carried by command-style tool results, or "" when the payload is not a
+// timed-out command.
+func timedOutKind(data any) string {
+	if m, ok := data.(map[string]any); ok {
+		if s, ok := m["timedOut"].(string); ok && s != "" {
+			return s
+		}
+	}
+	if cr, ok := asCommandResult(data); ok && cr.TimedOut != "" {
+		return cr.TimedOut
+	}
+	return ""
+}
+
+// reportCommandTimeout logs every exec-level tool timeout on the MCP side and
+// records it in telemetry as a failure so timeouts are visible and queryable.
+func reportCommandTimeout(tool, action, kind string, elapsedMs int64) {
+	actionLabel := action
+	if actionLabel == "" {
+		actionLabel = "(none)"
+	}
+	logfilter.Errorf("[MCP] TIMER Tool '%s' TIMED OUT (%s) after %dms — action %q", tool, kind, elapsedMs, actionLabel)
+	_ = telemetry.LogToolCall(tool, action, false, fmt.Sprintf("timed out (%s) after %dms", kind, elapsedMs))
+	if onCommandTimeout != nil {
+		onCommandTimeout(tool, kind, elapsedMs)
+	}
+}
+
+// onCommandTimeout is a test-only observer, invoked after a timeout is logged.
+var onCommandTimeout func(tool, kind string, elapsedMs int64)
+
+// SetTimeoutObserver registers a callback invoked whenever a tool result
+// carries an exec-level timeout. Intended for tests; nil by default.
+func SetTimeoutObserver(fn func(tool, kind string, elapsedMs int64)) {
+	onCommandTimeout = fn
 }
 
 func WrapError(tool string, err error, start time.Time) *mcp.CallToolResult {
