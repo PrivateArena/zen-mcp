@@ -50,7 +50,14 @@ func HandlePoolAction(ctx context.Context, deps Deps, req mcp.CallToolRequest) *
 		outcome := pooling.GlobalRegistry().LongPoll(ctx, poolID, elapsed)
 		switch outcome.State {
 		case "done":
-			return outcome.Result
+			if outcome.Result == nil {
+				return toolresponse.WrapSuccess(ctx, "pool", map[string]any{
+					"status":  "done",
+					"pool_id": poolID,
+				}, start)
+			}
+			res, _ := outcome.Result.Content[0].(mcp.TextContent)
+			return toolresponse.WrapSuccess(ctx, "pool", res.Text, start)
 		case "running":
 			return toolresponse.WrapSuccess(ctx, "pool", map[string]any{
 				"status":  "running",

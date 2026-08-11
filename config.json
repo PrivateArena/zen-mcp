@@ -190,5 +190,12 @@
       "format": "raw"
     }
   },
-  "chat_output_path": "/tmp/zen-mcp/chat"
+  "chat_output_path": "/tmp/zen-mcp/chat",
+  "pooling": {
+    "enabled": true,
+    "tools": ["shell"],
+    "elapsedMs": 2000,
+    "ttlMinutes": 10,
+    "maxJobs": 32
+  }
 }

@@ -20,14 +20,14 @@ type result struct {
 }
 
 func Wrap(name string, inner toolregistry.Handler) toolregistry.Handler {
-	return WrapWithRegistry(name, inner, Global)
+	return WrapWithRegistry(name, inner, GlobalRegistry)
 }
 
 func WrapWithRegistry(name string, inner toolregistry.Handler, regFn func() *Registry) toolregistry.Handler {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		start := time.Now()
 		cfg := mcpcfg.Get().Pooling
-		if !cfg.Enabled || !toolInList(name, cfg.Tools) {
+		if name == "pool" || !cfg.Enabled || !toolInList(name, cfg.Tools) {
 			return inner(ctx, req)
 		}
 
@@ -76,12 +76,13 @@ func WrapWithRegistry(name string, inner toolregistry.Handler, regFn func() *Reg
 
 		go func() {
 			r := <-ch
+			var res *mcp.CallToolResult
 			if r.err != nil {
-				job.Result = toolresponse.WrapErrorWithContext(innerCtx, name, r.err, start)
+				res = toolresponse.WrapErrorWithContext(innerCtx, name, r.err, start)
 			} else {
-				job.Result = r.res
+				res = r.res
 			}
-			close(job.Done)
+			reg.Complete(id, res)
 		}()
 
 		select {
@@ -92,9 +93,10 @@ func WrapWithRegistry(name string, inner toolregistry.Handler, regFn func() *Reg
 
 		_ = summarize(params)
 		return toolresponse.WrapSuccess(ctx, name, map[string]any{
-			"status":  "running",
-			"pool_id": id,
-			"hint":    "poll via pool tool: {\"action\":\"poll\",\"pool_id\":\"" + id + "\"}",
+			"status":     "running",
+			"pool_id":    id,
+			"elapsed_ms": time.Since(start).Milliseconds(),
+			"hint":       "poll via pool tool: {\"action\":\"poll\",\"pool_id\":\"" + id + "\"}",
 		}, start), nil
 	}
 }

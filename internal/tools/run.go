@@ -24,9 +24,7 @@ func defRun(deps Deps) ToolDef {
 	return ToolDef{
 		Name:  "run",
 		Title: "Code Sandbox",
-		Description: "Run code snippets in isolated temp files. Auto-cleanup. Activity-based timeout.\n" +
-			"Supported: " + strings.Join(langs, ", ") +
-			"\nLong-running jobs (>60s) return {\"status\":\"running\",\"pool_id\":...} — poll with the pool tool (action=\"poll\").",
+		Description: "Run code snippets in isolated temp files. Auto-cleanup. Activity-based timeout.",
 		Schema: jsonSchema(map[string]any{
 			"language":     strEnumProp("Language: "+strings.Join(langs, ", "), langs),
 			"code":         strProp("Code snippet (no escaping)"),
