@@ -223,7 +223,7 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 
 	logfilter.Info(fmt.Sprintf("[MCP] Terminal commander started. Export port: %d.", exportPort))
 	terminal.SetDeps(deps)
-	terminal.StartTerminalCommander()
+	terminal.StartTerminalCommander(shutdownCh)
 
 	<-shutdownCh
 	terminal.WaitTerminalCommander()

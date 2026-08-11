@@ -65,8 +65,18 @@ start_server() {
 stop_server() {
   if [[ -n "${SERVER_PID:-}" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
     echo "⏹  Stopping ${BIN} (pid ${SERVER_PID})" >&3
-    kill "$SERVER_PID" 2>/dev/null || true
-    wait "$SERVER_PID" 2>/dev/null || true
+    kill -TERM "$SERVER_PID" 2>/dev/null || true
+    for i in $(seq 1 50); do
+      kill -0 "$SERVER_PID" 2>/dev/null || break
+      sleep 0.1
+    done
+    if kill -0 "$SERVER_PID" 2>/dev/null; then
+      echo "⚠️  ${BIN} did not exit after 5s — sending SIGKILL" >&3
+      kill -9 "$SERVER_PID" 2>/dev/null || true
+      wait "$SERVER_PID" 2>/dev/null || true
+    else
+      wait "$SERVER_PID" 2>/dev/null || true
+    fi
   fi
 }
 

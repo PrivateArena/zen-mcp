@@ -189,98 +189,18 @@ func runCommander(r io.Reader, prompt io.Writer) bool {
 		Logf("WARN: failed to set raw mode: %v", err)
 		return runCommanderScanner(r, prompt)
 	}
-	defer func() {
-		if err := restoreTerminal(int(fd), oldTermios); err != nil {
-			Logf("WARN: failed to restore terminal: %v", err)
-		}
-	}()
 
 	history := []string{}
 	historyIdx := -1
 	var currentLine []byte
 	buf := make([]byte, 1)
 
-	fmt.Fprint(prompt, "> ")
-	for {
-		n, err := rawFile.Read(buf)
-		if err != nil || n == 0 {
-			fmt.Fprint(prompt, "\r\n")
-			return false
-		}
-		b := buf[0]
+	exited := runCommanderLoop(prompt, rawFile, &history, &historyIdx, &currentLine, buf)
 
-		switch b {
-		case '\r', '\n':
-			line := strings.TrimSpace(string(currentLine))
-			if line == "" {
-				fmt.Fprint(prompt, "\r\n> ")
-				continue
-			}
-			history = append(history, line)
-			historyIdx = len(history)
-			currentLine = nil
-			fmt.Fprint(prompt, "\r\n")
-			oldLogOut := LogOut
-			LogOut = prompt
-			shouldExit := dispatch(line, prompt)
-			LogOut = oldLogOut
-			if shouldExit {
-				return true
-			}
-			fmt.Fprint(prompt, "> ")
-		case 127, 8:
-			if len(currentLine) > 0 {
-				currentLine = currentLine[:len(currentLine)-1]
-				redraw(prompt, currentLine)
-			}
-		case 3:
-			fmt.Fprint(prompt, "\r\n")
-			Logf("Shutting down terminal commander.")
-			return true
-		case 4:
-			if len(currentLine) == 0 {
-				fmt.Fprint(prompt, "\r\n")
-				Logf("Shutting down terminal commander.")
-				return true
-			}
-		case '\x1b':
-			seq := make([]byte, 2)
-			_, err := rawFile.Read(seq)
-			if err != nil {
-				return false
-			}
-			if seq[0] == '[' {
-				switch seq[1] {
-				case 'A':
-					if len(history) == 0 {
-					} else if historyIdx == -1 {
-						historyIdx = len(history) - 1
-						currentLine = []byte(history[historyIdx])
-						redraw(prompt, currentLine)
-					} else if historyIdx > 0 {
-						historyIdx--
-						currentLine = []byte(history[historyIdx])
-						redraw(prompt, currentLine)
-					}
-				case 'B':
-					if historyIdx >= 0 && historyIdx < len(history)-1 {
-						historyIdx++
-						currentLine = []byte(history[historyIdx])
-						redraw(prompt, currentLine)
-					} else if historyIdx >= 0 {
-						historyIdx = -1
-						currentLine = nil
-						redraw(prompt, currentLine)
-					}
-				}
-			}
-		default:
-			if b >= 32 && b <= 126 {
-				currentLine = append(currentLine, b)
-				redraw(prompt, currentLine)
-			}
-		}
+	if oldTermios != nil {
+		_ = restoreTerminal(int(fd), oldTermios)
 	}
+	return exited
 }
 
 // runCommanderScanner handles non-TTY input using bufio.Scanner.
@@ -365,6 +285,92 @@ func setRawMode(fd int) (*unix.Termios, error) {
 	return old, nil
 }
 
+// runCommanderLoop is the raw-mode line REPL loop, split out so that
+// runCommander can restore the terminal before returning.
+func runCommanderLoop(prompt io.Writer, rawFile *os.File, history *[]string, historyIdx *int, currentLine *[]byte, buf []byte) bool {
+	fmt.Fprint(prompt, "> ")
+	for {
+		n, err := rawFile.Read(buf)
+		if err != nil || n == 0 {
+			fmt.Fprint(prompt, "\r\n")
+			return false
+		}
+		b := buf[0]
+
+		switch b {
+		case '\r', '\n':
+			line := strings.TrimSpace(string(*currentLine))
+			if line == "" {
+				fmt.Fprint(prompt, "\r\n> ")
+				continue
+			}
+			*history = append(*history, line)
+			*historyIdx = len(*history)
+			*currentLine = nil
+			fmt.Fprint(prompt, "\r\n")
+			oldLogOut := LogOut
+			LogOut = prompt
+			shouldExit := dispatch(line, prompt)
+			LogOut = oldLogOut
+			if shouldExit {
+				return true
+			}
+			fmt.Fprint(prompt, "> ")
+		case 127, 8:
+			if len(*currentLine) > 0 {
+				*currentLine = (*currentLine)[:len(*currentLine)-1]
+				redraw(prompt, *currentLine)
+			}
+		case 3:
+			fmt.Fprint(prompt, "\r\n")
+			Logf("Shutting down terminal commander.")
+			return true
+		case 4:
+			if len(*currentLine) == 0 {
+				fmt.Fprint(prompt, "\r\n")
+				Logf("Shutting down terminal commander.")
+				return true
+			}
+		case '\x1b':
+			seq := make([]byte, 2)
+			_, err := rawFile.Read(seq)
+			if err != nil {
+				return false
+			}
+			if seq[0] == '[' {
+				switch seq[1] {
+				case 'A':
+					if len(*history) == 0 {
+					} else if *historyIdx == -1 {
+						*historyIdx = len(*history) - 1
+						*currentLine = []byte((*history)[*historyIdx])
+						redraw(prompt, *currentLine)
+					} else if *historyIdx > 0 {
+						*historyIdx--
+						*currentLine = []byte((*history)[*historyIdx])
+						redraw(prompt, *currentLine)
+					}
+				case 'B':
+					if *historyIdx >= 0 && *historyIdx < len(*history)-1 {
+						*historyIdx++
+						*currentLine = []byte((*history)[*historyIdx])
+						redraw(prompt, *currentLine)
+					} else if *historyIdx >= 0 {
+						*historyIdx = -1
+						*currentLine = nil
+						redraw(prompt, *currentLine)
+					}
+				}
+			}
+		default:
+			if b >= 32 && b <= 126 {
+				*currentLine = append(*currentLine, b)
+				redraw(prompt, *currentLine)
+			}
+		}
+	}
+}
+
 // restoreTerminal restores the terminal to its previous settings.
 func restoreTerminal(fd int, old *unix.Termios) error {
 	if old != nil {
@@ -374,22 +380,27 @@ func restoreTerminal(fd int, old *unix.Termios) error {
 }
 
 // StartTerminalCommander launches the REPL in a background goroutine.
-func StartTerminalCommander() {
+// It exits (and signals commanderDone) once shutdownCh is closed, by
+// closing stdin to unblock any pending Read/Scan call.
+func StartTerminalCommander(shutdownCh <-chan struct{}) {
 	commanderOnce.Do(func() {
 		commanderDone = make(chan struct{}, 1)
 		go func() {
-			if runCommander(os.Stdin, os.Stdout) {
+			<-shutdownCh
+			_ = os.Stdin.Close()
+		}()
+		go func() {
+			exited := runCommander(os.Stdin, os.Stdout)
+			if exited {
 				p, err := os.FindProcess(os.Getpid())
 				if err != nil {
 					Logf("WARN: failed to find process for shutdown signal: %v", err)
-					return
-				}
-				if err := p.Signal(syscall.SIGINT); err != nil {
+				} else if err := p.Signal(syscall.SIGINT); err != nil {
 					Logf("WARN: failed to send shutdown signal: %v", err)
-					return
+				} else {
+					time.Sleep(50 * time.Millisecond)
+					_ = p.Signal(syscall.SIGINT)
 				}
-				time.Sleep(50 * time.Millisecond)
-				_ = p.Signal(syscall.SIGINT)
 			}
 			commanderDone <- struct{}{}
 		}()
