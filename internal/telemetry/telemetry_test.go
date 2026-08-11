@@ -1,10 +1,13 @@
 package telemetry
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	_ "modernc.org/sqlite"
 
 	"zen-mcp/internal/mcpcfg"
 )
@@ -75,6 +78,92 @@ func TestTelemetryDisabled(t *testing.T) {
 	if got := QueryTelemetry([]string{"summary"}); !strings.Contains(got, "Total calls: 0") {
 		t.Errorf("disabled telemetry should not record:\n%s", got)
 	}
+}
+
+// TestLogToolCallRecordsDurationMs pins that the duration metric is persisted
+// as a real column (not buried in prose) so timeouts/aborts are queryable.
+func TestLogToolCallRecordsDurationMs(t *testing.T) {
+	setupTempRoot(t)
+	if err := LogToolCall("shell", "", false, "timed out (activity) after 600012ms", 600012); err != nil {
+		t.Fatal(err)
+	}
+	d, err := sql.Open("sqlite", telemetryDSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	var dur sql.NullInt64
+	var msg string
+	if err := d.QueryRow(`SELECT duration_ms, error_message FROM tool_calls WHERE tool='shell'`).Scan(&dur, &msg); err != nil {
+		t.Fatal(err)
+	}
+	if !dur.Valid || dur.Int64 != 600012 {
+		t.Errorf("duration_ms = %v, want 600012", dur)
+	}
+	if !strings.Contains(msg, "activity") {
+		t.Errorf("error_message = %q", msg)
+	}
+}
+
+// TestLogToolCallMigratesExistingSchema pins that a telemetry.db created by an
+// older version (no duration_ms column) is upgraded in place rather than
+// failing, keeping past records and the write path intact.
+func TestLogToolCallMigratesExistingSchema(t *testing.T) {
+	setupTempRoot(t)
+	root := mcpcfg.ProjectRoot
+	dir := filepath.Join(root, "telemetry")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "telemetry.db")+"?_pragma=journal_mode(WAL)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.Exec(`CREATE TABLE tool_calls (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tool TEXT NOT NULL,
+      action TEXT,
+      success INTEGER NOT NULL DEFAULT 1,
+      error_message TEXT,
+      timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+    )`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.Exec(`INSERT INTO tool_calls (tool, action, success, error_message) VALUES ('browser','navigate',0,'pre-existing failure')`); err != nil {
+		t.Fatal(err)
+	}
+	_ = old.Close()
+	_ = Close() // reset cached handle so getDb re-opens the migrated file
+
+	if err := LogToolCall("shell", "", false, "client abort after 292621ms", 292621); err != nil {
+		t.Fatal(err)
+	}
+
+	d, err := sql.Open("sqlite", telemetryDSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	var count int
+	if err := d.QueryRow(`SELECT COUNT(*) FROM tool_calls`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Errorf("rows = %d, want 2 (pre-existing + new)", count)
+	}
+	var dur sql.NullInt64
+	var msg string
+	if err := d.QueryRow(`SELECT duration_ms, error_message FROM tool_calls WHERE tool='shell'`).Scan(&dur, &msg); err != nil {
+		t.Fatalf("duration_ms column missing/read failed: %v", err)
+	}
+	if !dur.Valid || dur.Int64 != 292621 {
+		t.Errorf("duration_ms = %v, want 292621", dur)
+	}
+}
+
+func telemetryDSN(t *testing.T) string {
+	t.Helper()
+	return "file:" + filepath.Join(mcpcfg.ProjectRoot, "telemetry", "telemetry.db") + "?mode=ro"
 }
 
 func TestEnableDisableToggles(t *testing.T) {

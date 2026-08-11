@@ -3,11 +3,13 @@ package server
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,9 +18,13 @@ import (
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
+	_ "modernc.org/sqlite"
 
+	"zen-mcp/internal/mcpcfg"
 	"zen-mcp/internal/shared"
+	"zen-mcp/internal/telemetry"
 	"zen-mcp/internal/toolregistry"
+	"zen-mcp/internal/toolresponse"
 	"zen-mcp/internal/tools"
 )
 
@@ -171,6 +177,201 @@ func TestGetMcpReturns405WithAllowHeader(t *testing.T) {
 	}
 	if allow := rec.Header().Get("Allow"); allow != "POST" {
 		t.Errorf("Allow header = %q, want POST", allow)
+	}
+}
+
+// TestClientDisconnectReachesWrappedHandler pins that a client disconnect
+// cancels r.Context() and that cancellation propagates through mcp-go
+// (streamable HTTP -> HandleMessage) into WrapHandlerWithTimeout's ctx.Done
+// branch, so a client-side deadline surfaces as an "interrupted" tool result
+// instead of the handler running to completion against a dead connection.
+func TestClientDisconnectReachesWrappedHandler(t *testing.T) {
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	inner := func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		close(entered)
+		<-ctx.Done()
+		<-release
+		return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "late"}}}, nil
+	}
+	wrapped := WrapHandlerWithTimeout("blocker", inner, func(string) time.Duration { return time.Hour })
+
+	deps := RouteDeps{
+		CreateMCPServer: func(id string) *mcpserver.MCPServer {
+			s := mcpserver.NewMCPServer("zen-tools", "2.4.1",
+				mcpserver.WithToolCapabilities(true),
+				mcpserver.WithResourceCapabilities(false, false),
+				mcpserver.WithPromptCapabilities(false),
+			)
+			tool := mcp.NewTool("blocker", mcp.WithString("x"))
+			s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				return wrapped(ctx, req)
+			})
+			return s
+		},
+		Registry:              toolregistry.Create(),
+		Shared:                shared.NewStore(),
+		PendingCollaborations: tools.NewCollaborationRegistry(),
+		StartTime:             time.Now(),
+		Tag:                   "test",
+	}
+	mux := http.NewServeMux()
+	SetupRoutes(mux, deps)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	defer cancel()
+	body := []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"blocker","arguments":{"x":"y"}}}`)
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/mcp", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(ctx)
+
+	clientDone := make(chan error, 1)
+	go func() {
+		_, err := ts.Client().Do(req)
+		clientDone <- err
+	}()
+
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("wrapped handler did not start")
+	}
+
+	select {
+	case err := <-clientDone:
+		t.Logf("client saw error after deadline: %v", err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("client request did not return after its own deadline")
+	}
+
+	close(release)
+	time.Sleep(200 * time.Millisecond)
+}
+
+// TestClientAbortTelemetryFaithful pins the whole faithfulness fix: when a
+// client aborts a long tool call, telemetry receives EXACTLY ONE failure row
+// for the client-visible abort (with a real duration_ms metric), and the
+// orphaned background handler's later result must NOT emit a second row.
+func TestClientAbortTelemetryFaithful(t *testing.T) {
+	// Isolate telemetry to a temp dir; reset any cached DB handle first.
+	old := mcpcfg.ProjectRoot
+	mcpcfg.ProjectRoot = t.TempDir()
+	t.Cleanup(func() {
+		mcpcfg.ProjectRoot = old
+		_ = telemetry.Close()
+	})
+	_ = telemetry.Close()
+
+	started := make(chan struct{})
+	inner := func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		select {
+		case <-started:
+		default:
+			close(started)
+		}
+		// Long, ctx-agnostic work (mirrors HandleShellAction -> exec.Run).
+		time.Sleep(800 * time.Millisecond)
+		return toolresponse.WrapSuccess(ctx, "blocker", map[string]any{
+			"command":  "sleep 900",
+			"stdout":   "partial",
+			"stderr":   "",
+			"exitCode": 0,
+			"timedOut": "hard",
+			"timeout":  nil,
+		}, time.Now()), nil
+	}
+	wrapped := WrapHandlerWithTimeout("blocker", inner, func(string) time.Duration { return time.Hour })
+
+	deps := RouteDeps{
+		CreateMCPServer: func(id string) *mcpserver.MCPServer {
+			s := mcpserver.NewMCPServer("zen-tools", "2.4.1",
+				mcpserver.WithToolCapabilities(true),
+				mcpserver.WithResourceCapabilities(false, false),
+				mcpserver.WithPromptCapabilities(false),
+			)
+			s.AddTool(mcp.NewTool("blocker", mcp.WithString("x")), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				return wrapped(ctx, req)
+			})
+			return s
+		},
+		Registry:              toolregistry.Create(),
+		Shared:                shared.NewStore(),
+		PendingCollaborations: tools.NewCollaborationRegistry(),
+		StartTime:             time.Now(),
+		Tag:                   "test",
+	}
+	mux := http.NewServeMux()
+	SetupRoutes(mux, deps)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/mcp", bytes.NewReader(
+		[]byte(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"blocker","arguments":{"x":"y"}}}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(ctx)
+
+	clientDone := make(chan error, 1)
+	go func() {
+		_, err := ts.Client().Do(req)
+		clientDone <- err
+	}()
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("blocker handler did not start")
+	}
+	select {
+	case err := <-clientDone:
+		if err == nil {
+			t.Log("client call surfaced a response before cancel?")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("client did not abort after its own deadline")
+	}
+	// Let the orphaned background handler finish so suppression is exercised.
+	time.Sleep(900 * time.Millisecond)
+
+	_ = telemetry.Close()
+	d, err := sql.Open("sqlite", "file:"+filepath.Join(mcpcfg.ProjectRoot, "telemetry", "telemetry.db")+"?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	rows, err := d.Query(`SELECT tool, success, error_message, duration_ms FROM tool_calls ORDER BY id`)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer rows.Close()
+	var got []string
+	for rows.Next() {
+		var tool string
+		var success int
+		var msg sql.NullString
+		var dur sql.NullInt64
+		if err := rows.Scan(&tool, &success, &msg, &dur); err != nil {
+			t.Fatal(err)
+		}
+		durStr := "<nil>"
+		if dur.Valid {
+			durStr = strconv.FormatInt(dur.Int64, 10)
+		}
+		got = append(got, fmt.Sprintf("%s|%d|%s|%s", tool, success, msg.String, durStr))
+	}
+	if len(got) != 1 {
+		t.Fatalf("telemetry rows = %v, want exactly 1 (abort), got %d", got, len(got))
+	}
+	if !strings.HasPrefix(got[0], "blocker|0|Tool 'blocker' interrupted: client_disconnect_cancel|") {
+		t.Errorf("unexpected row: %q", got[0])
 	}
 }
 

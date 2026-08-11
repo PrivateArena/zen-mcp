@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"zen-mcp/internal/logfilter"
 	"zen-mcp/internal/mcpcfg"
 )
 
@@ -46,6 +48,7 @@ func getDb() (*sql.DB, error) {
 		_ = conn.Close()
 		return nil, err
 	}
+	ensureColumn(conn, "tool_calls", "duration_ms", "INTEGER")
 	if _, err := conn.Exec(`CREATE INDEX IF NOT EXISTS idx_telemetry_tool ON tool_calls(tool)`); err != nil {
 		_ = conn.Close()
 		return nil, err
@@ -58,12 +61,37 @@ func getDb() (*sql.DB, error) {
 	return db, nil
 }
 
-func LogToolCall(tool string, action string, success bool, errorMessage string) error {
+// ensureColumn adds a column to an existing table when missing. Missing columns
+// are a metadata change only; old rows keep NULL.
+func ensureColumn(conn *sql.DB, table, name, typ string) {
+	rows, err := conn.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var cname, ctype string
+		var notnull, pk int
+		var dflt any
+		if err := rows.Scan(&cid, &cname, &ctype, &notnull, &dflt, &pk); err == nil && cname == name {
+			return
+		}
+	}
+	_, _ = conn.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + name + ` ` + typ)
+}
+
+// LogToolCall records one tool invocation. durationMs is the wall-clock time
+// the call took (or the elapsed time at an abort/timeout); 0 records NULL.
+// A failed write is retried once for transient SQLite lock errors and is
+// otherwise surfaced to the logfilter error channel — never silently dropped.
+func LogToolCall(tool string, action string, success bool, errorMessage string, durationMs ...int64) error {
 	if c := mcpcfg.Get(); c != nil && !c.TelemetryEnabled {
 		return nil
 	}
 	d, err := getDb()
 	if err != nil {
+		logfilter.Errorf("[TELEMETRY] write failed to open DB: %v", err)
 		return err
 	}
 	s := 0
@@ -78,9 +106,35 @@ func LogToolCall(tool string, action string, success bool, errorMessage string) 
 	if errorMessage != "" {
 		errArg = errorMessage
 	}
-	_, err = d.Exec(`INSERT INTO tool_calls (tool, action, success, error_message, timestamp) VALUES (?, ?, ?, ?, datetime('now'))`,
-		tool, actionArg, s, errArg)
+	var durArg any
+	if len(durationMs) > 0 && durationMs[0] > 0 {
+		durArg = durationMs[0]
+	}
+	insert := func() error {
+		_, err := d.Exec(`INSERT INTO tool_calls (tool, action, success, error_message, duration_ms, timestamp) VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+			tool, actionArg, s, errArg, durArg)
+		return err
+	}
+	if err := insert(); err == nil {
+		return nil
+	} else if isBusy(err) {
+		// Retry once: transient "database is locked" under concurrent writers.
+		err = insert()
+	}
+	if err != nil {
+		logfilter.Errorf("[TELEMETRY] write failed for tool %q: %v", tool, err)
+	}
 	return err
+}
+
+func isBusy(err error) bool {
+	var sqlErr interface{ Error() string }
+	ok := errors.As(err, &sqlErr)
+	if !ok {
+		return false
+	}
+	msg := sqlErr.Error()
+	return strings.Contains(msg, "database is locked") || strings.Contains(msg, "busy") || strings.Contains(msg, "SQLITE_BUSY")
 }
 
 func QueryTelemetry(args []string) string {

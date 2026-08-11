@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
@@ -248,6 +249,25 @@ func ToolActionFromContext(ctx context.Context) string {
 	return ""
 }
 
+// ---- Orphan flag (abandoned tool calls) ----
+
+type orphanFlagKey struct{}
+
+// MarkWithOrphanFlag attaches a flag that records whether the tool call was
+// abandoned (client abort or server timeout) before the handler returned. The
+// handler goroutine may still be running in the background; result wrapping in
+// that goroutine must not emit telemetry or error logs for a call the client
+// never observed.
+func MarkWithOrphanFlag(ctx context.Context, flag *atomic.Bool) context.Context {
+	return context.WithValue(ctx, orphanFlagKey{}, flag)
+}
+
+// isOrphaned reports whether the tool call was abandoned before it completed.
+func isOrphaned(ctx context.Context) bool {
+	flag, ok := ctx.Value(orphanFlagKey{}).(*atomic.Bool)
+	return ok && flag.Load()
+}
+
 // ---- Schema registry (mirrors toolSchemas Map in TS) ----
 
 var (
@@ -282,10 +302,10 @@ func WrapSuccess(ctx context.Context, tool string, data any, start time.Time) *m
 	text := RenderOutput(string(toolCfg.Format), data)
 
 	action := ToolActionFromContext(ctx)
-	if kind := timedOutKind(data); kind != "" {
+	if kind := timedOutKind(data); kind != "" && !isOrphaned(ctx) {
 		reportCommandTimeout(tool, action, kind, time.Since(start).Milliseconds())
-	} else {
-		_ = telemetry.LogToolCall(tool, action, true, "")
+	} else if !isOrphaned(ctx) {
+		_ = telemetry.LogToolCall(tool, action, true, "", time.Since(start).Milliseconds())
 	}
 
 	bypass := mcpcfg.Get().BypassTools
@@ -326,7 +346,7 @@ func reportCommandTimeout(tool, action, kind string, elapsedMs int64) {
 		actionLabel = "(none)"
 	}
 	logfilter.Errorf("[MCP] TIMER Tool '%s' TIMED OUT (%s) after %dms — action %q", tool, kind, elapsedMs, actionLabel)
-	_ = telemetry.LogToolCall(tool, action, false, fmt.Sprintf("timed out (%s) after %dms", kind, elapsedMs))
+	_ = telemetry.LogToolCall(tool, action, false, fmt.Sprintf("timed out (%s) after %dms", kind, elapsedMs), elapsedMs)
 	if onCommandTimeout != nil {
 		onCommandTimeout(tool, kind, elapsedMs)
 	}
@@ -353,10 +373,11 @@ func wrapErrorCtx(ctx context.Context, tool string, err error, start time.Time) 
 	errorMessage := err.Error()
 	duration := time.Since(start).Milliseconds()
 
-	logfilter.Errorf("[%s] FAILED after %dms: %s", tool, duration, errorMessage)
-
 	action := ToolActionFromContext(ctx)
-	_ = telemetry.LogToolCall(tool, action, false, errorMessage)
+	if !isOrphaned(ctx) {
+		logfilter.Errorf("[%s] FAILED after %dms: %s", tool, duration, errorMessage)
+		_ = telemetry.LogToolCall(tool, action, false, errorMessage, duration)
+	}
 
 	schema := GetToolSchema(tool)
 	stackTrace := errorStack(err)

@@ -18,6 +18,7 @@ import (
 
 	"zen-mcp/internal/logfilter"
 	"zen-mcp/internal/shared"
+	"zen-mcp/internal/telemetry"
 	"zen-mcp/internal/toolregistry"
 	"zen-mcp/internal/tools"
 )
@@ -303,6 +304,14 @@ func serveWithAbortLog(r *http.Request, msg rpcMessage, handler *mcpserver.Strea
 				elapsed := time.Since(start).Milliseconds()
 				reason := abortReason(r.Context())
 				logfilter.Errorf("[MCP] CLIENT-ABORT method %q after %dms reason=%s", msg.Method, elapsed, reason)
+				// tools/call aborts are recorded at the tool-handler level
+				// (WrapHandlerWithTimeout), which carries tool + action. Every
+				// other MCP method aborted mid-handshake is recorded here so no
+				// client-side timeout is invisible to telemetry.
+				if msg.Method != "tools/call" {
+					_ = telemetry.LogToolCall(reqTool(msg), "", false,
+						fmt.Sprintf("client abort after %dms: %s", elapsed, reason), elapsed)
+				}
 				if onRequestAbort != nil {
 					onRequestAbort(msg.Method, elapsed, reason)
 				}
@@ -312,6 +321,17 @@ func serveWithAbortLog(r *http.Request, msg rpcMessage, handler *mcpserver.Strea
 	}()
 	handler.ServeHTTP(w, r)
 	close(done)
+}
+
+// reqTool extracts a tool name from a tools/call message body, empty otherwise.
+func reqTool(msg rpcMessage) string {
+	if msg.Method != "tools/call" {
+		return msg.Method
+	}
+	if name, ok := msg.Params["name"].(string); ok {
+		return name
+	}
+	return "tools/call"
 }
 
 // onRequestAbort is a test-only observer, invoked after a client-request abort

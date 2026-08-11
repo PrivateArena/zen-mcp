@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -209,6 +210,71 @@ func TestWrapSuccessNoTimeoutNoObserver(t *testing.T) {
 	}
 	if len(res.Content) != 1 || res.Content[0].(mcp.TextContent).Text == "" {
 		t.Fatalf("successful result should be rendered unchanged: %+v", res.Content)
+	}
+}
+
+func TestOrphanFlagSemantics(t *testing.T) {
+	flag := new(atomic.Bool)
+	ctx := MarkWithOrphanFlag(context.Background(), flag)
+	if isOrphaned(ctx) {
+		t.Error("fresh orphan flag should be false")
+	}
+	flag.Store(true)
+	if !isOrphaned(ctx) {
+		t.Error("flag should reflect the stored value")
+	}
+	if isOrphaned(context.Background()) {
+		t.Error("plain context must not be orphaned")
+	}
+}
+
+func TestWrapSuccessOrphanedSuppressesTimeoutEvent(t *testing.T) {
+	setupMCPConfig(t)
+	fired := false
+	SetTimeoutObserver(func(_, _ string, _ int64) { fired = true })
+	t.Cleanup(func() { SetTimeoutObserver(nil) })
+
+	flag := new(atomic.Bool)
+	flag.Store(true)
+	ctx := WithToolContext(MarkWithOrphanFlag(context.Background(), flag),
+		ToolContext{ToolName: "shell", Params: map[string]any{"action": "run"}})
+
+	res := WrapSuccess(ctx, "shell", map[string]any{
+		"command":  "long task",
+		"stdout":   "partial",
+		"stderr":   "",
+		"exitCode": 0,
+		"timedOut": "hard",
+		"timeout":  nil,
+	}, time.Now())
+
+	if fired {
+		t.Fatal("timeout observer fired for an orphaned (already-abandoned) result")
+	}
+	if len(res.Content) != 1 {
+		t.Fatalf("expected rendered content, got %d items", len(res.Content))
+	}
+	if !strings.Contains(res.Content[0].(mcp.TextContent).Text, "hard ceiling") {
+		t.Errorf("orphaned result should still render the timeout annotation")
+	}
+}
+
+func TestWrapSuccessOrphanedSuppressesSuccessEvent(t *testing.T) {
+	setupMCPConfig(t)
+	fired := false
+	SetTimeoutObserver(func(_, _ string, _ int64) { fired = true })
+	t.Cleanup(func() { SetTimeoutObserver(nil) })
+
+	flag := new(atomic.Bool)
+	flag.Store(true)
+	ctx := WithToolContext(MarkWithOrphanFlag(context.Background(), flag),
+		ToolContext{ToolName: "shell", Params: map[string]any{}})
+	res := WrapSuccess(ctx, "shell", "rendered", time.Now())
+	if fired {
+		t.Fatal("timeout observer must not fire on a plain orphaned success")
+	}
+	if len(res.Content) != 1 || res.Content[0].(mcp.TextContent).Text != "rendered" {
+		t.Fatalf("orphaned success should still render: %+v", res.Content)
 	}
 }
 

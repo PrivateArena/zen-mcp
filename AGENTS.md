@@ -8,4 +8,4 @@ The MCP server runs in **stateless mode** (`internal/server/routes.go:162`). It 
 
 The server auto-restarts via `.air.toml` (if present). Manual restart is not needed during development.
 
-[FORBIDDEN] DO NOT KILL THE SERVER, JUST EDIT CODE AND IT WILL RESTART.
+[FORBIDDEN] DO NOT KILL THE SERVER, JUST EDIT CODE AND IT WILL RESTART. DO NOT ASSUME THAT THE SERVER FAIL TO RESTART/COMPILE, IF THE CODE IS CORRECT IT ALWAYS RECOMPILE WITH FRESH BINARY.

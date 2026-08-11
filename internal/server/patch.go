@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
@@ -42,6 +43,8 @@ func WrapHandlerWithTimeout(name string, inner toolregistry.Handler, getTimeout 
 		action, _ := params["action"].(string)
 
 		ctx = toolresponse.WithToolContext(ctx, toolresponse.ToolContext{ToolName: name, Params: params})
+		orphaned := new(atomic.Bool)
+		ctx = toolresponse.MarkWithOrphanFlag(ctx, orphaned)
 
 		if action != "" && mcpcfg.Get().ToolSuggestionsEnabled {
 			res := toolsuggestions.ValidateToolCall(name, action, params, toolresponse.GetToolSchema(name))
@@ -86,7 +89,12 @@ func WrapHandlerWithTimeout(name string, inner toolregistry.Handler, getTimeout 
 			}
 			logfilter.Errorf("[MCP] TIMER Tool '%s' timed out after %dms (elapsed %dms) — action %q params: %s",
 				name, timeout.Milliseconds(), elapsed, actionLabel, SummarizeParams(params))
-			return toolresponse.WrapErrorWithContext(ctx, name, fmt.Errorf("Tool '%s' timed out after %dms", name, timeout.Milliseconds()), start), nil
+			// Record the timeout error first (orphan must be false so the record lands),
+			// then mark the still-running handler goroutine as abandoned so its
+			// eventual result does not emit a second, client-visible telemetry row.
+			res := toolresponse.WrapErrorWithContext(ctx, name, fmt.Errorf("Tool '%s' timed out after %dms", name, timeout.Milliseconds()), start)
+			orphaned.Store(true)
+			return res, nil
 		case <-ctx.Done():
 			elapsed := time.Since(start).Milliseconds()
 			actionLabel := action
@@ -96,7 +104,9 @@ func WrapHandlerWithTimeout(name string, inner toolregistry.Handler, getTimeout 
 			reason := abortReason(ctx)
 			logfilter.Errorf("[MCP] CLIENT-ABORT Tool '%s' cancelled after %dms — action %q reason=%s (timeout %dms)",
 				name, elapsed, actionLabel, reason, timeout.Milliseconds())
-			return toolresponse.WrapErrorWithContext(ctx, name, fmt.Errorf("Tool '%s' interrupted: %s", name, reason), start), nil
+			res := toolresponse.WrapErrorWithContext(ctx, name, fmt.Errorf("Tool '%s' interrupted: %s", name, reason), start)
+			orphaned.Store(true)
+			return res, nil
 		}
 	}
 }
