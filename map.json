@@ -1,4 +1,15 @@
 {
+  "/media/jang/home/Deve/zen-contact": {
+    "description": "ZenContact is Kontakt, Heptewerk... sample libraries extractor and reconstructor.",
+    "lastVisited": "2026-08-10T13:53:25.781Z",
+    "scopes": {
+      "reconstruct": [
+        "pkg/reconstruct",
+        "KONTAKT_RECONSTRUCT_SKILL.md",
+        "reconstruct_profiles"
+      ]
+    }
+  },
   "/media/jang/home/Deve/worldproxy/zendes/zen-webserver": {
     "description": "ZenServer is multi-purpose webserver that hosts the ZenECO system (ZenNote whiteboard note taking app, ZenRAG) and can multiply itself.",
     "lastVisited": "2026-08-09T15:57:27.515Z",
@@ -17,6 +28,7 @@
     }
   },
   "/media/jang/home/Deve/zen-mcp": {
+    "description": "ZenMCP is multi-purpose MCP server designed for ZenECO system.",
     "lastVisited": "2026-08-09T13:55:56.616Z",
     "scopes": {
       "workspace": [
@@ -122,19 +134,6 @@
     "description": "SfizzCGO for ZenMIDI DAW.",
     "lastVisited": "2026-07-30T03:01:35.576Z"
   },
-  "/media/jang/home/Deve/web-reader-mcp-master": {
-    "description": "ZenMCP is multi-purpose MCP server designed for ZenECO system.",
-    "lastVisited": "2026-08-05T02:13:08.988Z",
-    "scopes": {
-      "test-scope-xyz": [
-        "src/index.ts",
-        "src/tools/project-memory.ts"
-      ]
-    }
-  },
-  "/media/jang/home/Deve/worldproxy/zendes/zen2/build/bin/config/data/userscripts": {
-    "lastVisited": "2026-06-06T02:33:32.084Z"
-  },
   "/media/jang/home/Deve/zen-bashrc": {
     "description": "bashrc builder.",
     "lastVisited": "2026-07-26T02:45:01.741Z"
@@ -175,17 +174,6 @@
   "/media/jang/home/Deve/zen-clone": {
     "description": "ZenClone is Frontend for rclone.",
     "lastVisited": "2026-07-30T16:09:15.299Z"
-  },
-  "/media/jang/home/Deve/zen-contact": {
-    "description": "ZenContact is Kontakt, Heptewerk... sample libraries extractor and reconstructor.",
-    "lastVisited": "2026-08-04T09:51:21.901Z",
-    "scopes": {
-      "reconstruct": [
-        "pkg/reconstruct",
-        "KONTAKT_RECONSTRUCT_SKILL.md",
-        "reconstruct_profiles"
-      ]
-    }
   },
   "/media/jang/home/Deve/zen-cycle": {
     "description": "ZenCycle is multi-account manager and switcher ultilising symlink.",

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"zen-mcp/internal/bridge"
+	"zen-mcp/internal/logfilter"
 	"zen-mcp/internal/mcpcfg"
 	"zen-mcp/internal/toolresponse"
 	wspkg "zen-mcp/internal/workspace"
@@ -163,39 +164,6 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 	var err error
 
 	switch action {
-	case "start_recording":
-		recSessionId := ""
-		if sid, ok := params["session_id"].(string); ok && sid != "" {
-			recSessionId = sid
-		} else {
-			recSessionId = fmt.Sprintf("rec_%d", time.Now().UnixMilli())
-		}
-		body := map[string]any{
-			"enabled":    true,
-			"domains":    params["domains"],
-			"types":      params["types"],
-			"session_id": recSessionId,
-		}
-		res, err = postJSON(ctx, fmt.Sprintf("http://%s:%d/api/recorder/toggle", mcpcfg.Get().Host, mcpcfg.Get().ProxyPort), body)
-		if err != nil {
-			return toolresponse.WrapErrorWithContext(ctx, "browser", err, start)
-		}
-		if code, ok := res["statusCode"].(float64); ok && code >= 400 {
-			return toolresponse.WrapErrorWithContext(ctx, "browser", fmt.Errorf("Recorder failed: %v", res), start)
-		}
-		return toolresponse.WrapSuccess(ctx, "browser", map[string]any{"message": "Recording started", "session_id": recSessionId}, start)
-
-	case "stop_recording":
-		body := map[string]any{"enabled": false}
-		res, err = postJSON(ctx, fmt.Sprintf("http://%s:%d/api/recorder/toggle", mcpcfg.Get().Host, mcpcfg.Get().ProxyPort), body)
-		if err != nil {
-			return toolresponse.WrapErrorWithContext(ctx, "browser", err, start)
-		}
-		if code, ok := res["statusCode"].(float64); ok && code >= 400 {
-			return toolresponse.WrapErrorWithContext(ctx, "browser", fmt.Errorf("Recorder failed: %v", res), start)
-		}
-		return toolresponse.WrapSuccess(ctx, "browser", map[string]any{"message": "Recording stopped"}, start)
-
 	case "read":
 		if urlStr, ok := bridgeParams["url"].(string); ok && urlStr != "" {
 			if _, err := bridge.CallBridge(ctx, "navigate", map[string]any{"url": urlStr, "new_tab": true}); err != nil {
@@ -478,7 +446,7 @@ func wrapBridgeOutput(ctx context.Context, action string, bridgeParams map[strin
 	}
 
 	logSessionEvent(workspace, "browser", fmt.Sprintf("browser: %s", action), fmt.Sprintf("Params: %v\n\nOutput: %v", bridgeParams, output))
-
+	logfilter.Info(output)
 	return output
 }
 
