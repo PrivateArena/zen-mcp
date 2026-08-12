@@ -1,4 +1,11 @@
 {
+  "/media/jang/home/Deve/zen-ovpn": {
+    "lastVisited": "2026-08-12T08:11:10.553Z"
+  },
+  "/media/jang/home/Deve/zen-board": {
+    "description": "ZenBoard is whiteboard video generator.",
+    "lastVisited": "2026-08-12T06:55:23.811Z"
+  },
   "/media/jang/home/Deve/zen-mcp": {
     "description": "ZenMCP is multi-purpose MCP server designed for ZenECO system.",
     "lastVisited": "2026-08-12T01:07:09.235Z",
@@ -74,9 +81,6 @@
       ]
     }
   },
-  "/media/jang/home/Deve/zen-ovpn": {
-    "lastVisited": "2026-08-09T11:47:15.759Z"
-  },
   "/media/jang/home/Deve/worldproxy/zendes/zen2": {
     "description": "ZenProxy is uBO-like adblock proxy with higher capabilities like Tagging  (from Privoxy), header filtering, download accelerating, proxying, leeching and bandwidth controlling.",
     "lastVisited": "2026-08-08T00:10:28.637Z",
@@ -137,10 +141,6 @@
   "/media/jang/home/Deve/zen-bashrc": {
     "description": "bashrc builder.",
     "lastVisited": "2026-07-26T02:45:01.741Z"
-  },
-  "/media/jang/home/Deve/zen-board": {
-    "description": "ZenBoard is whiteboard video generator.",
-    "lastVisited": "2026-08-04T09:14:29.328Z"
   },
   "/media/jang/home/Deve/zen-cap": {
     "description": "ZenCap is ShareX but smaller, faster, better and run on Linux.",
