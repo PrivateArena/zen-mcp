@@ -4,8 +4,18 @@
 ---
 
 ## SESSION INIT ⚠️ MANDATORY
-Call `workspace <project_dir>` — **HALT until complete.**
+Call `zworkspace -p <project_dir>` — **HALT until complete.**
 Do NOT proceed to any task until both return success.
+
+---
+
+## zTOOLS
+A set of useful tools that are used to solve various tasks in the project: 
+- `zcodegraph`: A tool to analyze and visualize the code structure and dependencies of a project.
+- `zbrowser`: A tool to control the browser and extract information from web pages.
+- `zskill`: Use this instead of harness's `skills`.
+
+> [TIP] Use `-h` to get the help message.
 
 ---
 
@@ -13,8 +23,8 @@ Do NOT proceed to any task until both return success.
 Runs immediately after SESSION INIT, before any task work.
 
 Shell `ls PROJECT_OVERVIEW.md`
-- **Exists** Read it to understand the project architecture  — **HALT until complete.** → skip `map`/`mermaid`. Jump to `codegraph skeletons` + `codegraph related` on entry point only.
-- **Missing** → run full Precision Tunnelling: `files` → `map` → `skeletons` → `related`.
+- **Exists** Read it to understand the project architecture  — **HALT until complete.** → skip `map`/`mermaid`. Jump to `zcodegraph -a skeletons -q <filename/filepath>` + `zcodegraph -a related  -q <filename>` on entry point only.
+- **Missing** → run full Precision Tunnelling: `zcodegraph -a files` → `zcodegraph -a map` → `zcodegraph -a skeletons  -q <filename/filepath>` → `zcodegraph -a related  -q <filename>`.
 
 ---
 
@@ -29,12 +39,6 @@ Label every non-trivial block: `[VERIFIED]` · `[HISTORICAL]` · `[HYPOTHESIS]`
 
 ---
 
-## SHELL EXECUTION
-**MCP shell REQUIRED over built-in `bash_tool`** if connector present — lower token cost, explicit `timeout_ms`.
-Fall back to `bash_tool` only on MCP shell error/absence.
-
----
-
 ## FAILURES
 On any tool failure: retry once with correction applied. If retry fails — **HALT, report last known-good state, wait for instruction**.
 
@@ -42,7 +46,7 @@ On any tool failure: retry once with correction applied. If retry fails — **HA
 
 ## VERIFICATION LADDER
 ```
-1. EXISTS    → codegraph search, or shell ls
+1. EXISTS    → zcodegraph search, or shell ls
 2. UNIT      → test changed unit
 3. INTEGRATE → suite for affected subsystem
 4. BUILD     → syntax check or binary build
@@ -51,18 +55,9 @@ On any tool failure: retry once with correction applied. If retry fails — **HA
 ---
 
 ## EDITING
-1. **Find** — `codegraph` REQUIRED before any file touch. `grep` only if codegraph unavailable.
+1. **Find** — `zcodegraph` REQUIRED before any file touch. `grep` only if codegraph unavailable.
 2. **Read** only target 100-200 lines. Never read whole file.
 3. **Patch** specific lines only. **DO NOT** rewrite entire file unless creating from scratch.
-
----
-
-## Caveman Style
-Adopt Caveman style for prose responses to minimize output tokens:
-- Cut filler, intros, fluff, polite padding, and conversational summaries.
-- Keep technical accuracy 100%. Never omit required details.
-- Express key facts, solutions, and reasoning in ultra-concise, telegram/grunt-style fragments.
-- Keep all code blocks, diffs, terminal commands, file paths, and errors byte-for-byte exact and unmodified.
 
 ---
 
@@ -74,7 +69,7 @@ Adopt Caveman style for prose responses to minimize output tokens:
 5. [IMPORTANT] No hardcoded paths, URLs, or env-specific values, boilerplates.
 6. [FORBIDDEN] DO NOT run `git diff` at the end of the task. It uses too many tokens.
 7. **STRICT ARCHITECTURE RULE** NEVER create generic or ambiguous directories/files (e.g., `misc`, `core`, `utils`, `common`, `helpers`, `stuff`); every module MUST be named strictly after its single, specific domain responsibility.
-8. When using `upload_files` in [zenmcp]`browser action=chat`, **ALWAYS use absolute path**.
+8. When using `upload_files` in `zbrowser -a chat`, **ALWAYS use absolute path**.
 9. Use `mv`/`cp` to move files instead of rewriting.
 10. Always try to write a test everytime you fix or add a feature.
 11. DO NOT clean package cache using `go clean`, `cache clean`, `cache purge`, in 99% case this won't fix any issue.
