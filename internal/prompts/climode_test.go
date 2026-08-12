@@ -152,7 +152,7 @@ func TestTransformTextRefs(t *testing.T) {
 		{
 			name: "MCP Tool skill reference",
 			in:   "Please use MCP Tool skill id=grill-me",
-			want: "Please use `zen-skill --action get --id=grill-me",
+			want: "Please use `zen-skill --action get --id=grill-me`",
 		},
 		{
 			name: "inline skill id backticks",
@@ -512,7 +512,7 @@ func TestTransformCustomPrefix(t *testing.T) {
 		{
 			name: "MCP Tool skill reference",
 			in:   "Please use MCP Tool skill id=grill-me",
-			want: "Please use `zn-skill --action get --id=grill-me",
+			want: "Please use `zn-skill --action get --id=grill-me`",
 		},
 		{
 			name: "inline skill id backticks",

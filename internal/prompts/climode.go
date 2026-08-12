@@ -42,10 +42,10 @@ func init() {
 		},
 		// Rule 8 — MCP Tool skill reference
 		{
-			re:      regexp.MustCompile("Use MCP skill id=skill_id"),
+			re:      regexp.MustCompile("MCP Tool skill id=([a-zA-Z0-9_-]+)"),
 			useFunc: true,
 			replFunc: func(matches []string) string {
-				return "Use `" + CLITool("skill") + " --action get --id=skill_id"
+				return "`" + CLITool("skill") + " --action get --id=" + matches[1] + "`"
 			},
 		},
 		// Rule 9 — Inline skill id backticks
