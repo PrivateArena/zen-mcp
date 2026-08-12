@@ -39,7 +39,7 @@
   ],
   "pooling": {
     "enabled": true,
-    "tools": ["shell"],
+    "tools": ["browser"],
     "elapsedMs": 120000,
     "ttlMinutes": 60,
     "maxJobs": 256
