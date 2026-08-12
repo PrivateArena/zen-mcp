@@ -60,8 +60,8 @@ type Registry struct {
 	mu       sync.Mutex
 	jobs     map[string]*Job
 	counters map[string]int // per-tool incremental counter for ID generation
-	ttl      time.Duration // eviction age from CreatedAt for running/cancelled jobs
-	grace    time.Duration // eviction age from FinishedAt for done jobs
+	ttl      time.Duration  // eviction age from CreatedAt for running/cancelled jobs
+	grace    time.Duration  // eviction age from FinishedAt for done jobs
 	max      int
 }
 

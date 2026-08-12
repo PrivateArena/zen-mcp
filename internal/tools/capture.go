@@ -115,7 +115,6 @@ func (r *CollaborationRegistry) Contains(id string) bool {
 	return ok && e.state == CollabPending
 }
 
-
 func defCapture(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "capture",
