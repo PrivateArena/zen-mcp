@@ -106,7 +106,12 @@ func Wrap(name string, reg *Registry, inner toolregistry.Handler) toolregistry.H
 			"status":    StateRunning,
 			"pool_id":   id,
 			"elapsedMs": time.Since(start).Milliseconds(),
-			"hint":      fmt.Sprintf(`poll: pool("%s",%q)`, "poll", id),
+			"hint": func() string {
+				if mcpcfg.Get().Mcp2Cli {
+					return fmt.Sprintf("Use Shell: zpool -a poll -p %s", id)
+				}
+				return fmt.Sprintf(`Use MCP: pool("poll","%s")`, id)
+			}(),
 		}
 		return toolresponse.WrapSuccess(interimCtx, name, payload, start), nil
 	}

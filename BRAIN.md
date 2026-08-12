@@ -23,7 +23,7 @@ Shell `ls PROJECT_OVERVIEW.md`
 
 ## Shell and zTOOLS
 
-MCP CLI tools, available globally in shell.
+MCP CLI tools, available globally in PATH.
 - `zcodegraph`: Analyze and visualize code structure and dependencies.
 - `zbrowser`: Web automation. **ALWAYS use absolute paths** for `upload_files`.
 - `zskill -a get -i <id>`: Use this instead of harness `skills`.
