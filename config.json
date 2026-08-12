@@ -1,5 +1,5 @@
 {
-  "mcp2cli": false,
+  "mcp2cli": true,
   "climode_prefix": "z",
   "climode_short": true,
   "daemonPort": 31337,

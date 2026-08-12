@@ -1,14 +1,7 @@
 {
-  "/media/jang/home/Deve/zen-ovpn": {
-    "lastVisited": "2026-08-12T08:11:10.553Z"
-  },
-  "/media/jang/home/Deve/zen-board": {
-    "description": "ZenBoard is whiteboard video generator.",
-    "lastVisited": "2026-08-12T06:55:23.811Z"
-  },
   "/media/jang/home/Deve/zen-mcp": {
     "description": "ZenMCP is multi-purpose MCP server designed for ZenECO system.",
-    "lastVisited": "2026-08-12T01:07:09.235Z",
+    "lastVisited": "2026-08-12T13:38:18.465Z",
     "scopes": {
       "browser": [
         "cli/zen-browser",
@@ -52,6 +45,13 @@
         "internal/tools/workspace.go"
       ]
     }
+  },
+  "/media/jang/home/Deve/zen-ovpn": {
+    "lastVisited": "2026-08-12T08:11:10.553Z"
+  },
+  "/media/jang/home/Deve/zen-board": {
+    "description": "ZenBoard is whiteboard video generator.",
+    "lastVisited": "2026-08-12T06:55:23.811Z"
   },
   "/media/jang/home/Deve/zen-contact": {
     "description": "ZenContact is Kontakt, Heptewerk... sample libraries extractor and reconstructor.",
