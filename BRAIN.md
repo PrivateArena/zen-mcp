@@ -6,19 +6,7 @@
 
 ## SESSION INIT ⚠️ MANDATORY
 
-Shell `zworkspace -p <project_dir>` — **HALT until complete.**
-Do NOT proceed to any task until both return success.
-
----
-
-## zTOOLS
-
-- `zcodegraph`: Analyze and visualize code structure and dependencies.
-- `zbrowser`: Web automation. **ALWAYS use absolute paths** for `upload_files`.
-- `zskill -a get -i <id>`: Use this instead of harness `skills`.
-
-> [TIP] Use `-h` to get help messages.
-> [FORBIDDEN] DO NOT run `git diff` at task completion. DO NOT clear package caches (`go clean`, etc.).
+[IMPORTANT] Shell `zworkspace -p <project_dir>` — **HALT until complete, DO NOT SKIP THIS STEP.**
 
 ---
 
@@ -28,8 +16,20 @@ Runs immediately after SESSION INIT, before any task work.
 
 Shell `ls PROJECT_OVERVIEW.md`
 
-- **Exists** Read it to understand project architecture — **HALT until complete.** → skip `map`/`mermaid`. Jump to `zcodegraph -a skeletons -q <filename/filepath>` + `zcodegraph -a related -q <filename>` on entry point.
-- **Missing** → run full Precision Tunnelling: `zcodegraph -a files` → `zcodegraph -a map` → `zcodegraph -a skeletons -q <filename/filepath>` → `zcodegraph -a related -q <filename>`.
+- **Exists** Read it to understand project architecture — **HALT until complete.** → skip `files`/`map`/`mermaid` and read relevant code lines/files.
+- **Missing** → run full Precision Tunnelling: `zcodegraph -a files` → `zcodegraph -a map` → `zcodegraph -a skeletons -q <filename/filepath>` → `zcodegraph -a related -q <filename>` and read relevant lines/files.
+
+---
+
+## Shell and zTOOLS
+
+MCP CLI tools, available globally in shell.
+- `zcodegraph`: Analyze and visualize code structure and dependencies.
+- `zbrowser`: Web automation. **ALWAYS use absolute paths** for `upload_files`.
+- `zskill -a get -i <id>`: Use this instead of harness `skills`.
+
+> [TIP] Use `-h` to get help messages.
+> [FORBIDDEN] DO NOT run `git diff` at task completion. DO NOT clear package caches (`go clean`, etc.).
 
 ---
 
