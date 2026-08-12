@@ -15,7 +15,7 @@ Do NOT proceed to any task until both return success.
 
 - `zcodegraph`: Analyze and visualize code structure and dependencies.
 - `zbrowser`: Web automation. **ALWAYS use absolute paths** for `upload_files`.
-- `zskill`: Use this instead of harness `skills`.
+- `zskill -a get -i <id>`: Use this instead of harness `skills`.
 
 > [TIP] Use `-h` to get help messages.
 > [FORBIDDEN] DO NOT run `git diff` at task completion. DO NOT clear package caches (`go clean`, etc.).

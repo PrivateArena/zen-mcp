@@ -37,7 +37,7 @@ func newMcpServer(id string, reg *toolregistry.ToolRegistry, deps tools.Deps) *m
 	}
 
 	srv := mcpserver.NewMCPServer(server.ServerName, server.ServerVersion,
-		mcpserver.WithToolCapabilities(true),
+		mcpserver.WithToolCapabilities(!deps.HideTools),
 		mcpserver.WithToolFilter(server.FilterEnabled(reg)),
 		mcpserver.WithResourceCapabilities(true, true),
 		mcpserver.WithPromptCapabilities(false),
@@ -140,6 +140,9 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 	filteredFactory := func(id string) *mcpserver.MCPServer {
 		d := deps
 		d.Reg = filteredReg
+		// mcp2cli mode: the agent-facing MCP server exposes no tools; the CLI
+		// wrappers target the unfiltered server which keeps the full set.
+		d.HideTools = mcpcfg.Get().Mcp2Cli
 		return newMcpServer(id, filteredReg, d)
 	}
 	unfilteredFactory := func(id string) *mcpserver.MCPServer {

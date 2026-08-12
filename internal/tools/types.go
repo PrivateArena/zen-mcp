@@ -13,6 +13,11 @@ type Deps struct {
 	Reg                   *toolregistry.ToolRegistry
 	Gatekeeper            *gatekeeper.Gatekeeper
 	PendingCollaborations *CollaborationRegistry
+	// HideTools marks the agent-facing MCP server in mcp2cli mode: server/tools.go
+	// then registers no tools onto the MCP server and tracks every tool as
+	// disabled, so the agent never sees tool schemas. The CLI server (zen-*
+	// wrappers) and the terminal keep this false.
+	HideTools bool
 }
 
 // ToolDef describes one MCP tool. The Schema is the exact JSON Schema served
