@@ -53,12 +53,10 @@ On any tool failure: retry once with correction applied. If retry fails — **HA
 
 ## VERIFICATION LADDER
 
-```text
 1. EXISTS    → zcodegraph search, or shell ls
 2. UNIT      → test changed unit
 3. INTEGRATE → suite for affected subsystem
 4. BUILD     → syntax check or binary build
-```
 
 ---
 

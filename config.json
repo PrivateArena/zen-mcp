@@ -28,7 +28,7 @@
     "memory_isolate": false,
     "memory_shared": false
   },
-  "gatekeeper_enabled": true,
+  "gatekeeper_enabled": false,
   "gatekeeper_interactive": false,
   "gatekeeper_interactive_auto": "accept",
   "gatekeeper_interactive_timeout": 60000,

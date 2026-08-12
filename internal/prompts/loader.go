@@ -168,7 +168,7 @@ func generateSkillPrompts() ([]PromptDefinition, error) {
 		}
 
 		results = append(results, PromptDefinition{
-			Name:          fmt.Sprintf("SKILL-%s", id),
+			Name:          fmt.Sprintf("_%s", id),
 			Description:   desc,
 			Arguments:     []PromptArgument{{Name: "i", Description: "Context or specific instructions for this skill", Required: false}},
 			Template:      fmt.Sprintf("Activate skill: %s\n\nTask: {{i}}", title),

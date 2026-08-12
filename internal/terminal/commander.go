@@ -294,6 +294,35 @@ func setRawMode(fd int) (*unix.Termios, error) {
 	return old, nil
 }
 
+// completeCommand attempts TAB completion of the command position of line
+// against registered command names. It only acts while the user is still on
+// the first token (no whitespace yet), since only command names are indexed:
+//   - advanced=true: exactly one command matches the prefix, so line is
+//     completed to that command plus a trailing space.
+//   - suggestions non-empty: several commands share the prefix, so they are
+//     returned for listing and the line is left unchanged.
+//   - otherwise: no match, callers must leave the line untouched.
+func completeCommand(line []byte) (completed []byte, suggestions []string, advanced bool) {
+	if strings.IndexByte(string(line), ' ') >= 0 {
+		return line, nil, false
+	}
+	prefix := string(line)
+	matches := make([]string, 0, 4)
+	for _, name := range List() {
+		if strings.HasPrefix(name, prefix) {
+			matches = append(matches, name)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return line, nil, false
+	case 1:
+		return []byte(matches[0] + " "), nil, true
+	default:
+		return line, matches, false
+	}
+}
+
 // runCommanderLoop is the raw-mode line REPL loop, split out so that
 // runCommander can restore the terminal before returning.
 func runCommanderLoop(prompt io.Writer, rawFile *os.File, history *[]string, historyIdx *int, currentLine *[]byte, buf []byte) bool {
@@ -328,6 +357,15 @@ func runCommanderLoop(prompt io.Writer, rawFile *os.File, history *[]string, his
 		case 127, 8:
 			if len(*currentLine) > 0 {
 				*currentLine = (*currentLine)[:len(*currentLine)-1]
+				redraw(prompt, *currentLine)
+			}
+		case '\t':
+			completed, suggestions, advanced := completeCommand(*currentLine)
+			if advanced {
+				*currentLine = completed
+				redraw(prompt, *currentLine)
+			} else if len(suggestions) > 0 {
+				fmt.Fprint(prompt, "\r\n"+strings.Join(suggestions, "  ")+"\r\n")
 				redraw(prompt, *currentLine)
 			}
 		case 3:

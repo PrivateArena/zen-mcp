@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -126,6 +127,226 @@ func unregister(name string) {
 	mu.Lock()
 	defer mu.Unlock()
 	delete(handlers, name)
+}
+
+// runLoopWithBytes drives runCommanderLoop directly over an os.Pipe, feeding
+// input bytes (a raw-mode byte stream) before closing the write end so the
+// loop terminates on EOF. It returns the loop's exit flag, the prompt output,
+// and the LogOut output.
+func runLoopWithBytes(t *testing.T, input string) (exited bool, prompt, logOut *bytes.Buffer) {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+
+	var p, l bytes.Buffer
+	old := LogOut
+	LogOut = &l
+	defer func() { LogOut = old }()
+
+	if _, err := w.WriteString(input); err != nil {
+		w.Close()
+		t.Fatal(err)
+	}
+	w.Close()
+
+	var history []string
+	historyIdx := -1
+	var currentLine []byte
+	buf := make([]byte, 1)
+
+	exited = runCommanderLoop(&p, r, &history, &historyIdx, &currentLine, buf)
+	return exited, &p, &l
+}
+
+// TestRunCommanderLoopCharacterization pins the CURRENT observable behavior
+// of the raw-mode loop, so that readline edits (TAB completion) cannot
+// silently regress non-TAB key handling. Each subtest asserts pre-existing
+// behavior that must remain identical after the feature lands.
+func TestRunCommanderLoopCharacterization(t *testing.T) {
+	t.Run("printableAndEnterDispatch", func(t *testing.T) {
+		var called []string
+		Register("abb", func(args []string) error {
+			called = append(called, strings.Join(args, " "))
+			return nil
+		})
+		defer unregister("abb")
+
+		exited, _, _ := runLoopWithBytes(t, "abc\x7fb\n")
+		if exited {
+			t.Error("exit flag should be false")
+		}
+		if len(called) != 1 || called[0] != "" {
+			t.Errorf("handler called = %v, want one call with empty args", called)
+		}
+	})
+
+	t.Run("tabBeforeWhitespaceIsNoop", func(t *testing.T) {
+		// TAB in argument position must not mangle the line nor trigger
+		// completion of argument tokens.
+		var got []string
+		Register("acmd", func(args []string) error {
+			got = append(got, args...)
+			return nil
+		})
+		defer unregister("acmd")
+
+		exited, _, _ := runLoopWithBytes(t, "acmd x\x09\n")
+		if exited {
+			t.Error("exit flag should be false")
+		}
+		if len(got) != 1 || got[0] != "x" {
+			t.Errorf("args = %v, want [x]", got)
+		}
+	})
+
+	t.Run("tabWithNoMatchIsNoop", func(t *testing.T) {
+		Register("abb", func([]string) error { return nil })
+		defer unregister("abb")
+
+		exited, prompt, _ := runLoopWithBytes(t, "zz\x09\n")
+		if exited {
+			t.Error("exit flag should be false")
+		}
+		// In the raw loop dispatch redirects LogOut to the prompt stream,
+		// so the unknown-command log appears there, not on LogOut.
+		if !strings.Contains(prompt.String(), "Unknown command: zz") {
+			t.Errorf("missing unknown-command log: %q", prompt.String())
+		}
+		if strings.Contains(prompt.String(), "abb") {
+			t.Errorf("no-match TAB must not print suggestions: %q", prompt.String())
+		}
+	})
+
+	t.Run("ctrlDWithContentDoesNotExit", func(t *testing.T) {
+		exited, prompt, _ := runLoopWithBytes(t, "abo\x04\n")
+		if exited {
+			t.Error("ctrl-D with non-empty line must not exit")
+		}
+		if !strings.Contains(prompt.String(), "Unknown command: abo") {
+			t.Errorf("missing unknown-command log: %q", prompt.String())
+		}
+	})
+
+	t.Run("ctrlCExits", func(t *testing.T) {
+		exited, _, logOut := runLoopWithBytes(t, "\x03")
+		if !exited {
+			t.Error("ctrl-C should exit the loop")
+		}
+		if !strings.Contains(logOut.String(), "Shutting down terminal commander.") {
+			t.Errorf("missing shutdown log: %q", logOut.String())
+		}
+	})
+
+	t.Run("ctrlDOnEmptyExits", func(t *testing.T) {
+		exited, _, logOut := runLoopWithBytes(t, "\x04")
+		if !exited {
+			t.Error("ctrl-D on empty line should exit the loop")
+		}
+		if !strings.Contains(logOut.String(), "Shutting down terminal commander.") {
+			t.Errorf("missing shutdown log: %q", logOut.String())
+		}
+	})
+
+	t.Run("exitCommandExits", func(t *testing.T) {
+		exited, prompt, _ := runLoopWithBytes(t, "exit\n")
+		if !exited {
+			t.Error("exit command should exit the loop")
+		}
+		if !strings.Contains(prompt.String(), "Shutting down terminal commander.") {
+			t.Errorf("missing shutdown log: %q", prompt.String())
+		}
+	})
+
+	t.Run("helpCommandDispatches", func(t *testing.T) {
+		exited, prompt, _ := runLoopWithBytes(t, "help\n")
+		if exited {
+			t.Error("help should not exit the loop")
+		}
+		if !strings.Contains(prompt.String(), "Available commands:") {
+			t.Errorf("missing help output: %q", prompt.String())
+		}
+	})
+}
+
+// TestRunCommanderLoopTabCompletion covers the new TAB suggestion/autocomplete
+// behavior of the raw-mode loop.
+func TestRunCommanderLoopTabCompletion(t *testing.T) {
+	t.Run("uniqueMatchAutocompletesLine", func(t *testing.T) {
+		called := false
+		Register("shell", func(_ []string) error {
+			called = true
+			return nil
+		})
+		defer unregister("shell")
+
+		exited, prompt, _ := runLoopWithBytes(t, "sh\x09\n")
+		if exited {
+			t.Error("exit flag should be false")
+		}
+		if !called {
+			t.Error("completed line should dispatch the handler")
+		}
+		if !strings.Contains(prompt.String(), "shell ") {
+			t.Errorf("line was not completed to 'shell ': %q", prompt.String())
+		}
+	})
+
+	t.Run("autocompleteThenTypeArgs", func(t *testing.T) {
+		var got []string
+		Register("shell", func(args []string) error {
+			got = append(got, args...)
+			return nil
+		})
+		defer unregister("shell")
+
+		exited, _, _ := runLoopWithBytes(t, "sh\x09env\n")
+		if exited {
+			t.Error("exit flag should be false")
+		}
+		if len(got) != 1 || got[0] != "env" {
+			t.Errorf("handler args = %v, want [env]", got)
+		}
+	})
+
+	t.Run("multipleMatchesList", func(t *testing.T) {
+		Register("alpha", func([]string) error { return nil })
+		Register("alpine", func([]string) error { return nil })
+		defer unregister("alpha")
+		defer unregister("alpine")
+
+		exited, prompt, _ := runLoopWithBytes(t, "al\x09\n")
+		if exited {
+			t.Error("exit flag should be false")
+		}
+		if !strings.Contains(prompt.String(), "alpha") || !strings.Contains(prompt.String(), "alpine") {
+			t.Errorf("multi-match TAB must list both suggestions: %q", prompt.String())
+		}
+		if !strings.Contains(prompt.String(), "Unknown command: al") {
+			t.Errorf("line must dispatch uncompleted after listing: %q", prompt.String())
+		}
+	})
+
+	t.Run("emptyLineListsAll", func(t *testing.T) {
+		Register("alpha", func([]string) error { return nil })
+		Register("alpine", func([]string) error { return nil })
+		defer unregister("alpha")
+		defer unregister("alpine")
+
+		exited, prompt, _ := runLoopWithBytes(t, "\x09\n")
+		if exited {
+			t.Error("exit flag should be false")
+		}
+		// Empty prefix matches every registered command, including the
+		// statically-registered help command.
+		for _, name := range []string{"alpha", "alpine", "help"} {
+			if !strings.Contains(prompt.String(), name) {
+				t.Errorf("empty-line TAB must list %q: %q", name, prompt.String())
+			}
+		}
+	})
 }
 
 // TestExecuteToolRecordsActionTelemetry pins that the CLI dispatch boundary
