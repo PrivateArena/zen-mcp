@@ -254,10 +254,10 @@ func TestWrapSinglePoolIDLifecycle(t *testing.T) {
 	}
 
 	// The running payload must reference exactly one DISTINCT pool id: every
-	// "pool-" token (the pool_id field and the one inside the hint) must be the
+	// "<tool>_<n>" token (the pool_id field and the one inside the hint) must be the
 	// same id that keys the job. A second, different id anywhere = the
 	// "double pool_id" bug this test guards against.
-	re := regexp.MustCompile(`pool-[0-9a-f]{16}`)
+	re := regexp.MustCompile(`[a-z-]+_[0-9]+`)
 	seen := map[string]bool{}
 	for _, tok := range re.FindAllString(res.Content[0].(mcp.TextContent).Text, -1) {
 		seen[tok] = true
@@ -326,7 +326,7 @@ func TestWrapRegistryFullReturnsErrorNotRunningPayload(t *testing.T) {
 	withPoolingConfig(t, poolEnabledConfig)
 	reg := NewRegistry(time.Minute, time.Minute, 1)
 	// Occupies the only slot.
-	id1, err := reg.Register(&Job{})
+	id1, err := reg.Register("shell", &Job{})
 	if err != nil {
 		t.Fatalf("seed register: %v", err)
 	}
@@ -377,5 +377,34 @@ func TestWrapDetachesContext(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if sawCancel.Load() {
 		t.Error("inner handler must not observe request cancellation (WithoutCancel)")
+	}
+}
+
+func TestWrapRunningPayloadContainsShortToolPrefixedPoolID(t *testing.T) {
+	withPoolingConfig(t, poolEnabledConfig)
+	reg := NewRegistry(time.Minute, time.Minute, 4)
+	inner := func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		time.Sleep(120 * time.Millisecond)
+		return textResult("done"), nil
+	}
+	res, err := Wrap("browser", reg, inner)(context.Background(), makeCall(map[string]any{"action": "navigate", "url": "x"}))
+	if err != nil {
+		t.Fatalf("Wrap: %v", err)
+	}
+	payload := extractRunningPayload(t, res)
+	id, _ := payload["pool_id"].(string)
+	if !strings.HasPrefix(id, "browser_") {
+		t.Errorf("pool_id = %q, want browser_<n> prefix", id)
+	}
+	if len(id) > 20 {
+		t.Errorf("pool_id %q is too long (%d chars)", id, len(id))
+	}
+	// Hint must reference the pool tool and the id.
+	hint, _ := payload["hint"].(string)
+	if !strings.Contains(hint, "pool(") {
+		t.Errorf("hint = %q, must reference pool tool", hint)
+	}
+	if !strings.Contains(hint, id) {
+		t.Errorf("hint = %q, must contain pool_id %q", hint, id)
 	}
 }

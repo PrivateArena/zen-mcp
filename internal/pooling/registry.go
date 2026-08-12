@@ -3,9 +3,8 @@ package pooling
 //
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -58,11 +57,12 @@ type PollOutcome struct {
 // concurrent use. State is intentionally not persisted: a server restart
 // surfaces as StateUnknown so the LLM re-issues the original tool call.
 type Registry struct {
-	mu    sync.Mutex
-	jobs  map[string]*Job
-	ttl   time.Duration // eviction age from CreatedAt for running/cancelled jobs
-	grace time.Duration // eviction age from FinishedAt for done jobs
-	max   int
+	mu       sync.Mutex
+	jobs     map[string]*Job
+	counters map[string]int // per-tool incremental counter for ID generation
+	ttl      time.Duration // eviction age from CreatedAt for running/cancelled jobs
+	grace    time.Duration // eviction age from FinishedAt for done jobs
+	max      int
 }
 
 // NewRegistry builds a registry. Non-positive values fall back to sane
@@ -77,14 +77,15 @@ func NewRegistry(ttl, grace time.Duration, max int) *Registry {
 	if max <= 0 {
 		max = 256
 	}
-	return &Registry{jobs: make(map[string]*Job), ttl: ttl, grace: grace, max: max}
+	return &Registry{jobs: make(map[string]*Job), counters: make(map[string]int), ttl: ttl, grace: grace, max: max}
 }
 
 // Register stores job and returns the pool_id under which it is stored. If
-// job.ID is empty a fresh id is generated and assigned to job.ID. The returned
-// id is the ONLY id that exists for this job: it is the map key, the value of
-// job.ID, and the value handed to the client for polling.
-func (r *Registry) Register(job *Job) (string, error) {
+// job.ID is empty a fresh id is generated using an incremental per-tool counter
+// (e.g. "shell_1", "browser_2"). The returned id is the ONLY id that exists
+// for this job: it is the map key, the value of job.ID, and the value handed
+// to the client for polling.
+func (r *Registry) Register(name string, job *Job) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if len(r.jobs) >= r.max {
@@ -94,7 +95,7 @@ func (r *Registry) Register(job *Job) (string, error) {
 		return "", ErrRegistryFull
 	}
 	if job.ID == "" {
-		job.ID = newPoolID()
+		job.ID = newPoolID(name, r.counters)
 	} else if _, exists := r.jobs[job.ID]; exists {
 		return "", errors.New("duplicate pool_id " + job.ID)
 	}
@@ -252,10 +253,12 @@ func (r *Registry) jobStateLocked(job *Job) string {
 	}
 }
 
-func newPoolID() string {
-	b := make([]byte, 8)
-	_, _ = rand.Read(b)
-	return "pool-" + hex.EncodeToString(b)
+// newPoolID generates a short, easy-to-type id using an incremental per-tool
+// counter. The format is "<tool>_<n>" (e.g. "shell_1", "browser_2"). The
+// counter is advanced atomically under the caller's held lock.
+func newPoolID(name string, counters map[string]int) string {
+	counters[name]++
+	return fmt.Sprintf("%s_%d", name, counters[name])
 }
 
 // ---- process-wide singleton (shared by both HTTP listeners) ----

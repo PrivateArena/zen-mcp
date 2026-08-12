@@ -2,7 +2,6 @@ package pooling
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -72,12 +71,11 @@ func Wrap(name string, reg *Registry, inner toolregistry.Handler) toolregistry.H
 
 		// Conversion: register NOW so the job is never lost, then drain the
 		// inner result in the background and replay it through the pool tool.
-		id, err := reg.Register(&Job{})
+		id, err := reg.Register(name, &Job{})
 		if err != nil {
 			return toolresponse.WrapErrorWithContext(ctx, name, err, start), nil
 		}
-		logfilter.Infof("[pooling] Tool %q exceeded %dms — job %s running (params: %s)",
-			name, elapsed.Milliseconds(), id, summarize(req.GetArguments()))
+		logfilter.Infof("[pooling] %s exceeded %dms — %s running", name, elapsed.Milliseconds(), id)
 
 		go func() {
 			r := <-ch
@@ -108,7 +106,7 @@ func Wrap(name string, reg *Registry, inner toolregistry.Handler) toolregistry.H
 			"status":    StateRunning,
 			"pool_id":   id,
 			"elapsedMs": time.Since(start).Milliseconds(),
-			"hint":      fmt.Sprintf(`poll via pool tool: {"action":"poll","pool_id":%q}`, id),
+			"hint":      fmt.Sprintf(`poll: pool("%s",%q)`, "poll", id),
 		}
 		return toolresponse.WrapSuccess(interimCtx, name, payload, start), nil
 	}
@@ -124,21 +122,6 @@ func jobDone(reg *Registry, id string) <-chan struct{} {
 	closed := make(chan struct{})
 	close(closed)
 	return closed
-}
-
-// summarize renders call arguments for log lines, truncating to 400 chars.
-func summarize(args map[string]any) string {
-	if len(args) == 0 {
-		return "{}"
-	}
-	b, err := json.Marshal(args)
-	if err != nil {
-		return fmt.Sprintf("%v", args)
-	}
-	if len(b) > 400 {
-		return fmt.Sprintf("%s... [truncated %d chars]", b[:400], len(b)-400)
-	}
-	return string(b)
 }
 
 func containsStr(list []string, s string) bool {

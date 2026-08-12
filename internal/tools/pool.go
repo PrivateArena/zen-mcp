@@ -16,14 +16,9 @@ func defPool(deps Deps) ToolDef {
 	return ToolDef{
 		Name:  "pool",
 		Title: "Long-Running Job Pool",
-		Description: "Manage long-running pooled jobs. When a wrapped tool (shell, browser, run, " +
-			"ui-vision) exceeds the configured pooling window it returns " +
-			`{"status":"running","pool_id":"...","elapsedMs":<ms since job start>}` + " instead of blocking; call this tool with " +
-			"action=\"poll\" and that SAME pool_id to wait for and retrieve the eventual result. " +
-			"elapsedMs grows monotonically so you can judge how long the job has been running. " +
-			"Actions: poll (block until done or the pooling window), status (immediate check), " +
-			"cancel (soft — marks cancelled, the underlying process is NOT killed), list (all live jobs). " +
-			"pool_id is required for poll/status/cancel.",
+		Description: "Poll or manage pooled jobs. Wrapped tools (shell, browser, run, ui-vision) " +
+			"return {status,pool_id} when they exceed the pooling window; use this tool " +
+			"to poll, check status, cancel, or list live jobs.",
 		Schema: jsonSchema(map[string]any{
 			"action":  strEnumProp("Pool action.", []string{"poll", "status", "cancel", "list"}),
 			"pool_id": strProp("Pool id returned by a pooled tool call (required for poll/status/cancel)"),

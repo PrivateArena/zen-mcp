@@ -72,7 +72,7 @@ func TestPoolPollReplaysStoredResultVerbatim(t *testing.T) {
 	withPoolToolConfig(t, poolToolConfig)
 	reg := pooling.NewRegistry(time.Minute, time.Minute, 4)
 	stored := &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "original-job-output"}}}
-	id, err := reg.Register(&pooling.Job{})
+	id, err := 	reg.Register("shell", &pooling.Job{})
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestPoolPollReplaysStoredResultVerbatim(t *testing.T) {
 func TestPoolPollRunningReturnsSamePoolID(t *testing.T) {
 	withPoolToolConfig(t, poolToolConfig)
 	reg := pooling.NewRegistry(time.Minute, time.Minute, 4)
-	id, err := reg.Register(&pooling.Job{})
+	id, err := 	reg.Register("shell", &pooling.Job{})
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestPoolPollRunningReturnsSamePoolID(t *testing.T) {
 func TestPoolPollCancelled(t *testing.T) {
 	withPoolToolConfig(t, poolToolConfig)
 	reg := pooling.NewRegistry(time.Minute, time.Minute, 4)
-	id, _ := reg.Register(&pooling.Job{})
+	id, _ := 	reg.Register("shell", &pooling.Job{})
 	reg.Cancel(id)
 	res := HandlePoolAction(context.Background(), reg, poolRequest(map[string]any{"action": "poll", "pool_id": id}))
 	m := poolPayload(t, res)
@@ -122,9 +122,9 @@ func TestPoolPollCancelled(t *testing.T) {
 func TestPoolPollUnknownNeverCreatesJob(t *testing.T) {
 	withPoolToolConfig(t, poolToolConfig)
 	reg := pooling.NewRegistry(time.Minute, time.Minute, 4)
-	res := HandlePoolAction(context.Background(), reg, poolRequest(map[string]any{"action": "poll", "pool_id": "pool-nonexistent"}))
+	res := HandlePoolAction(context.Background(), reg, poolRequest(map[string]any{"action": "poll", "pool_id": "shell-nonexistent"}))
 	text := res.Content[0].(mcp.TextContent).Text
-	if !strings.Contains(text, "unknown pool_id \"pool-nonexistent\"") || !strings.Contains(text, "re-issue the original call") {
+	if !strings.Contains(text, "unknown pool_id \"shell-nonexistent\"") || !strings.Contains(text, "re-issue the original call") {
 		t.Errorf("expected actionable unknown-id error, got: %s", text)
 	}
 	if n := len(reg.List()); n != 0 {
@@ -147,7 +147,7 @@ func TestPoolPollMissingIDExplicitError(t *testing.T) {
 func TestPoolStatus(t *testing.T) {
 	withPoolToolConfig(t, poolToolConfig)
 	reg := pooling.NewRegistry(time.Minute, time.Minute, 4)
-	id, _ := reg.Register(&pooling.Job{})
+	id, _ := 	reg.Register("shell", &pooling.Job{})
 	if m := poolPayload(t, HandlePoolAction(context.Background(), reg, poolRequest(map[string]any{"action": "status", "pool_id": id}))); m["status"] != "running" {
 		t.Errorf("running status wrong: %v", m)
 	} else if em, ok := m["elapsedMs"].(float64); !ok || em < 0 {
@@ -161,7 +161,7 @@ func TestPoolStatus(t *testing.T) {
 	if m := poolPayload(t, HandlePoolAction(context.Background(), reg, poolRequest(map[string]any{"action": "status", "pool_id": id}))); m["status"] != "cancelled" {
 		t.Errorf("cancelled status wrong: %v", m)
 	}
-	res := HandlePoolAction(context.Background(), reg, poolRequest(map[string]any{"action": "status", "pool_id": "pool-missing"}))
+	res := HandlePoolAction(context.Background(), reg, poolRequest(map[string]any{"action": "status", "pool_id": "shell-missing"}))
 	if !strings.Contains(res.Content[0].(mcp.TextContent).Text, "unknown pool_id") {
 		t.Errorf("unknown status should error, got: %s", res.Content[0].(mcp.TextContent).Text)
 	}
@@ -170,7 +170,7 @@ func TestPoolStatus(t *testing.T) {
 func TestPoolCancel(t *testing.T) {
 	withPoolToolConfig(t, poolToolConfig)
 	reg := pooling.NewRegistry(time.Minute, time.Minute, 4)
-	id, _ := reg.Register(&pooling.Job{})
+	id, _ := 	reg.Register("shell", &pooling.Job{})
 	m := poolPayload(t, HandlePoolAction(context.Background(), reg, poolRequest(map[string]any{"action": "cancel", "pool_id": id})))
 	if m["status"] != "cancelled" || m["pool_id"] != id {
 		t.Errorf("cancel payload wrong: %v", m)
@@ -178,7 +178,7 @@ func TestPoolCancel(t *testing.T) {
 	if reg.State(id) != pooling.StateCancelled {
 		t.Error("registry should mark job cancelled")
 	}
-	res := HandlePoolAction(context.Background(), reg, poolRequest(map[string]any{"action": "cancel", "pool_id": "pool-missing"}))
+	res := HandlePoolAction(context.Background(), reg, poolRequest(map[string]any{"action": "cancel", "pool_id": "shell-missing"}))
 	if !strings.Contains(res.Content[0].(mcp.TextContent).Text, "unknown pool_id") {
 		t.Errorf("cancel unknown should error, got: %s", res.Content[0].(mcp.TextContent).Text)
 	}
@@ -187,8 +187,8 @@ func TestPoolCancel(t *testing.T) {
 func TestPoolListShape(t *testing.T) {
 	withPoolToolConfig(t, poolToolConfig)
 	reg := pooling.NewRegistry(time.Minute, time.Minute, 4)
-	id1, _ := reg.Register(&pooling.Job{})
-	id2, _ := reg.Register(&pooling.Job{})
+	id1, _ := 	reg.Register("shell", &pooling.Job{})
+	id2, _ := 	reg.Register("shell", &pooling.Job{})
 	reg.Complete(id2, &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "x"}}})
 	res := HandlePoolAction(context.Background(), reg, poolRequest(map[string]any{"action": "list"}))
 	text := res.Content[0].(mcp.TextContent).Text

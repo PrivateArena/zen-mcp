@@ -40,7 +40,7 @@
   "pooling": {
     "enabled": true,
     "tools": ["shell"],
-    "elapsedMs": 2000,
+    "elapsedMs": 120000,
     "ttlMinutes": 60,
     "maxJobs": 256
   },

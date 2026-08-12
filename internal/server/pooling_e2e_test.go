@@ -135,7 +135,7 @@ func TestPoolEndToEndHTTP(t *testing.T) {
 	}
 
 	// Across both running payloads there must be exactly ONE distinct pool id.
-	re := regexp.MustCompile(`pool-[0-9a-f]{16}`)
+	re := regexp.MustCompile(`[a-z-]+_[0-9]+`)
 	ids := map[string]bool{}
 	ids[re.FindString(firstText)] = true
 	ids[re.FindString(pollText)] = true

@@ -15,7 +15,7 @@ func textResult(s string) *mcp.CallToolResult {
 
 func TestRegisterReturnsSameIDThatKeysTheJob(t *testing.T) {
 	r := NewRegistry(time.Minute, time.Minute, 4)
-	id, err := r.Register(&Job{})
+	id, err := r.Register("shell", &Job{})
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -36,21 +36,21 @@ func TestRegisterReturnsSameIDThatKeysTheJob(t *testing.T) {
 
 func TestRegisterHonorsPreassignedID(t *testing.T) {
 	r := NewRegistry(time.Minute, time.Minute, 4)
-	id, err := r.Register(&Job{ID: "pool-custom"})
+	id, err := r.Register("shell", &Job{ID: "pool-custom"})
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 	if id != "pool-custom" {
 		t.Errorf("returned id = %q, want pool-custom", id)
 	}
-	if _, err := r.Register(&Job{ID: "pool-custom"}); err == nil {
+	if _, err := r.Register("shell", &Job{ID: "pool-custom"}); err == nil {
 		t.Error("duplicate preassigned id should error")
 	}
 }
 
 func TestCompleteSetsResultBeforeClosingDone(t *testing.T) {
 	r := NewRegistry(time.Minute, time.Minute, 4)
-	id, err := r.Register(&Job{})
+	id, err := r.Register("shell", &Job{})
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestCompleteSetsResultBeforeClosingDone(t *testing.T) {
 
 func TestCompleteOnEvictedJobIsNoop(t *testing.T) {
 	r := NewRegistry(10*time.Millisecond, time.Millisecond, 4)
-	id, err := r.Register(&Job{})
+	id, err := r.Register("shell", &Job{})
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestCompleteOnEvictedJobIsNoop(t *testing.T) {
 
 func TestLongPollRunningThenDone(t *testing.T) {
 	r := NewRegistry(time.Minute, time.Minute, 4)
-	id, _ := r.Register(&Job{})
+	id, _ := r.Register("shell", &Job{})
 	if out := r.LongPoll(context.Background(), id, 20*time.Millisecond); out.State != StateRunning {
 		t.Fatalf("before completion state = %q, want running", out.State)
 	}
@@ -110,7 +110,7 @@ func TestLongPollRunningThenDone(t *testing.T) {
 
 func TestLongPollCancelled(t *testing.T) {
 	r := NewRegistry(time.Minute, time.Minute, 4)
-	id, _ := r.Register(&Job{})
+	id, _ := r.Register("shell", &Job{})
 	if !r.Cancel(id) {
 		t.Fatal("Cancel returned false")
 	}
@@ -135,7 +135,7 @@ func TestLongPollUnknownNeverCreatesJob(t *testing.T) {
 
 func TestLongPollContextCancel(t *testing.T) {
 	r := NewRegistry(time.Minute, time.Minute, 4)
-	id, _ := r.Register(&Job{})
+	id, _ := r.Register("shell", &Job{})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	out := r.LongPoll(ctx, id, time.Hour)
@@ -146,7 +146,7 @@ func TestLongPollContextCancel(t *testing.T) {
 
 func TestDuplicatePollsBothGetResult(t *testing.T) {
 	r := NewRegistry(time.Minute, time.Minute, 4)
-	id, _ := r.Register(&Job{})
+	id, _ := r.Register("shell", &Job{})
 	const n = 5
 	var wg sync.WaitGroup
 	results := make([]PollOutcome, n)
@@ -169,7 +169,7 @@ func TestDuplicatePollsBothGetResult(t *testing.T) {
 
 func TestCancelThenCompleteReportsCancelled(t *testing.T) {
 	r := NewRegistry(time.Minute, time.Minute, 4)
-	id, _ := r.Register(&Job{})
+	id, _ := r.Register("shell", &Job{})
 	r.Cancel(id)
 	go r.Complete(id, textResult("late"))
 	// Poll is checked against Cancelled first, so cancel wins.
@@ -181,7 +181,7 @@ func TestCancelThenCompleteReportsCancelled(t *testing.T) {
 
 func TestStateNonBlocking(t *testing.T) {
 	r := NewRegistry(time.Minute, time.Minute, 4)
-	id, _ := r.Register(&Job{})
+	id, _ := r.Register("shell", &Job{})
 	if got := r.State(id); got != StateRunning {
 		t.Errorf("State before completion = %q, want running", got)
 	}
@@ -200,7 +200,7 @@ func TestStateNonBlocking(t *testing.T) {
 
 func TestEvictExpiredKeepsDoneWithinGrace(t *testing.T) {
 	r := NewRegistry(10*time.Millisecond, time.Hour, 4)
-	id, _ := r.Register(&Job{})
+	id, _ := r.Register("shell", &Job{})
 	r.Complete(id, textResult("ok"))
 	now := time.Now().Add(2 * time.Second) // far past TTL but within grace
 	if n := r.EvictExpired(now); n != 0 {
@@ -216,7 +216,7 @@ func TestEvictExpiredKeepsDoneWithinGrace(t *testing.T) {
 
 func TestEvictExpiredEvictsRunningAfterTTL(t *testing.T) {
 	r := NewRegistry(10*time.Millisecond, time.Hour, 4)
-	id, _ := r.Register(&Job{})
+	id, _ := r.Register("shell", &Job{})
 	now := time.Now().Add(time.Second)
 	if n := r.EvictExpired(now); n != 1 {
 		t.Fatalf("running job past TTL should evict, got %d", n)
@@ -229,22 +229,22 @@ func TestEvictExpiredEvictsRunningAfterTTL(t *testing.T) {
 func TestRegisterRejectsAtCap(t *testing.T) {
 	r := NewRegistry(time.Minute, time.Minute, 2)
 	for i := 0; i < 2; i++ {
-		if _, err := r.Register(&Job{}); err != nil {
+		if _, err := r.Register("shell", &Job{}); err != nil {
 			t.Fatalf("register %d: %v", i, err)
 		}
 	}
-	if _, err := r.Register(&Job{}); err != ErrRegistryFull {
+	if _, err := r.Register("shell", &Job{}); err != ErrRegistryFull {
 		t.Fatalf("third register err = %v, want ErrRegistryFull", err)
 	}
 }
 
 func TestRegisterAtCapReclaimsExpiredSlot(t *testing.T) {
 	r := NewRegistry(10*time.Millisecond, time.Minute, 1)
-	if _, err := r.Register(&Job{}); err != nil {
+	if _, err := r.Register("shell", &Job{}); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	time.Sleep(20 * time.Millisecond)
-	id, err := r.Register(&Job{})
+	id, err := r.Register("shell", &Job{})
 	if err != nil {
 		t.Fatalf("register after expired slot should reclaim, got %v", err)
 	}
@@ -258,8 +258,8 @@ func TestRegisterAtCapReclaimsExpiredSlot(t *testing.T) {
 
 func TestListShapeAndOrder(t *testing.T) {
 	r := NewRegistry(time.Minute, time.Minute, 4)
-	id1, _ := r.Register(&Job{})
-	id2, _ := r.Register(&Job{})
+	id1, _ := r.Register("shell", &Job{})
+	id2, _ := r.Register("shell", &Job{})
 	r.Cancel(id1)
 	r.Complete(id2, textResult("done"))
 	time.Sleep(2 * time.Millisecond)
@@ -279,5 +279,33 @@ func TestListShapeAndOrder(t *testing.T) {
 	}
 	if byState[id1] != StateCancelled || byState[id2] != StateDone {
 		t.Errorf("list states wrong: %+v", byState)
+	}
+}
+
+func TestRegisterIncrementalPerToolIDs(t *testing.T) {
+	r := NewRegistry(time.Minute, time.Minute, 4)
+	shell1, _ := r.Register("shell", &Job{})
+	shell2, _ := r.Register("shell", &Job{})
+	browser1, _ := r.Register("browser", &Job{})
+	if shell1 != "shell_1" {
+		t.Errorf("first shell id = %q, want shell_1", shell1)
+	}
+	if shell2 != "shell_2" {
+		t.Errorf("second shell id = %q, want shell_2", shell2)
+	}
+	if browser1 != "browser_1" {
+		t.Errorf("first browser id = %q, want browser_1", browser1)
+	}
+	// IDs must be distinct across tools.
+	if shell1 == browser1 || shell2 == browser1 {
+		t.Error("counters must not leak between tools")
+	}
+}
+
+func TestRegisterIDFormatShortAndTypable(t *testing.T) {
+	r := NewRegistry(time.Minute, time.Minute, 4)
+	id, _ := r.Register("ui-vision", &Job{})
+	if len(id) > 20 {
+		t.Errorf("id %q is too long (%d chars), want <= 20 for easy typing", id, len(id))
 	}
 }
