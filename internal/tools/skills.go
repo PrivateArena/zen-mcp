@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/prompts"
 	"zen-mcp/internal/skills"
 	"zen-mcp/internal/toolresponse"
 
@@ -94,5 +96,10 @@ func handleSkillsGet(ctx context.Context, id string, start time.Time) *mcp.CallT
 	sb.WriteString("\n## Knowledge Content\n\n")
 	sb.WriteString(resolved.Enriched)
 
-	return toolresponse.WrapSuccess(ctx, "skill", strings.TrimSpace(sb.String()), start)
+	result := strings.TrimSpace(sb.String())
+	if mcpcfg.Get().Mcp2Cli {
+		result = prompts.TransformMCPToCLI(result)
+	}
+
+	return toolresponse.WrapSuccess(ctx, "skill", result, start)
 }
