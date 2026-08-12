@@ -136,7 +136,7 @@ func generateSkillPrompts() ([]PromptDefinition, error) {
 		var skillFile string
 		var skillID string
 
-		if entry.IsDir() {
+		if entry.IsDir() || (entry.Type()&os.ModeSymlink != 0 && isSymlinkDir(skillsDir, entry.Name())) {
 			skillFile = filepath.Join(skillsDir, entry.Name(), "SKILL.md")
 			if _, err := os.Stat(skillFile); os.IsNotExist(err) {
 				continue
@@ -176,6 +176,12 @@ func generateSkillPrompts() ([]PromptDefinition, error) {
 		})
 	}
 	return results, nil
+}
+
+func isSymlinkDir(dir, name string) bool {
+	target := filepath.Join(dir, name)
+	info, err := os.Stat(target)
+	return err == nil && info.IsDir()
 }
 
 type frontmatter struct {
