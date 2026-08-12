@@ -6,7 +6,7 @@
 
 ## SESSION INIT ⚠️ MANDATORY
 
-Call `zworkspace -p <project_dir>` — **HALT until complete.**
+Shell `zworkspace -p <project_dir>` — **HALT until complete.**
 Do NOT proceed to any task until both return success.
 
 ---
