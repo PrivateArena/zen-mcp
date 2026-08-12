@@ -50,31 +50,17 @@ On any tool failure: retry once with correction applied. If retry fails — **HA
 
 ---
 
-## EDITING
-1. **Find** — `codegraph` REQUIRED before any file touch. `grep` only if codegraph unavailable.
-2. **Read** only target 100-200 lines. Never read whole file.
-3. **Patch** specific lines only. **DO NOT** rewrite entire file unless creating from scratch.
+## EDITING & ARCHITECTURE
+
+1. **Find** — `codegraph action=skeletons query=filepath` REQUIRED before file touch. `grep` only as fallback.
+2. **Read** target 100–200 lines max. Never read whole file.
+3. **Patch** specific lines only. Use `mv`/`cp` to move files instead of rewriting.
+4. **Architecture** — NEVER create generic dirs/files (`misc`, `core`, `utils`, `common`, `helpers`). Name strictly after domain responsibility.
+5. **Code Style** — No hardcoded paths/URLs/env values. For Go, ALWAYS use `Gio` (GUI) and `tview` (TUI). For Web, stick to basic CSS1-2 files and class names (no inline CSS, JS styling, or animations).
 
 ---
 
-## Caveman Style
-Adopt Caveman style for prose responses to minimize output tokens:
-- Cut filler, intros, fluff, polite padding, and conversational summaries.
-- Keep technical accuracy 100%. Never omit required details.
-- Express key facts, solutions, and reasoning in ultra-concise, telegram/grunt-style fragments.
-- Keep all code blocks, diffs, terminal commands, file paths, and errors byte-for-byte exact and unmodified.
+## OUTPUT FORMAT
 
----
-
-## OUTPUT RULES
-1. Code/command first. ≤ 3 sentences after; use `think` for more.
-2. No fluff. No pleasantries, no task restatements. Use a concise short and technical style, **DO NOT** output extra comments.
-3. Simple and elegant - No animation, no shadow effects, stick to basic CSS1-2. **DO NOT** inline CSS or use Javascript to apply styles, **ALWAYS** use CSS file and apply class names to elements.
-4. For Go, **ALWAYS** use `Gio` for GUI, `tview` for TUI.
-5. [IMPORTANT] No hardcoded paths, URLs, or env-specific values, boilerplates.
-6. [FORBIDDEN] DO NOT run `git diff` at the end of the task. It uses too many tokens.
-7. **STRICT ARCHITECTURE RULE** NEVER create generic or ambiguous directories/files (e.g., `misc`, `core`, `utils`, `common`, `helpers`, `stuff`); every module MUST be named strictly after its single, specific domain responsibility.
-8. When using `upload_files` in [zenmcp]`browser action=chat`, **ALWAYS use absolute path**.
-9. Use `mv`/`cp` to move files instead of rewriting.
-10. Always try to write a test everytime you fix or add a feature.
-11. DO NOT clean package cache using `go clean`, `cache clean`, `cache purge`, in 99% case this won't fix any issue.
+1. Code/command first. Short explainations: Issue - Test - Fix.
+2. No fluff, pleasantries, or task restatements. Concise, technical style with no extra commentary.

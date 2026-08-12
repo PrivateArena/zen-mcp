@@ -64,7 +64,7 @@ On any tool failure: retry once with correction applied. If retry fails — **HA
 
 ## EDITING & ARCHITECTURE
 
-1. **Find** — `zcodegraph` REQUIRED before file touch. `grep` only as fallback.
+1. **Find** — `zcodegraph -a skeletons -q <filepath>` REQUIRED before file touch. `grep` only as fallback.
 2. **Read** target 100–200 lines max. Never read whole file.
 3. **Patch** specific lines only. Use `mv`/`cp` to move files instead of rewriting.
 4. **Architecture** — NEVER create generic dirs/files (`misc`, `core`, `utils`, `common`, `helpers`). Name strictly after domain responsibility.
