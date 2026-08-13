@@ -1,4 +1,4 @@
-<!-- codegraph-file-count: 141 -->
+<!-- codegraph-file-count: 144, last-commit: 78455a622db589e45ef400fe70a0eaedc974622e -->
 # zen-mcp — MCP Server for Zen IDE (Go 1.24)
 
 ## Purpose
@@ -47,7 +47,7 @@ Single-language Go project. Grouped by layer; LOC approximate.
 
 | File / Module | Role | LOC | Key Exports (with signatures) |
 |---|---|---|---|
-| internal/server/routes.go | Registers the 12 stateless HTTP routes; dispatches tools/call to cached mcpserver instances | ~460 | `SetupRoutes(mux *http.ServeMux, deps RouteDeps)`; `(d RouteDeps) postMCP(w, r)`; `autoDetectWorkspace(r *http.Request, st *shared.Store) string`; `serverCache.getOrCreate(logicalID, factory, registry) *mcpserver.MCPServer` |
+| internal/server/routes.go | Registers the 12 stateless HTTP routes; dispatches tools/call to cached mcpserver instances | ~460 | `SetupRoutes(mux *http.ServeMux, deps RouteDeps)`; `(d RouteDeps) postMCP(w, r)`; `detectWorkspace(msg rpcMessage, r *http.Request, st *shared.Store) string`; `autoDetectWorkspace(r *http.Request, st *shared.Store) string`; `serverCache.getOrCreate(logicalID, factory, registry) *mcpserver.MCPServer`; `SetRequestAbortObserver(fn func(method string, elapsedMs int64, reason string))` |
 | internal/server/tools.go | Wires all registered tools, pool wrapping, tool catalog resource, disabled filtering | ~100 | `RegisterAllTools(ctx, srv *mcpserver.MCPServer, reg *toolregistry.ToolRegistry, deps tools.Deps, workspace string) error`; `wrapIfPooled(name string, handler toolregistry.Handler) toolregistry.Handler`; `FilterEnabled(reg) (ctx, tools) []mcp.Tool` |
 | internal/server/pool.go | Global server-cache pool with idle reaping | ~66 | `StartIdleReaper() func()`; `snapshotServerCaches() []*serverCache` |
 | internal/server/patch.go | Per-tool timeouts, aborted-request cause detection | ~129 | `WrapHandlerWithTimeout(name string, inner toolregistry.Handler, getTimeout func(string) time.Duration) toolregistry.Handler`; `abortReason(ctx) string` |
@@ -68,7 +68,7 @@ Single-language Go project. Grouped by layer; LOC approximate.
 | File / Module | Role | LOC | Key Exports (with signatures) |
 |---|---|---|---|
 | internal/tools/types.go | Shared Deps/ToolDef types; the single registration axis for all tools | ~74 | `AllDefs(workspace string, deps Deps) []ToolDef`; `jsonSchema(properties map[string]any, required []string) map[string]any` |
-| internal/tools/codegraph.go | Largest tool: 19 codegraph actions over layered root/sub-graph DBs | ~1320 | `HandleCodegraphAction(ctx, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult`; `discoverGraphRoots(workspaceRoot string) []string`; `expandQueryPaths(query string, session *layeredGraphSession) []string`; `actionIndex/actionMap/actionSkeletons/actionRelated/actionImpact(...)` |
+| internal/tools/codegraph.go | Largest tool: 16 codegraph actions over layered root/sub-graph DBs | ~1320 | `HandleCodegraphAction(ctx, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult`; `discoverGraphRoots(workspaceRoot string) []string`; `expandQueryPaths(query string, session *layeredGraphSession) []string`; `actionIndex/actionMap/actionNeighbors/actionUsage/actionSkeletons/actionRelated/actionImpact/actionShortestPath/actionFindCycles/actionExplain/...` |
 | internal/tools/think.go | Sequential thinking + plan/task manager (plan.md persisted) | ~549 | `HandleThinkAction(ctx, workspace string, req mcp.CallToolRequest) *mcp.CallToolResult`; `(s *sequentialThinkingServer) processThought(input thoughtData) map[string]any`; `(p *planManager) createPlan(projectName, objective string, taskTitles []string) string` |
 | internal/tools/browser.go | Firefox bridge browser control (navigate/read/chat/request/eval) | ~538 | `HandleBrowserAction(ctx, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult`; `wrapBridgeOutput(ctx, action string, bridgeParams map[string]any, deps Deps, workspace string, start time.Time) any` |
 | internal/tools/shell.go | Shell execution with gatekeeping + token-profile optimization | ~180 | `HandleShellAction(ctx, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult`; `tokenOptConfig(cfg mcpcfg.ZenConfig) tokenoptimizer.Config`; `toBlacklist(entries) []tokenoptimizer.BlacklistEntry` |
@@ -81,7 +81,7 @@ Single-language Go project. Grouped by layer; LOC approximate.
 | internal/tools/memoryshared.go | Shared/multi-project memory via whiteboard REST | ~263 | `HandleSharedLoad(ctx, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult`; `loadRelatedProjects() map[string][]string` |
 | internal/tools/pool.go | Pool tool: poll/cancel/status over pooling.Registry. Intro-Commit f1354bbfea2fc72fbb2068b047639d5e603478a4 | ~121 | `HandlePoolAction(ctx, reg *pooling.Registry, req mcp.CallToolRequest) *mcp.CallToolResult`; `statusPayload(state, id string, reg) map[string]any` |
 | internal/tools/skills.go | Skill list/get with bundled resource resolution | ~98 | `HandleSkillsAction(ctx, workspace string, deps Deps, req mcp.CallToolRequest)`; `handleSkillsList(ctx, start)`; `handleSkillsGet(ctx, id string, start)` |
-| internal/tools/workspace.go | Set active workspace (resolved via shared store) | ~93 | `HandleWorkspaceAction(ctx, path, workspace string, deps Deps) *mcp.CallToolResult` |
+| internal/tools/workspace.go | Set active workspace (resolved via shared store); conditionally reports `tools_changed` only when non-empty | ~93 | `HandleWorkspaceAction(ctx, path, workspace string, deps Deps) *mcp.CallToolResult` |
 | internal/tools/colab.go | Collaboration card exchange with gateway | ~90 | `HandleColabAction(ctx, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult` |
 
 ### codegraph engine
@@ -126,7 +126,7 @@ Single-language Go project. Grouped by layer; LOC approximate.
 | File / Module | Role | LOC | Key Exports (with signatures) |
 |---|---|---|---|
 | internal/terminal/commander.go | Raw-mode interactive REPL, command dispatch, tool execution | ~440 | `StartTerminalCommander(shutdownCh <-chan struct{})`; `ExecuteTool(name string, args map[string]any) string`; `MakeFakeRequest(args map[string]any) mcp.CallToolRequest`; `ParseCodegraphArgs(args []string) ParsedCodegraphArgs` |
-| internal/terminal/exportcli.go | Generates `zen-*` shell wrapper scripts with short-flag aliases | ~514 | `ExportCLI(w io.Writer, cliPort, mcpPort int)`; `ExportCLIWithShort(w io.Writer, cliPort, mcpPort int, short bool)`; `ExportCliClean(w io.Writer)` |
+| internal/terminal/exportcli.go | Generates `zen-*` shell wrapper scripts with short-flag aliases + array params | ~568 | `ExportCLI(w io.Writer, cliPort, mcpPort int)`; `ExportCLIWithShort(w io.Writer, cliPort, mcpPort int, short bool)`; `ExportCliClean(w io.Writer)`; `collectParams(schema map[string]any) []cliParam`; `shortAliasMap(params []cliParam) map[string]string`; `writeAtomic(dest, content string) error` |
 | internal/terminal/handlers/*.go (14 files) | `init()`-registered CLI commands (browser, codegraph, gatekeeper, git, index, leech, memory, prompts, refactor, shell, skills, system, vision, workspace) | ~20–240 ea | init-only registration: `func init()` calling `commander.Register(name, handler)`; notable exports: `cd(args []string) error`, `runGitCommand(workdir string, args ...string) (string, error)`, `brainExtract(args []string) error` |
 | internal/bridge/bridge.go | Firefox bridge JSON POST client + response sanitization | ~194 | `CallBridge(ctx, action string, params map[string]any) (map[string]any, error)`; `DecodeHTMLEntities(text string) string`; `FixMojibake(text string) string` |
 | internal/agentbridge/agentbridge.go | Delegates chat to a web agent through the bridge | ~72 | `DelegateToWebAgent(ctx, params AgentChatParams) (string, error)` |
@@ -225,7 +225,3 @@ Terminal REPL ── commander.ExecuteTool ──▶ same tool handlers (MakeFak
 | `go test ./...` | Run full unit + e2e test suite |
 | `go vet ./...` | Static analysis |
 | `go run .` | Server run with env vars for config path / ports (see mcpcfg/paths.go) |
-
-## Last Git Commit
-Commit: 11188af06de870c1a8b5dd93ef89e321fd9ec248
-Date: Thu Aug 13 15:33:01 2026 +0700
