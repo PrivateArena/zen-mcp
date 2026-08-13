@@ -186,7 +186,7 @@
     },
     "workspace": {
       "timeout": 30000,
-      "format": "raw"
+      "format": "md"
     },
     "think": {
       "timeout": 600000,
