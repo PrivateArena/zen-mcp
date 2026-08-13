@@ -459,7 +459,7 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 
 	// Unwrap the MCP content envelope.
 	ln(`# Unwrap MCP content envelope; fall back to raw JSON if shape differs`)
-	ln(`echo "$RESPONSE" | jq -e 'if .result.content then .result.content[] | if .type == "text" then .text else . end elif .result then .result elif .error then error(.error.message) else . end' || echo "$RESPONSE"`)
+	ln(`echo "$RESPONSE" | jq -re 'if .result.content then .result.content[] | if .type == "text" then .text else . end elif .result then .result elif .error then error(.error.message) else . end' || echo "$RESPONSE"`)
 
 	return b.String()
 }
