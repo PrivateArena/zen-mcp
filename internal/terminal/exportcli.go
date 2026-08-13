@@ -26,6 +26,7 @@ type cliParam struct {
 	required bool
 	desc     string
 	values   []string
+	isArray  bool
 }
 
 // ExportCLI generates CLI wrapper scripts for all tools using full --param names,
@@ -199,6 +200,7 @@ func collectParams(schema map[string]any) []cliParam {
 				p.desc = d
 			}
 			p.values = strSlice(ps["enum"])
+			p.isArray = ps["type"] == "array"
 		}
 		params = append(params, p)
 	}
@@ -284,6 +286,9 @@ func paramSuffix(p cliParam) (req, vals string) {
 	}
 	if len(p.values) > 0 {
 		vals = " [" + strings.Join(p.values, "|") + "]"
+	}
+	if p.isArray {
+		req += " (repeatable, comma-separated)"
 	}
 	return req, vals
 }
@@ -371,6 +376,12 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	if short {
 		aliases = shortAliasMap(params)
 	}
+	var arrayKeys []string
+	for _, p := range params {
+		if p.isArray {
+			arrayKeys = append(arrayKeys, p.key)
+		}
+	}
 
 	var b strings.Builder
 	ln := func(line string) { b.WriteString(line); b.WriteString("\n") }
@@ -398,6 +409,18 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	ln(`TOOL="` + t.name + `"`)
 	ln(`RAW_JSON=""`)
 	ln(`declare -A PARAMS`)
+	if len(arrayKeys) > 0 {
+		ln(`declare -A ARR_PARAMS`)
+		ln("")
+		ln(`push_array() {`)
+		ln(`  local key="$1" val="$2"`)
+		ln(`  if [[ -n "${ARR_PARAMS[$key]:-}" ]]; then`)
+		ln(`    ARR_PARAMS["$key"]+=$'\x01'"$val"`)
+		ln(`  else`)
+		ln(`    ARR_PARAMS["$key"]="$val"`)
+		ln(`  fi`)
+		ln(`}`)
+	}
 	ln("")
 	ln(`if [[ $# -eq 0 ]]; then`)
 	ln(`  set -- --help`)
@@ -413,11 +436,31 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	ln(`      ;;`)
 	for _, p := range params {
 		if a, ok := aliases[p.key]; ok {
-			ln(`    -` + a + `) key="` + p.key + `"; PARAMS["$key"]="$2"; shift 2 ;;`)
+			if p.isArray {
+				ln(`    -` + a + `) key="` + p.key + `"; IFS=',' read -r -a _parts <<< "$2"; shift 2; for _p in "${_parts[@]}"; do [[ -n "$_p" ]] && push_array "$key" "$_p"; done ;;`)
+			} else {
+				ln(`    -` + a + `) key="` + p.key + `"; PARAMS["$key"]="$2"; shift 2 ;;`)
+			}
 		}
 	}
-	ln(`    --*)`)
-	ln(`      key="${1#--}"; PARAMS["$key"]="$2"; shift 2 ;;`)
+	if len(arrayKeys) > 0 {
+		ln(`    --*)`)
+		ln(`      key="${1#--}"`)
+		ln(`      case "$key" in`)
+		ln(`        ` + strings.Join(arrayKeys, "|") + `)`)
+		ln(`          IFS=',' read -r -a _parts <<< "$2"; shift 2`)
+		ln(`          for _p in "${_parts[@]}"; do`)
+		ln(`            if [[ -n "$_p" ]]; then`)
+		ln(`              push_array "$key" "$_p"`)
+		ln(`            fi`)
+		ln(`          done ;;`)
+		ln(`        *)`)
+		ln(`          PARAMS["$key"]="$2"; shift 2 ;;`)
+		ln(`      esac ;;`)
+	} else {
+		ln(`    --*)`)
+		ln(`      key="${1#--}"; PARAMS["$key"]="$2"; shift 2 ;;`)
+	}
 	ln(`    *) echo "Unknown arg: $1" >&2; exit 1 ;;`)
 	ln(`  esac`)
 	ln(`done`)
@@ -432,6 +475,13 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	ln(`    for k in "${!PARAMS[@]}"; do printf "%s\0%s\0" "$k" "${PARAMS[$k]}"; done \`)
 	ln(`    | jq -Rsc 'split("\u0000") | . as $a | [range(0; length-1; 2)] | map({key: $a[.], value: $a[.+1]}) | from_entries'`)
 	ln(`  )`)
+	if len(arrayKeys) > 0 {
+		ln(`  ARRS_JSON=$(`)
+		ln(`    for k in "${!ARR_PARAMS[@]}"; do printf "%s\0%s\0" "$k" "${ARR_PARAMS[$k]}"; done \`)
+		ln(`    | jq -Rsc 'split("\u0000") | . as $a | [range(0; length-1; 2)] | map({key: $a[.], value: ($a[.+1] | split("\u0001") | if length > 1 then . else .[0] end)}) | from_entries'`)
+		ln(`  )`)
+		ln(`  ARGS_JSON=$(jq -n --argjson base "$ARGS_JSON" --argjson extra "$ARRS_JSON" '$base * $extra')`)
+	}
 	ln(`fi`)
 	ln("")
 	ln(`PAYLOAD=$(jq -n --arg tool "$TOOL" --argjson args "$ARGS_JSON" '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":$tool,"arguments":$args}}')`)

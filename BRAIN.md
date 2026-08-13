@@ -30,6 +30,7 @@ MCP CLI tools, available globally in PATH.
 
 > [TIP] Use `-h` to get help messages.
 > [FORBIDDEN] DO NOT run `git diff` at task completion. DO NOT clear package caches (`go clean`, etc.).
+> When user saying "activate skill", use `zskill` CLI tool.
 
 ---
 
