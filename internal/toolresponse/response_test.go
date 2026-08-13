@@ -103,6 +103,16 @@ func TestRenderOutputOtherData(t *testing.T) {
 	}
 }
 
+func TestRenderOutputMDMap(t *testing.T) {
+	got := RenderOutput("md", map[string]any{"message": "Workspace -> /x", "path": "/x", "prev_path": "/x", "tools_changed": []any{}})
+	if strings.Contains(got, "```json") {
+		t.Errorf("md map should not be wrapped as json fence: %s", got)
+	}
+	if !strings.Contains(got, "**message**") || !strings.Contains(got, "Workspace -> /x") {
+		t.Errorf("md map should render key/value markdown: %s", got)
+	}
+}
+
 func TestIsCommandResult(t *testing.T) {
 	if !IsCommandResult(CommandResult{Stdout: "x", ExitCode: 0}) {
 		t.Error("CommandResult should be detected")
@@ -356,5 +366,35 @@ func TestWrapErrorSuggestionsDisabledIsBarebone(t *testing.T) {
 	}
 	if strings.Contains(text, "📌 **Tool:") || strings.Contains(text, "Example Usage") || strings.Contains(text, "Parameters for action") {
 		t.Errorf("suggestion block should be suppressed when disabled: %s", text)
+	}
+}
+
+func TestWrapErrorFormatMd(t *testing.T) {
+	setupMCPConfigWithBody(t, `{"toolConfigs":{"browser":{"timeout":60000,"format":"md"}}}`)
+	ctx := WithToolContext(context.Background(), ToolContext{ToolName: "browser", Params: map[string]any{"action": "navigate"}})
+	res := WrapErrorWithContext(ctx, "browser", errors.New("boom failure"), time.Now())
+	text := res.Content[0].(mcp.TextContent).Text
+	if strings.Contains(text, "```json") {
+		t.Errorf("md error should not be wrapped as json fence: %s", text)
+	}
+	if !strings.Contains(text, "boom failure") {
+		t.Errorf("md error should contain message: %s", text)
+	}
+}
+
+func TestWrapErrorFormatJSON(t *testing.T) {
+	setupMCPConfigWithBody(t, `{"toolConfigs":{"browser":{"timeout":60000,"format":"json"}}}`)
+	ctx := WithToolContext(context.Background(), ToolContext{ToolName: "browser", Params: map[string]any{"action": "navigate"}})
+	res := WrapErrorWithContext(ctx, "browser", errors.New("boom failure"), time.Now())
+	text := res.Content[0].(mcp.TextContent).Text
+	var m map[string]any
+	if err := json.Unmarshal([]byte(text), &m); err != nil {
+		t.Fatalf("json error format should be valid json: %v (%s)", err, text)
+	}
+	if m["message"] != "boom failure" {
+		t.Errorf("json error message wrong: %v", m)
+	}
+	if m["tool"] != "browser" {
+		t.Errorf("json error tool wrong: %v", m)
 	}
 }

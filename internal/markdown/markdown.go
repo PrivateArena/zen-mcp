@@ -1,4 +1,4 @@
-package projectmemory
+package markdown
 
 import (
 	"bytes"

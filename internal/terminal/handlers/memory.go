@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"zen-mcp/internal/markdown"
 	"zen-mcp/internal/projectmemory"
 	"zen-mcp/internal/terminal"
 )
@@ -77,7 +78,7 @@ func brainExtract(args []string) error {
 
 	sort.SliceStable(scored, func(i, j int) bool { return scored[i].score > scored[j].score })
 
-	md := projectmemory.JSONToMarkdown(scored[0].line)
+	md := markdown.JSONToMarkdown(scored[0].line)
 
 	brainDir := filepath.Join(wRoot, ".zenmcp", "brain")
 	if err := os.MkdirAll(brainDir, 0o755); err != nil {

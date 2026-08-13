@@ -14,6 +14,7 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 
 	"zen-mcp/internal/logfilter"
+	"zen-mcp/internal/markdown"
 	"zen-mcp/internal/mcpcfg"
 	"zen-mcp/internal/telemetry"
 	"zen-mcp/internal/toolsuggestions"
@@ -64,12 +65,15 @@ func RenderOutput(format string, data any) string {
 	case "json":
 		return string(serialized)
 	case "md":
-		json := string(serialized)
+		md := markdown.JSONToMarkdown(string(serialized))
+		if md != "" {
+			return md
+		}
 		fence := "```"
-		if strings.Contains(json, "```") {
+		if strings.Contains(string(serialized), "```") {
 			fence = "````"
 		}
-		return fence + "json\n" + json + "\n" + fence
+		return fence + "json\n" + string(serialized) + "\n" + fence
 	}
 	return string(serialized)
 }
@@ -393,27 +397,49 @@ func wrapErrorCtx(ctx context.Context, tool string, err error, start time.Time) 
 		actionLabel = "(no action)"
 	}
 
-	var lines []string
-	lines = append(lines, fmt.Sprintf("❌ %s failed", tool))
-	lines = append(lines, "Action: "+actionLabel)
-	lines = append(lines, "Error: "+errorMessage)
-	if stackTrace != "" {
-		stackLines := strings.Split(stackTrace, "\n")
-		var atParts []string
-		for i := 1; i < len(stackLines) && len(atParts) < 2; i++ {
-			if s := strings.TrimSpace(stackLines[i]); s != "" {
-				atParts = append(atParts, s)
+	toolCfg := mcpcfg.GetToolConfig(tool)
+	if toolCfg.Format == "raw" {
+		var lines []string
+		lines = append(lines, fmt.Sprintf("❌ %s failed", tool))
+		lines = append(lines, "Action: "+actionLabel)
+		lines = append(lines, "Error: "+errorMessage)
+		if stackTrace != "" {
+			stackLines := strings.Split(stackTrace, "\n")
+			var atParts []string
+			for i := 1; i < len(stackLines) && len(atParts) < 2; i++ {
+				if s := strings.TrimSpace(stackLines[i]); s != "" {
+					atParts = append(atParts, s)
+				}
+			}
+			if at := strings.Join(atParts, " → "); at != "" {
+				lines = append(lines, "At: "+at)
 			}
 		}
-		if at := strings.Join(atParts, " → "); at != "" {
-			lines = append(lines, "At: "+at)
+		if suggestion != "" {
+			lines = append(lines, "\n"+suggestion)
+		}
+
+		text := strings.Join(filterEmpty(lines), "\n")
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{mcp.TextContent{Type: "text", Text: text}},
+			IsError: false,
 		}
 	}
+
+	data := map[string]any{
+		"error":   true,
+		"tool":    tool,
+		"action":  actionLabel,
+		"message": errorMessage,
+	}
+	if stackTrace != "" {
+		data["stack"] = stackTrace
+	}
 	if suggestion != "" {
-		lines = append(lines, "\n"+suggestion)
+		data["suggestion"] = suggestion
 	}
 
-	text := strings.Join(filterEmpty(lines), "\n")
+	text := RenderOutput(string(toolCfg.Format), data)
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{mcp.TextContent{Type: "text", Text: text}},
 		IsError: false,
