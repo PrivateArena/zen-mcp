@@ -1,7 +1,7 @@
 {
   "/media/jang/home/Deve/zen-mcp": {
     "description": "ZenMCP is multi-purpose MCP server designed for ZenECO system.",
-    "lastVisited": "2026-08-12T23:15:26.245Z",
+    "lastVisited": "2026-08-13T07:05:03.162Z",
     "scopes": {
       "browser": [
         "cli/zen-browser",
@@ -43,6 +43,35 @@
         "cli/zen-workspace",
         "internal/workspace",
         "internal/tools/workspace.go"
+      ]
+    }
+  },
+  "/media/jang/home/Deve/zen-cap": {
+    "description": "ZenCap is ShareX but smaller, faster, better and run on Linux.",
+    "lastVisited": "2026-08-13T06:29:24.895Z",
+    "scopes": {
+      "automation": [
+        "pkg/automation"
+      ],
+      "capture": [
+        "pkg/capture"
+      ],
+      "clipboard": [
+        "pkg/clipboard"
+      ],
+      "editor": [
+        "pkg/annotation"
+      ],
+      "magnifier": [
+        "pkg/magnifier"
+      ],
+      "recorder": [
+        "pkg/recorder",
+        "pkg/av"
+      ],
+      "snippet": [
+        "pkg/snippet",
+        "pkg/prompt"
       ]
     }
   },
@@ -141,35 +170,6 @@
   "/media/jang/home/Deve/zen-bashrc": {
     "description": "bashrc builder.",
     "lastVisited": "2026-07-26T02:45:01.741Z"
-  },
-  "/media/jang/home/Deve/zen-cap": {
-    "description": "ZenCap is ShareX but smaller, faster, better and run on Linux.",
-    "lastVisited": "2026-08-04T15:14:10.910Z",
-    "scopes": {
-      "automation": [
-        "pkg/automation"
-      ],
-      "capture": [
-        "pkg/capture"
-      ],
-      "clipboard": [
-        "pkg/clipboard"
-      ],
-      "editor": [
-        "pkg/annotation"
-      ],
-      "magnifier": [
-        "pkg/magnifier"
-      ],
-      "recorder": [
-        "pkg/recorder",
-        "pkg/av"
-      ],
-      "snippet": [
-        "pkg/snippet",
-        "pkg/prompt"
-      ]
-    }
   },
   "/media/jang/home/Deve/zen-clone": {
     "description": "ZenClone is Frontend for rclone.",
