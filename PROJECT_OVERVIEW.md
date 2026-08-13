@@ -225,3 +225,7 @@ Terminal REPL ── commander.ExecuteTool ──▶ same tool handlers (MakeFak
 | `go test ./...` | Run full unit + e2e test suite |
 | `go vet ./...` | Static analysis |
 | `go run .` | Server run with env vars for config path / ports (see mcpcfg/paths.go) |
+
+## Last Git Commit
+Commit: 11188af06de870c1a8b5dd93ef89e321fd9ec248
+Date: Thu Aug 13 15:33:01 2026 +0700

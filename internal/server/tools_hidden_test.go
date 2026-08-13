@@ -14,8 +14,8 @@ import (
 	"zen-mcp/internal/mcpcfg"
 	"zen-mcp/internal/shared"
 	"zen-mcp/internal/toolregistry"
-	"zen-mcp/internal/toolstate"
 	"zen-mcp/internal/tools"
+	"zen-mcp/internal/toolstate"
 )
 
 // toolsModeMux builds the routes harness with every tool registered through

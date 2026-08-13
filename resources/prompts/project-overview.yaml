@@ -7,6 +7,21 @@
      MANDATE — Use CodeGraph as the primary source. FORBIDDEN: reading full source file bodies, using browser/chat tools, web search. Skeletons give function/class signatures WITHOUT body — this is intentional for token efficiency and is the core signal.
      EXCEPTION: You MAY read small manifest/config files directly (package.json, go.mod, Makefile, Cargo.toml, pyproject.toml, .env.example) — these are structured metadata, not source, and codegraph skeletons don't cover them. Cap at ~5 such reads.
 
+     STEP -1 — INCREMENTAL UPDATE CHECK (run before Step 0):
+     Check whether PROJECT_OVERVIEW.md (or, for split projects, the relevant PROJECT_OVERVIEW.<scope>.md) exists AND its leading `<!-- codegraph-file-count: N, last-commit: <sha> -->` comment has a `last-commit` field, AND the project is a git repo (`git rev-parse --is-inside-work-tree`).
+     - If any of that is false: skip straight to Step 0 (full generation).
+     - Else run `git rev-parse HEAD`.
+       - If it equals the stored `last-commit`: the file is already current. Skip generation entirely for that scope and do not call the commit function again.
+       - If it differs: run `git diff --name-only <stored-commit> HEAD` and `git diff --name-status <stored-commit> HEAD` (to catch renames/deletions) to get the changed-file set for that scope.
+         - Compute change ratio = changed files / total files in that scope (from a fresh `codegraph({ action: 'files' })`).
+         - REGEN THRESHOLD — fall back to full Step 0 generation for that scope if: change ratio > 25%, OR any top-level scope directory was added/removed, OR the file-count drift already exceeds 5% (existing rule).
+         - Otherwise, do a TARGETED UPDATE instead of full generation:
+           a. `codegraph({ action: 'skeletons', query: <only the changed files> })` — do not re-skeleton unchanged files.
+           b. Update only the Component Roles rows for changed/added files; remove rows for deleted files.
+           c. Re-run `codegraph({ action: 'related' })` only for changed files that already appear in the existing Cross-References table (their fan-in/out may have shifted) — do not recompute the full top-6 from scratch unless a changed file looks like a new structural hub (high fan-in/out in the diff).
+           d. Leave File Tree, Dependencies, Read Triggers, and Key Architectural Patterns untouched unless the diff directly implies a change to them (new entry point, new top-level dir, new dependency in a re-read manifest).
+           e. Update the leading marker comment to the new HEAD sha and current file count before writing.
+
      STEP 0 — SCOPE SIZE CHECK:
      Run `codegraph({ action: 'files' })` and count files per top-level scope (root, and any subtree that is itself a separate module/binary — e.g. cmd/*, apps/*, services/*).
      - If a scope has ≤ 60 files: fold it into the single PROJECT_OVERVIEW.md as normal.
@@ -109,7 +124,7 @@
      - If a cell exceeds 100 chars, abbreviate keeping the key signal (prefer trimming prose over trimming signatures).
 
      DETERMINISTIC RULES:
-     - No Generated: / Project Root: / timestamp footers. A hidden staleness marker is allowed: a single HTML comment at the very top, `<!-- codegraph-file-count: N -->`, so a future run can detect drift without a human-readable footer.
+     - No Generated: / Project Root: / timestamp footers. A hidden staleness marker is allowed: a single HTML comment at the very top, `<!-- codegraph-file-count: N, last-commit: <sha> -->` (sha = `git rev-parse HEAD` at write time; omit the last-commit field if not in a git repo), so a future run can detect drift without a human-readable footer.
      - No box-drawing diagrams, no Connection Map tables.
      - Required H2s: Purpose, File Tree, Component Roles, Key Architectural Patterns, Read Triggers, Dependencies.
      - Optional H2s (Architecture, Scope Map, Tools, Cross-References, Data Flow, Build & Run) included when they add signal; Scope Map and per-scope overview files are REQUIRED (not optional) once Step 0 crosses the 60-file threshold.
@@ -131,7 +146,14 @@
      - MUST NOT call browser/chat/web search.
      - MUST output plain text. No markdown formatting beyond the tables and fenced code blocks above.
      - IF a skeleton or related call returns no data for a path, fall back to `codegraph({ action: 'files' })` to verify the path exists.
+     - MUST attempt Step -1 (incremental check) before any full regeneration when an overview file with a `last-commit` marker exists in a git repo. Do not silently default to full regen just because it's simpler.
+     - MUST run the STEP FINAL commit exactly once per invocation (covering all scopes written this run), never per-scope.
      - Write result to PROJECT_OVERVIEW.md (and any PROJECT_OVERVIEW.<scope>.md files) at project root, overwriting existing files.
+
+     STEP FINAL — COMMIT (only if a write actually happened, i.e. not the "already current" skip case above):
+     If `git rev-parse --is-inside-work-tree` succeeds, run once after ALL overview files for this run are written (not per-scope):
+     `source /media/jang/home/Deve/zen-bashrc/src/28_git_suite.sh && git_poc`
+     If not in a git repo, skip this step silently — do not error or mention it.
   enabledSkills:
     - codebase-research
   suggestSkills: true
