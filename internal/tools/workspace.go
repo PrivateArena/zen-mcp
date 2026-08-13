@@ -80,12 +80,15 @@ func HandleWorkspaceAction(ctx context.Context, path, workspace string, deps Dep
 		}
 	}
 
-	return toolresponse.WrapSuccess(ctx, "workspace", map[string]any{
-		"path":          resolvedNewRoot,
-		"prev_path":     prevPath,
-		"tools_changed": toolsChanged,
-		"message":       "Workspace -> " + resolvedNewRoot,
-	}, start)
+	result := map[string]any{
+		"path":      resolvedNewRoot,
+		"prev_path": prevPath,
+		"message":   "Workspace -> " + resolvedNewRoot,
+	}
+	if len(toolsChanged) > 0 {
+		result["tools_changed"] = toolsChanged
+	}
+	return toolresponse.WrapSuccess(ctx, "workspace", result, start)
 }
 
 type workspaceErr struct{ msg string }
