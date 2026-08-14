@@ -52,6 +52,7 @@ func TestBuildWrapperScriptArraySections(t *testing.T) {
 	for _, want := range []string{
 		`declare -A ARR_PARAMS`,
 		`push_array() {`,
+		`split_array() {`,
 		`ARR_PARAMS["$key"]+=$'\x01'"$val"`,
 		`        provider|upload_files)`,
 		`  ARRS_JSON=$(`,
@@ -67,8 +68,8 @@ func TestBuildWrapperScriptArraySections(t *testing.T) {
 func TestBuildWrapperScriptArrayShortAliases(t *testing.T) {
 	script := buildWrapperScriptOpt(arraySampleTool(), "http://127.0.0.1:2999", true)
 	for _, want := range []string{
-		`-p) key="provider"; IFS=',' read -r -a _parts <<< "$2"; shift 2; for _p in "${_parts[@]}"; do [[ -n "$_p" ]] && push_array "$key" "$_p"; done ;;`,
-		`-up) key="upload_files"; IFS=',' read -r -a _parts <<< "$2"; shift 2; for _p in "${_parts[@]}"; do [[ -n "$_p" ]] && push_array "$key" "$_p"; done ;;`,
+		`-p) key="provider"; split_array "$key" "$2"; shift 2 ;;`,
+		`-up) key="upload_files"; split_array "$key" "$2"; shift 2 ;;`,
 		`-ur) key="url"; PARAMS["$key"]="$2"; shift 2 ;;`,
 		`echo "  -up, --upload_files (repeatable, comma-separated)  Files"`,
 	} {
@@ -287,6 +288,61 @@ func TestArrayWrapperHelpDocumentsEqualStyle(t *testing.T) {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("equal-style help missing %q\n%s", want, out)
 		}
+	}
+}
+
+func TestArrayHarnessMultilineValuePreserved(t *testing.T) {
+	harness := arrayHarness(t, arraySampleTool(), false)
+	got := runArrayHarness(t, harness, "--action", "chat", "--upload_files", "line1\nline2")
+	if got["upload_files"] != "line1\nline2" {
+		t.Fatalf("multiline array value must survive as one element, got %#v", got["upload_files"])
+	}
+}
+
+func TestArrayHarnessMultilineWithCommaSplit(t *testing.T) {
+	harness := arrayHarness(t, arraySampleTool(), true)
+	got := runArrayHarness(t, harness, "-a", "chat", "-up", "a\nb,c")
+	files, ok := got["upload_files"].([]any)
+	if !ok || len(files) != 2 || files[0] != "a\nb" || files[1] != "c" {
+		t.Fatalf("newlines preserved while commas split, got %#v", got["upload_files"])
+	}
+}
+
+func TestArrayHarnessMissingValueGuard(t *testing.T) {
+	if _, err := exec.LookPath("jq"); err != nil {
+		t.Skip("jq not available")
+	}
+	harness := arrayHarness(t, arraySampleTool(), true)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "harness")
+	if err := os.WriteFile(path, []byte(harness), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("bash", path, "-a", "chat", "-ur").CombinedOutput()
+	if err == nil {
+		t.Fatalf("missing value must fail, got success: %s", out)
+	}
+	if !strings.Contains(string(out), "missing value") {
+		t.Fatalf("missing-value diagnostic expected, got: %s", out)
+	}
+}
+
+func TestArrayHarnessMissingValueGuardLong(t *testing.T) {
+	if _, err := exec.LookPath("jq"); err != nil {
+		t.Skip("jq not available")
+	}
+	harness := arrayHarness(t, arraySampleTool(), false)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "harness")
+	if err := os.WriteFile(path, []byte(harness), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("bash", path, "--action", "chat", "--url").CombinedOutput()
+	if err == nil {
+		t.Fatalf("missing long-flag value must fail, got success: %s", out)
+	}
+	if !strings.Contains(string(out), "missing value") {
+		t.Fatalf("missing-value diagnostic expected, got: %s", out)
 	}
 }
 
