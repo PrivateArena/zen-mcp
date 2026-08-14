@@ -646,6 +646,50 @@ func (s *Storage) ListFiles(filter string, limit int) ([]FileRecord, error) {
 	return files, nil
 }
 
+// ListSymbolsByDocstring returns all indexed symbols joined with their file
+// paths, ordered by path then line, optionally filtered by docstring presence.
+// hasDoc selects symbols carrying a non-empty docstring; !hasDoc selects
+// symbols lacking one. limit <= 0 returns every match.
+func (s *Storage) ListSymbolsByDocstring(hasDoc bool, limit int) ([]NodeRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	query := `
+		SELECT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
+		FROM nodes n JOIN files f ON n.file_id = f.id
+	`
+	args := make([]any, 0, 1)
+	if hasDoc {
+		query += ` WHERE n.docstring IS NOT NULL AND n.docstring != ''`
+	} else {
+		query += ` WHERE n.docstring IS NULL OR n.docstring = ''`
+	}
+	query += ` ORDER BY f.path, n.start_line, n.name`
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var nodes []NodeRecord
+	for rows.Next() {
+		var n NodeRecord
+		if err := rows.Scan(&n.ID, &n.FileID, &n.Type, &n.Name, &n.Language, &n.Path, &n.QualifiedName, &n.Signature, &n.Docstring, &n.StartLine, &n.EndLine, &n.Content); err != nil {
+			continue
+		}
+		nodes = append(nodes, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return nodes, nil
+}
+
 // NodeRecord represents a code symbol.
 type NodeRecord struct {
 	ID            int64

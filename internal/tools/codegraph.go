@@ -646,6 +646,85 @@ func actionSkeletons(session *layeredGraphSession, isolate int, query string) (s
 	return trimmed, nil
 }
 
+// formatSymbolLedger renders indexed symbols in skeleton style, grouped by
+// file path. showDocs=true appends each symbol's docstring after its signature
+// (mirroring GetSkeleton); showDocs=false emits only the symbol line so that
+// undocumented symbols read as a docstring-maintenance ledger.
+func formatSymbolLedger(symbols []codegraph.NodeRecord, showDocs bool) string {
+	var sb strings.Builder
+	currentPath := ""
+	for _, n := range symbols {
+		if n.Path != currentPath {
+			currentPath = n.Path
+			sb.WriteString(fmt.Sprintf("File: %s\n", n.Path))
+		}
+		loc := fmt.Sprintf("(lines %d-%d)", n.StartLine, n.EndLine)
+		sig := strings.TrimSpace(n.Signature)
+		if sig != "" {
+			oneLineSig := strings.Join(strings.Fields(sig), " ")
+			sb.WriteString(fmt.Sprintf("  %s %s %s %s\n", n.Type, n.Name, oneLineSig, loc))
+		} else {
+			sb.WriteString(fmt.Sprintf("  %s %s %s\n", n.Type, n.Name, loc))
+		}
+		if showDocs && n.Docstring != "" {
+			sb.WriteString(fmt.Sprintf("    \"%s\"\n", n.Docstring))
+		}
+	}
+	return strings.TrimSpace(sb.String())
+}
+
+func actionDocsless(session *layeredGraphSession, isolate int, limit *int) (string, error) {
+	return actionSymbolLedger(session, isolate, limit, false)
+}
+
+func actionDocsfull(session *layeredGraphSession, isolate int, limit *int) (string, error) {
+	return actionSymbolLedger(session, isolate, limit, true)
+}
+
+// actionSymbolLedger implements the global docstring-ledger actions: it scans
+// every graph layer for symbols missing (docsless) or carrying (docsfull) a
+// docstring, like a global skeletons search with no query required.
+func actionSymbolLedger(session *layeredGraphSession, isolate int, limit *int, hasDoc bool) (string, error) {
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
+	l := 0
+	if limit != nil {
+		l = *limit
+	}
+	kind := "missing docstrings"
+	if hasDoc {
+		kind = "with docstrings"
+	}
+
+	parts := make([]string, 0, len(targets))
+	for _, target := range targets {
+		symbols, err := target.graph.SymbolsByDocstring(hasDoc, l)
+		if err != nil {
+			parts = append(parts, fmt.Sprintf("Scope [%s]: lookup failed: %v.", target.label, err))
+			continue
+		}
+		if len(symbols) == 0 {
+			if hasDoc {
+				parts = append(parts, fmt.Sprintf("Scope [%s]: No symbols %s. Run 'docsless' to find symbols needing documentation.", target.label, kind))
+			} else {
+				parts = append(parts, fmt.Sprintf("Scope [%s]: No symbols %s. All indexed symbols are documented.", target.label, kind))
+			}
+			continue
+		}
+		body := formatSymbolLedger(symbols, hasDoc)
+		parts = append(parts, fmt.Sprintf("Scope [%s]: %d symbol(s) %s.\n%s", target.label, len(symbols), kind, body))
+	}
+
+	results := make([]layeredResult, 0, len(parts))
+	for i, p := range parts {
+		label := targets[i].label
+		results = append(results, layeredResult{label: label, data: p})
+	}
+	return formatLayered(results, isolate != 0), nil
+}
+
 func actionMermaid(session *layeredGraphSession, isolate int, query string, limit *int) (string, error) {
 	targets, err := getTargetGraphs(session, isolate)
 	if err != nil {
@@ -1255,6 +1334,10 @@ func HandleCodegraphAction(ctx context.Context, workspace string, deps Deps, req
 			return toolresponse.WrapErrorWithContext(ctx, "codegraph", fmt.Errorf("file path(s) (query) required for skeleton action"), start)
 		}
 		return run(func() (string, error) { return actionSkeletons(session, isolate, query) })
+	case "docsless":
+		return run(func() (string, error) { return actionDocsless(session, isolate, limit) })
+	case "docsfull":
+		return run(func() (string, error) { return actionDocsfull(session, isolate, limit) })
 	case "mermaid":
 		return run(func() (string, error) { return actionMermaid(session, isolate, query, limit) })
 	case "markdown":
@@ -1301,10 +1384,10 @@ func defCodegraph(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "codegraph",
 		Title:       "Code Graph",
-		Description: "Code graph engine. Actions: index, search, status, map, skeletons, mermaid, usage, neighbors, files, explain, related, deadcode, shortestPath, findCycles, markdown, impact.",
+		Description: "Code graph engine. Actions: index, search, status, map, skeletons, docsless, docsfull, mermaid, usage, neighbors, files, explain, related, deadcode, shortestPath, findCycles, markdown, impact.",
 		Schema: jsonSchema(map[string]any{
 			"action": strEnumProp("Codegraph action.", []string{
-				"index", "search", "status", "map", "skeletons", "mermaid",
+				"index", "search", "status", "map", "skeletons", "docsless", "docsfull", "mermaid",
 				"usage", "neighbors", "files", "explain", "related",
 				"deadcode", "shortestPath", "findCycles", "markdown", "impact",
 			}),

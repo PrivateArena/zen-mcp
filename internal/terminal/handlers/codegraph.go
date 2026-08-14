@@ -80,6 +80,28 @@ func init() {
 		return nil
 	})
 
+	terminal.Register("docsless", func(args []string) error {
+		parsed := terminal.ParseCodegraphArgs(args)
+		res := terminal.ExecuteTool("codegraph", map[string]any{
+			"action":  "docsless",
+			"limit":   parsed.Limit,
+			"isolate": parsed.Isolate,
+		})
+		terminal.Logf("RESULT:\n%s", res)
+		return nil
+	})
+
+	terminal.Register("docsfull", func(args []string) error {
+		parsed := terminal.ParseCodegraphArgs(args)
+		res := terminal.ExecuteTool("codegraph", map[string]any{
+			"action":  "docsfull",
+			"limit":   parsed.Limit,
+			"isolate": parsed.Isolate,
+		})
+		terminal.Logf("RESULT:\n%s", res)
+		return nil
+	})
+
 	terminal.Register("mermaid", func(args []string) error {
 		parsed := terminal.ParseCodegraphArgs(args)
 		res := terminal.ExecuteTool("codegraph", map[string]any{

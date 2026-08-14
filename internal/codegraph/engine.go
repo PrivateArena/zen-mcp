@@ -808,6 +808,14 @@ func (cg *CodeGraph) Skeletons() (string, error) {
 	return sb.String(), nil
 }
 
+// SymbolsByDocstring returns every indexed symbol, joined with its file path,
+// filtered by docstring presence. hasDoc=true selects documented symbols,
+// hasDoc=false selects symbols missing a docstring (the docstring-maintenance
+// ledger). Ordered by file path then line for stable, groupable output.
+func (cg *CodeGraph) SymbolsByDocstring(hasDoc bool, limit int) ([]NodeRecord, error) {
+	return cg.storage.ListSymbolsByDocstring(hasDoc, limit)
+}
+
 // GenerateMermaid returns a mermaid diagram with optional query filter and limit.
 func (cg *CodeGraph) GenerateMermaid(query string, limit int) (string, error) {
 	var nodes []NodeRecord

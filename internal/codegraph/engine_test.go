@@ -72,6 +72,90 @@ func TestGetSkeletonMissingFile(t *testing.T) {
 	}
 }
 
+func TestSymbolsByDocstring(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	src := `package foo
+
+// Adds a and b.
+func Add(a int, b int) int {
+	return a + b
+}
+
+// Subtracts b from a.
+func Sub(a int, b int) int {
+	return a - b
+}
+
+func mul(x, y int) int {
+	return x * y
+}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "calc.go"), []byte(src), 0644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	cg, err := NewCodeGraph(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCodeGraph: %v", err)
+	}
+	defer cg.Close()
+
+	if _, err := cg.Index(); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	withDocs, err := cg.SymbolsByDocstring(true, 0)
+	if err != nil {
+		t.Fatalf("SymbolsByDocstring(true, 0): %v", err)
+	}
+	if len(withDocs) != 2 {
+		t.Fatalf("expected exactly 2 documented symbols, got %d", len(withDocs))
+	}
+	if withDocs[0].Name != "Add" {
+		t.Fatalf("expected documented symbol Add first, got %s", withDocs[0].Name)
+	}
+	if withDocs[0].Docstring == "" {
+		t.Fatalf("expected non-empty docstring for Add")
+	}
+	if withDocs[0].Path != "calc.go" {
+		t.Fatalf("expected path calc.go, got %s", withDocs[0].Path)
+	}
+	if withDocs[1].Name != "Sub" {
+		t.Fatalf("expected documented symbol Sub second, got %s", withDocs[1].Name)
+	}
+
+	// Limit boundary: with 2 documented symbols, limit 1 must return only the
+	// first one in path+line order.
+	limited, err := cg.SymbolsByDocstring(true, 1)
+	if err != nil {
+		t.Fatalf("SymbolsByDocstring(true, 1): %v", err)
+	}
+	if len(limited) != 1 {
+		t.Fatalf("expected exactly 1 documented symbol with limit 1, got %d", len(limited))
+	}
+	if limited[0].Name != "Add" {
+		t.Fatalf("expected Add to be first documented symbol, got %s", limited[0].Name)
+	}
+
+	withoutDocs, err := cg.SymbolsByDocstring(false, 0)
+	if err != nil {
+		t.Fatalf("SymbolsByDocstring(false, 0): %v", err)
+	}
+	if len(withoutDocs) != 1 {
+		t.Fatalf("expected exactly 1 undocumented symbol, got %d", len(withoutDocs))
+	}
+	if withoutDocs[0].Name != "mul" {
+		t.Fatalf("expected undocumented symbol mul, got %s", withoutDocs[0].Name)
+	}
+	if withoutDocs[0].Docstring != "" {
+		t.Fatalf("expected empty docstring for mul, got %q", withoutDocs[0].Docstring)
+	}
+	if withoutDocs[0].Path != "calc.go" {
+		t.Fatalf("expected path calc.go, got %s", withoutDocs[0].Path)
+	}
+}
+
 func TestGetFileByPathReturnsID(t *testing.T) {
 	tmpDir := t.TempDir()
 

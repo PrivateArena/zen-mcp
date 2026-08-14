@@ -162,6 +162,87 @@ func TestSubgraphDiscoveredAfterInitialSession(t *testing.T) {
 	ClearSessionGraphByWorkspace(ws)
 }
 
+// TestDocsFullAndDocsLessActions guards the docstring-maintenance actions:
+// docsfull must list only documented symbols (with their docstrings), while
+// docsless must list only symbols missing a docstring. Neither action requires
+// a query — they behave like a global skeletons scan.
+func TestDocsFullAndDocsLessActions(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "calc.go", `package foo
+
+// Adds a and b.
+func Add(a int, b int) int {
+	return a + b
+}
+
+func mul(x, y int) int {
+	return x * y
+}
+`)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	resFull := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "docsfull"}))
+	full := toolText(resFull)
+	t.Logf("docsfull output:\n%s", full)
+	if !strings.Contains(full, "function Add func") {
+		t.Fatalf("docsfull should list documented symbol Add:\n%s", full)
+	}
+	if !strings.Contains(full, "Adds a and b") {
+		t.Fatalf("docsfull should include the docstring text:\n%s", full)
+	}
+	if strings.Contains(full, "function mul func") {
+		t.Fatalf("docsfull should not list undocumented symbol mul:\n%s", full)
+	}
+
+	resLess := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "docsless"}))
+	less := toolText(resLess)
+	t.Logf("docsless output:\n%s", less)
+	if !strings.Contains(less, "function mul func") {
+		t.Fatalf("docsless should list undocumented symbol mul:\n%s", less)
+	}
+	if strings.Contains(less, "function Add func") {
+		t.Fatalf("docsless should not list documented symbol Add:\n%s", less)
+	}
+	ClearSessionGraphByWorkspace(ws)
+}
+
+// TestDocslessAllDocumented guards the fully-documented happy path: when every
+// indexed symbol carries a docstring, docsless must report a clear message
+// instead of returning an empty or erroring result.
+func TestDocslessAllDocumented(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "calc.go", `package foo
+
+// Adds a and b.
+func Add(a int, b int) int {
+	return a + b
+}
+`)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	resLess := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "docsless"}))
+	less := toolText(resLess)
+	t.Logf("docsless (all documented) output:\n%s", less)
+	if !strings.Contains(less, "No symbols missing docstrings") {
+		t.Fatalf("docsless should report no missing docstrings when all symbols are documented:\n%s", less)
+	}
+	ClearSessionGraphByWorkspace(ws)
+}
+
 func makeFakeRequest(args map[string]any) mcp.CallToolRequest {
 	return mcp.CallToolRequest{
 		Params: mcp.CallToolParams{

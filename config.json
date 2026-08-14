@@ -131,6 +131,8 @@
     }
   },
   "bypassTools": [
+    "context",
+    "codegraph",
     "session",
     "memory",
     "memory_isolate",
