@@ -107,31 +107,7 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 	bridgeParams["timeout"] = mcpcfg.GetToolConfig("browser").Timeout
 
 	if uploadFiles, ok := bridgeParams["upload_files"]; ok {
-		workspaceRoot := workspace
-		var files []string
-		switch v := uploadFiles.(type) {
-		case []string:
-			files = v
-		case []any:
-			files = make([]string, 0, len(v))
-			for _, f := range v {
-				if s, ok := f.(string); ok {
-					files = append(files, s)
-				}
-			}
-		case string:
-			files = []string{v}
-		}
-
-		if len(files) > 0 {
-			resolved := make([]string, 0, len(files))
-			for _, f := range files {
-				if filepath.IsAbs(f) {
-					resolved = append(resolved, f)
-				} else {
-					resolved = append(resolved, filepath.Join(workspaceRoot, f))
-				}
-			}
+		if resolved := resolveUploadFiles(uploadFiles, workspace); resolved != nil {
 			bridgeParams["upload_files"] = resolved
 		}
 	}
@@ -146,7 +122,7 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 	}
 
 	if action == "chat" {
-		if uploadFiles, ok := params["upload_files"]; ok && uploadFiles != nil {
+		if uploadFiles, ok := bridgeParams["upload_files"]; ok && uploadFiles != nil {
 			if _, hasPath := bridgeParams["path"]; !hasPath {
 				bridgeParams["path"] = uploadFiles
 				delete(bridgeParams, "upload_files")
@@ -301,7 +277,7 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 	}
 
 	if action == "chat" {
-		if uploadFiles, ok := params["upload_files"]; ok && uploadFiles != nil && bridgeParams["path"] == nil {
+		if uploadFiles, ok := bridgeParams["upload_files"]; ok && uploadFiles != nil && bridgeParams["path"] == nil {
 			bridgeParams["path"] = uploadFiles
 			delete(bridgeParams, "upload_files")
 		}
@@ -487,6 +463,39 @@ func postJSON(ctx context.Context, url string, body map[string]any) (map[string]
 		return m, nil
 	}
 	return map[string]any{"statusCode": resp.StatusCode, "body": result}, nil
+}
+
+// resolveUploadFiles resolves relative file paths against workspaceRoot,
+// preserving the caller's shape: a plain string stays a string, an array stays
+// an array. Absolute paths pass through untouched. Returns nil only when the
+// input is nil, so callers can detect "nothing to resolve".
+func resolveUploadFiles(v any, workspaceRoot string) any {
+	switch files := v.(type) {
+	case []string:
+		out := make([]string, 0, len(files))
+		for _, f := range files {
+			out = append(out, resolveUploadPath(f, workspaceRoot))
+		}
+		return out
+	case []any:
+		out := make([]any, 0, len(files))
+		for _, f := range files {
+			if s, ok := f.(string); ok {
+				out = append(out, resolveUploadPath(s, workspaceRoot))
+			}
+		}
+		return out
+	case string:
+		return resolveUploadPath(files, workspaceRoot)
+	}
+	return v
+}
+
+func resolveUploadPath(f, workspaceRoot string) string {
+	if filepath.IsAbs(f) {
+		return f
+	}
+	return filepath.Join(workspaceRoot, f)
 }
 
 func sanitizeBrowserParams(args map[string]any) map[string]any {

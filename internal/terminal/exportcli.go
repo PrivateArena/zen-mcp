@@ -331,6 +331,7 @@ func buildHelpStatementsOpt(t cliTool, url string, aliases map[string]string) []
 		`echo "  $0 --<param> <value>..."`,
 		`echo "  $0 --<param>=<value>   # equal-style, e.g. --upload_files=f1,f2 or -up=f1"`,
 		`echo "  $0 --json '{\"key\":\"val\"}'   # raw JSON escape hatch"`,
+		`echo "  $0 --dry-run           # print the JSON-RPC body + metrics, do NOT send"`,
 	}
 	if len(aliases) > 0 {
 		lines = append(lines, `echo "  $0 -<short> <value>...   # short aliases"`)
@@ -409,6 +410,7 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	ln(`WORKSPACE="${ZENMCP_WORKSPACE_ROOT:-${SHARED_WS:-$(pwd)}}"`)
 	ln(`TOOL="` + t.name + `"`)
 	ln(`RAW_JSON=""`)
+	ln(`DRY_RUN=0`)
 	ln(`declare -A PARAMS`)
 	if len(arrayKeys) > 0 {
 		ln(`declare -A ARR_PARAMS`)
@@ -447,11 +449,12 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	ln(`    _fl="${1%%=*}"; _vl="${1#*=}"`)
 	ln(`    set -- "$_fl" "$_vl" "${@:2}"`)
 	ln(`  fi`)
-	ln(`  if [[ $# -lt 2 && "$1" != --help && "$1" != -h ]]; then`)
+	ln(`  if [[ $# -lt 2 && "$1" != --help && "$1" != -h && "$1" != --dry-run ]]; then`)
 	ln(`    echo "Error: missing value for $1" >&2; exit 2`)
 	ln(`  fi`)
 	ln(`  case "$1" in`)
 	ln(`    --json)  RAW_JSON="$2"; shift 2 ;;`)
+	ln(`    --dry-run) DRY_RUN=1; shift ;;`)
 	ln(`    --help|-h)`)
 	for _, l := range buildHelpStatementsOpt(t, url, aliases) {
 		ln("      " + l)
@@ -503,6 +506,25 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	ln(`fi`)
 	ln("")
 	ln(`PAYLOAD=$(jq -n --arg tool "$TOOL" --argjson args "$ARGS_JSON" '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":$tool,"arguments":$args}}')`)
+	ln("")
+
+	// Dry-run: print the JSON-RPC body and request metrics without sending.
+	// This is the debugging escape hatch — run any wrapper with --dry-run to
+	// see exactly what the server would receive (and spot missing params).
+	ln(`# Dry-run: print the JSON-RPC body and metrics, then exit without sending`)
+	ln(`if [[ "$DRY_RUN" == "1" ]]; then`)
+	ln(`  echo "=== JSON-RPC REQUEST (dry-run, NOT sent) ==="`)
+	ln(`  echo "$PAYLOAD" | jq .`)
+	ln(`  echo ""`)
+	ln(`  echo "=== METRICS ==="`)
+	ln(`  echo "tool          : $TOOL"`)
+	ln(`  echo "workspace     : $WORKSPACE"`)
+	ln(`  echo "session_id    : $SESSION_ID"`)
+	ln(`  echo "param_count   : $(echo "$PAYLOAD" | jq '.params.arguments | keys | length')"`)
+	ln(`  echo "upload_files  : $(echo "$PAYLOAD" | jq 'if (.params.arguments.upload_files | type) == "array" then (.params.arguments.upload_files | length) elif (.params.arguments.upload_files | type) == "string" then 1 else 0 end')"`)
+	ln(`  echo "payload_bytes : $(printf '%s' "$PAYLOAD" | wc -c | tr -d ' ')"`)
+	ln(`  exit 0`)
+	ln(`fi`)
 	ln("")
 
 	// Execute with curl failure diagnostics.

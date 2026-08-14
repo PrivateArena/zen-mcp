@@ -6,7 +6,7 @@
 
 ## SESSION INIT ⚠️ MANDATORY
 
-[IMPORTANT] Shell `zworkspace -p <project_dir>` — **HALT until complete, DO NOT SKIP THIS STEP.**
+**[REQUIRED]** Use shell `zworkspace -p <project_dir>` — **HALT until complete.**
 
 ---
 
@@ -16,7 +16,7 @@ Runs immediately after SESSION INIT, before any task work.
 
 Shell `ls PROJECT_OVERVIEW.md`
 
-- **Exists** Read it to understand project architecture — **HALT until complete.** → skip `files`/`map`/`mermaid` and read relevant code lines/files.
+- **Exists** Read it to understand project architecture — **HALT until complete.** → skip `files`/`map`/`mermaid` and read relevant lines/files.
 - **Missing** → run full Precision Tunnelling: `zcodegraph -a files` → `zcodegraph -a map` → `zcodegraph -a skeletons -q <filename/filepath>` → `zcodegraph -a related -q <filename>` and read relevant lines/files.
 
 ---
