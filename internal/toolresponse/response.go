@@ -32,17 +32,6 @@ type CommandResult struct {
 	Savings      *string `json:"savings,omitempty"`
 }
 
-func IsCommandResult(v any) bool {
-	m, ok := v.(map[string]any)
-	if !ok {
-		cr, ok := v.(CommandResult)
-		return ok && cr.Stdout != ""
-	}
-	_, hasStdout := m["stdout"].(string)
-	_, hasExit := m["exitCode"]
-	return hasStdout && hasExit
-}
-
 func RenderOutput(format string, data any) string {
 	if data == nil {
 		return ""
@@ -358,12 +347,6 @@ func reportCommandTimeout(tool, action, kind string, elapsedMs int64) {
 
 // onCommandTimeout is a test-only observer, invoked after a timeout is logged.
 var onCommandTimeout func(tool, kind string, elapsedMs int64)
-
-// SetTimeoutObserver registers a callback invoked whenever a tool result
-// carries an exec-level timeout. Intended for tests; nil by default.
-func SetTimeoutObserver(fn func(tool, kind string, elapsedMs int64)) {
-	onCommandTimeout = fn
-}
 
 func WrapError(tool string, err error, start time.Time) *mcp.CallToolResult {
 	return WrapErrorWithContext(context.Background(), tool, err, start)

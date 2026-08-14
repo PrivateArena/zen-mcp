@@ -18,6 +18,24 @@ import (
 
 func intPtr(v int) *int { return &v }
 
+
+func IsCommandResult(v any) bool {
+	m, ok := v.(map[string]any)
+	if !ok {
+		cr, ok := v.(CommandResult)
+		return ok && cr.Stdout != ""
+	}
+	_, hasStdout := m["stdout"].(string)
+	_, hasExit := m["exitCode"]
+	return hasStdout && hasExit
+}
+
+// SetTimeoutObserver registers a callback invoked whenever a tool result
+// carries an exec-level timeout. Intended for tests; nil by default.
+func SetTimeoutObserver(fn func(tool, kind string, elapsedMs int64)) {
+	onCommandTimeout = fn
+}
+
 func TestRenderOutputStringPassthrough(t *testing.T) {
 	if got := RenderOutput("json", "plain text"); got != "plain text" {
 		t.Errorf("string data should pass through, got %q", got)

@@ -5,20 +5,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
 	"zen-mcp/internal/logfilter"
 )
-
-// NormalizeKey ports timeline.ts normalizeKey.
-func NormalizeKey(s string) string {
-	s = strings.TrimSpace(strings.ToLower(s))
-	s = regexp.MustCompile(`\s+`).ReplaceAllString(s, " ")
-	s = regexp.MustCompile(`[.!?]+$`).ReplaceAllString(s, "")
-	return s
-}
 
 // BrainEvent mirrors the schema_version 3 shape.
 type BrainEvent struct {

@@ -4,12 +4,22 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"zen-mcp/internal/markdown"
 	"zen-mcp/internal/mcpcfg"
 )
+
+// NormalizeKey ports timeline.ts normalizeKey.
+func NormalizeKey(s string) string {
+	s = strings.TrimSpace(strings.ToLower(s))
+	s = regexp.MustCompile(`\s+`).ReplaceAllString(s, " ")
+	s = regexp.MustCompile(`[.!?]+$`).ReplaceAllString(s, "")
+	return s
+}
+
 
 func TestNormalizeKey(t *testing.T) {
 	if got := NormalizeKey("Hello World!"); got != "hello world" {

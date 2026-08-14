@@ -452,18 +452,6 @@ func (g *Gatekeeper) ValidatePathSafety(path, operationName string) error {
 	return nil
 }
 
-func (g *Gatekeeper) ValidatePathSafetySync(path, operationName string) error {
-	cfg := mcpcfg.Get()
-	if cfg != nil && !cfg.GatekeeperEnabled {
-		return nil
-	}
-	normalizedPath := g.resolvePath(path)
-	if g.IsPathUnderRestrictedRoot(normalizedPath) {
-		return fmt.Errorf("[%s] DANGEROUS PATH DETECTED: %q. System roots or home infrastructure subdirectories are restricted for safety.", operationName, normalizedPath)
-	}
-	return nil
-}
-
 func (g *Gatekeeper) ValidateCommandPayload(command, execDir string) error {
 	cfg := mcpcfg.Get()
 	if cfg != nil && !cfg.GatekeeperEnabled {

@@ -51,23 +51,6 @@ func (s *Store) GetAll() map[string]string {
 	return out
 }
 
-func (s *Store) OnChange(key string, fn func(string)) func() {
-	s.mu.Lock()
-	s.subs[key] = append(s.subs[key], fn)
-	s.mu.Unlock()
-	return func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		arr := s.subs[key]
-		for i, f := range arr {
-			if eqFunc(f, fn) {
-				s.subs[key] = append(arr[:i], arr[i+1:]...)
-				return
-			}
-		}
-	}
-}
-
 func eqFunc(a, b func(string)) bool {
 	return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
 }

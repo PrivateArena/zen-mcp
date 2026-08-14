@@ -338,23 +338,6 @@ func reqTool(msg rpcMessage) string {
 // is logged.
 var onRequestAbort func(method string, elapsedMs int64, reason string)
 
-// SetRequestAbortObserver registers a callback invoked whenever an in-flight
-// MCP request is cancelled by the client. Intended for tests; nil by default.
-func SetRequestAbortObserver(fn func(method string, elapsedMs int64, reason string)) {
-	onRequestAbort = fn
-}
-
-// autoDetectWorkspace resolves a workspace root from initialize params, query,
-// shared state, then headers — in that order, matching routes.ts.
-func autoDetectWorkspace(r *http.Request, st *shared.Store) string {
-	body, _ := io.ReadAll(io.LimitReader(r.Body, 50<<20))
-	r.Body = io.NopCloser(bytes.NewReader(body))
-
-	var msg rpcMessage
-	_ = json.Unmarshal(body, &msg)
-	return detectWorkspace(msg, r, st)
-}
-
 // detectWorkspace resolves the workspace for an already-decoded request.
 func detectWorkspace(msg rpcMessage, r *http.Request, st *shared.Store) string {
 	var projectPath string

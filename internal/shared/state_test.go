@@ -4,6 +4,23 @@ import (
 	"testing"
 )
 
+func (s *Store) OnChange(key string, fn func(string)) func() {
+	s.mu.Lock()
+	s.subs[key] = append(s.subs[key], fn)
+	s.mu.Unlock()
+	return func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		arr := s.subs[key]
+		for i, f := range arr {
+			if eqFunc(f, fn) {
+				s.subs[key] = append(arr[:i], arr[i+1:]...)
+				return
+			}
+		}
+	}
+}
+
 func TestStoreBasics(t *testing.T) {
 	st := NewStore()
 	if _, ok := st.Get("workspace-root"); ok {

@@ -34,6 +34,24 @@ func echoHandler(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult,
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "ok"}}}, nil
 }
 
+
+// setRequestAbortObserver registers a callback invoked whenever an in-flight
+// MCP request is cancelled by the client. Intended for tests; nil by default.
+func setRequestAbortObserver(fn func(method string, elapsedMs int64, reason string)) {
+	onRequestAbort = fn
+}
+
+// autoDetectWorkspace resolves a workspace root from initialize params, query,
+// shared state, then headers — in that order, matching routes.ts.
+func autoDetectWorkspace(r *http.Request, st *shared.Store) string {
+	body, _ := io.ReadAll(io.LimitReader(r.Body, 50<<20))
+	r.Body = io.NopCloser(bytes.NewReader(body))
+
+	var msg rpcMessage
+	_ = json.Unmarshal(body, &msg)
+	return detectWorkspace(msg, r, st)
+}
+
 func testDeps() (RouteDeps, *http.ServeMux) {
 	reg := toolregistry.Create()
 	start := time.Date(2026, 8, 5, 2, 22, 34, 570000000, time.UTC)
@@ -588,12 +606,12 @@ func TestPostMCPNoAbortOnNormalCompletion(t *testing.T) {
 	_, mux := testDeps()
 	var mu sync.Mutex
 	aborts := 0
-	SetRequestAbortObserver(func(string, int64, string) {
+	setRequestAbortObserver(func(string, int64, string) {
 		mu.Lock()
 		aborts++
 		mu.Unlock()
 	})
-	t.Cleanup(func() { SetRequestAbortObserver(nil) })
+	t.Cleanup(func() { setRequestAbortObserver(nil) })
 
 	rec := doRequest(mux, http.MethodPost, "/mcp", mcpInitializeRequest(1), "application/json")
 	if rec.Code != http.StatusOK {
@@ -636,7 +654,7 @@ func TestPostMCPRequestAbortLogged(t *testing.T) {
 
 	var mu sync.Mutex
 	aborts := make([]string, 0)
-	SetRequestAbortObserver(func(method string, _ int64, reason string) {
+	setRequestAbortObserver(func(method string, _ int64, reason string) {
 		if reason == "" {
 			t.Error("abort observer received empty reason")
 		}
@@ -644,7 +662,7 @@ func TestPostMCPRequestAbortLogged(t *testing.T) {
 		aborts = append(aborts, method)
 		mu.Unlock()
 	})
-	t.Cleanup(func() { SetRequestAbortObserver(nil) })
+	t.Cleanup(func() { setRequestAbortObserver(nil) })
 
 	ctx, cancel := context.WithCancel(context.Background())
 	body := []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"block","arguments":{}}}`)

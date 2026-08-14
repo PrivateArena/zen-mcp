@@ -68,6 +68,7 @@ On any tool failure: retry once with correction applied. If retry fails — **HA
 3. **Patch** specific lines only. Use `mv`/`cp` to move files instead of rewriting.
 4. **Architecture** — NEVER create generic dirs/files (`misc`, `core`, `utils`, `common`, `helpers`). Name strictly after domain responsibility.
 5. **Code Style** — No hardcoded paths/URLs/env values. For Go, ALWAYS use `Gio` (GUI) and `tview` (TUI). For Web, stick to basic CSS1-2 files and class names (no inline CSS, JS styling, or animations).
+6. **Test** — Keep test related functions inside test files.
 
 ---
 

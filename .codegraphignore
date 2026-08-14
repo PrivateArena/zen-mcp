@@ -34,3 +34,4 @@ _scratch/
 .agents/
 dist/
 *.md
+*_test.go

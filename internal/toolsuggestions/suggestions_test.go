@@ -1,6 +1,8 @@
 package toolsuggestions
 
 import (
+	"fmt"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -15,6 +17,74 @@ func schema() map[string]any {
 		"required": []any{"url"},
 	}
 }
+
+
+func GetAllToolNames() []string {
+	names := make([]string, 0, len(suggestions))
+	for name := range suggestions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func GetToolsByCategory() map[string][]ToolRef {
+	categories := map[string][]string{
+		"👁️ Vision & Capture":      {"capture", "colab"},
+		"🌐 Browser & Automation":   {"browser"},
+		"📁 Workspace & Storage":    {"workspace", "memory"},
+		"🔧 Shell & Sandbox":        {"shell", "run"},
+		"⚙️ Reasoning & Knowledge": {"think", "skills", "codegraph"},
+		"🛠️ Server Management":     {"server"},
+	}
+	result := make(map[string][]ToolRef)
+	for category, tools := range categories {
+		var refs []ToolRef
+		for _, name := range tools {
+			if s, ok := suggestions[name]; ok {
+				refs = append(refs, ToolRef{Name: name, Description: s.Description})
+			}
+		}
+		result[category] = refs
+	}
+	return result
+}
+
+type ToolRef struct {
+	Name        string
+	Description string
+}
+
+func FormatToolReference() string {
+	var b strings.Builder
+	b.WriteString("# 🛠️ Tool Quick Reference\n\n")
+	for _, category := range []string{"👁️ Vision & Capture", "🌐 Browser & Automation", "📁 Workspace & Storage", "🔧 Shell & Sandbox", "⚙️ Reasoning & Knowledge", "🛠️ Server Management"} {
+		b.WriteString("## " + category + "\n")
+		for _, tool := range GetToolsByCategory()[category] {
+			b.WriteString(fmt.Sprintf("- **%s**: %s\n", tool.Name, tool.Description))
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func FindMistakeCorrection(toolName, errorMessage string, action string, schema any) *MistakeCorrection {
+	suggestion := FormatSuggestion(toolName, errorMessage, action, schema)
+	if suggestion == "" {
+		return nil
+	}
+	correctUsage := fmt.Sprintf("%s({ ... })", toolName)
+	if s := GetToolSuggestion(toolName); s != nil && s.ExampleUsage != "" {
+		correctUsage = s.ExampleUsage
+	}
+	return &MistakeCorrection{Message: suggestion, CorrectUsage: correctUsage}
+}
+
+type MistakeCorrection struct {
+	Message      string
+	CorrectUsage string
+}
+
 
 func TestGetToolSuggestionKnown(t *testing.T) {
 	if GetToolSuggestion("browser") == nil {
