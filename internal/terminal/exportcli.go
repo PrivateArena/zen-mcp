@@ -544,7 +544,7 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 
 	// Execute with curl failure diagnostics.
 	ln(`# Execute — distinguish common curl failure modes`)
-	ln(`RESPONSE=$(curl -sf --max-time "${ZENMCP_TIMEOUT:-60}" \`)
+	ln(`RESPONSE=$(curl -sf --max-time "${ZENMCP_TIMEOUT:-1200}" \`)
 	ln(`  -X POST "` + url + `/mcp" \`)
 	ln(`  -H "Content-Type: application/json" \`)
 	ln(`  -H "Accept: application/json, text/event-stream" \`)
@@ -554,7 +554,7 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	ln(`  code=$?`)
 	ln(`  case $code in`)
 	ln(`    7)  echo "Error: connection refused — is zenmcp running at ` + url + `?" >&2 ;;`)
-	ln(`    28) echo "Error: request timed out (${ZENMCP_TIMEOUT:-60}s) — server may be busy" >&2 ;;`)
+	ln(`    28) echo "Error: request timed out (${ZENMCP_TIMEOUT:-1200}s) — server may be busy" >&2 ;;`)
 	ln(`    22) echo "Error: HTTP error from server" >&2 ;;`)
 	ln(`    *)  echo "Error: curl failed (exit code $code)" >&2 ;;`)
 	ln(`  esac`)
