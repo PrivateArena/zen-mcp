@@ -81,8 +81,8 @@ func HandleWorkspaceAction(ctx context.Context, path, workspace string, deps Dep
 	}
 
 	result := map[string]any{
-		"path":      resolvedNewRoot,
-		"prev_path": prevPath,
+		//"path":      resolvedNewRoot,
+		//"prev_path": prevPath,
 		"message":   "Workspace -> " + resolvedNewRoot,
 	}
 	if len(toolsChanged) > 0 {
