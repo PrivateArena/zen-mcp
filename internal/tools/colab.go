@@ -21,7 +21,7 @@ func defColab(workspace string, deps Deps) ToolDef {
 			"index":   numProp("0-based cell index (required update/run/delete/clear)"),
 			"type":    strEnumProp("[add_cell] \"code\" or \"text\" (default \"code\")", []string{"code", "text"}),
 			"text":    strProp("[update_cell] Source/markdown to write"),
-			"timeout": numProp("Bridge call timeout ms (default 60000)"),
+			//"timeout": numProp("Bridge call timeout ms (default 60000)"),
 		}, []string{"action"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return HandleColabAction(ctx, workspace, deps, req), nil

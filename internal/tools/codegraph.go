@@ -1309,9 +1309,9 @@ func defCodegraph(workspace string, deps Deps) ToolDef {
 				"deadcode", "shortestPath", "findCycles", "markdown", "impact",
 			}),
 			"query":   strProp("Search query or symbol name"),
-			"format":  strEnumProp("Output format: text (default) or json", []string{"text", "json"}),
-			"limit":   numProp("Result limit"),
-			"isolate": numProp("Graph isolate level (0 = root)"),
+			//"format":  strEnumProp("Output format: text (default) or json", []string{"text", "json"}),
+			//"limit":   numProp("Result limit"),
+			//"isolate": numProp("Graph isolate level (0 = root)"),
 		}, []string{"action"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return HandleCodegraphAction(ctx, workspace, deps, req), nil

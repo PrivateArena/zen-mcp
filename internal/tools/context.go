@@ -19,7 +19,7 @@ func defContext(workspace string, deps Deps) ToolDef {
 		Title:       "Context",
 		Description: "Retrieve stored project memory context with optional file analysis.",
 		Schema: jsonSchema(map[string]any{
-			"workspace": strProp("Project path (default: current session workspace)"),
+			//"workspace": strProp("Project path (default: current session workspace)"),
 			"query":     strProp("Retrieval ID"),
 		}, []string{"query"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
