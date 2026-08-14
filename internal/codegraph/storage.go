@@ -1236,10 +1236,6 @@ func (s *Storage) GetStats() map[string]int {
 
 // FindDeadCode returns dead code analysis results.
 func (s *Storage) FindDeadCode(query string, limit int) *DeadcodeResult {
-	if limit <= 0 {
-		limit = 200
-	}
-
 	symbolQuery := `
 		SELECT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
 		FROM nodes n
@@ -1260,9 +1256,11 @@ func (s *Storage) FindDeadCode(query string, limit int) *DeadcodeResult {
 			WHERE n2.id != n.id
 			  AND n2.content LIKE '%' || n.name || '%'
 		)
-		LIMIT ?
 	`
-	args = append(args, limit)
+	if limit > 0 {
+		symbolQuery += ` LIMIT ?`
+		args = append(args, limit)
+	}
 
 	rows, err := s.db.Query(symbolQuery, args...)
 	if err != nil {

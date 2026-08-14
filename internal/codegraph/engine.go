@@ -954,11 +954,6 @@ func (cg *CodeGraph) Related(symbolName string) ([]NodeRecord, error) {
 
 // FindDeadCode returns dead code analysis results.
 func (cg *CodeGraph) FindDeadCode(query string, limit int) (*DeadcodeResult, error) {
-	if limit <= 0 {
-		limit = 200
-	}
-
-	// Find all files
 	files, _ := cg.storage.ListFiles("", 0)
 	filePaths := make([]string, 0, len(files))
 	for _, f := range files {
@@ -973,7 +968,7 @@ func (cg *CodeGraph) FindDeadCode(query string, limit int) (*DeadcodeResult, err
 
 // Deadcode returns potentially unused symbols.
 func (cg *CodeGraph) Deadcode() ([]NodeRecord, error) {
-	result, _ := cg.FindDeadCode("", 200)
+	result, _ := cg.FindDeadCode("", 0)
 	return result.Symbols, nil
 }
 

@@ -458,7 +458,7 @@ func actionFiles(session *layeredGraphSession, isolate int, query string, limit 
 		expanded = expandQueryPaths(query, session)
 	}
 
-	l := 200
+	l := 0
 	if limit != nil {
 		l = *limit
 	}
@@ -762,7 +762,7 @@ func actionDeadcode(session *layeredGraphSession, isolate int, query string, lim
 		return "", err
 	}
 	parts := make([]string, 0, len(targets))
-	l := 200
+	l := 0
 	if limit != nil {
 		l = *limit
 	}
