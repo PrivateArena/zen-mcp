@@ -34,7 +34,7 @@ framework: test
 
 	var found bool
 	for _, def := range defs {
-		if def.Name == "SKILL-dir-skill" {
+		if def.Name == skillPromptPrefix+"dir-skill" {
 			found = true
 			if def.Description != "A directory-based skill" {
 				t.Errorf("unexpected description: %s", def.Description)
@@ -45,7 +45,7 @@ framework: test
 		}
 	}
 	if !found {
-		t.Errorf("expected SKILL-dir-skill in results, got: %v", defs)
+		t.Errorf("expected %sdir-skill in results, got: %v", skillPromptPrefix, defs)
 	}
 }
 
@@ -73,7 +73,7 @@ framework: test
 
 	var found bool
 	for _, def := range defs {
-		if def.Name == "SKILL-md-skill" {
+		if def.Name == skillPromptPrefix+"md-skill" {
 			found = true
 			if def.Description != "A markdown-file skill" {
 				t.Errorf("unexpected description: %s", def.Description)
@@ -81,7 +81,7 @@ framework: test
 		}
 	}
 	if !found {
-		t.Errorf("expected SKILL-md-skill in results, got: %v", defs)
+		t.Errorf("expected %smd-skill in results, got: %v", skillPromptPrefix, defs)
 	}
 }
 
@@ -117,7 +117,7 @@ framework: test
 
 	var found bool
 	for _, def := range defs {
-		if def.Name == "SKILL-symlinked-skill" {
+		if def.Name == skillPromptPrefix+"symlinked-skill" {
 			found = true
 			if def.Description != "A symlinked directory skill" {
 				t.Errorf("unexpected description: %s", def.Description)
@@ -128,7 +128,7 @@ framework: test
 		}
 	}
 	if !found {
-		t.Errorf("expected SKILL-symlinked-skill in results, got: %v", defs)
+		t.Errorf("expected %ssymlinked-skill in results, got: %v", skillPromptPrefix, defs)
 	}
 }
 
@@ -185,12 +185,12 @@ func TestGenerateSkillPrompts_SymlinkToMarkdownFile(t *testing.T) {
 
 	var found bool
 	for _, def := range defs {
-		if def.Name == "SKILL-symlink-md" {
+		if def.Name == skillPromptPrefix+"symlink-md" {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("expected SKILL-symlink-md in results, got: %v", defs)
+		t.Errorf("expected %ssymlink-md in results, got: %v", skillPromptPrefix, defs)
 	}
 }
 

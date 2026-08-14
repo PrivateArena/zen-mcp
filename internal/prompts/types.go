@@ -1,5 +1,7 @@
 package prompts
 
+const skillPromptPrefix = "_"
+
 // PromptArgument represents a prompt argument definition.
 type PromptArgument struct {
 	Name        string `yaml:"name"`
