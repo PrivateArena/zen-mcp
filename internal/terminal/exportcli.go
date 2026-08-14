@@ -332,6 +332,7 @@ func buildHelpStatementsOpt(t cliTool, url string, aliases map[string]string) []
 		`echo "  $0 --<param>=<value>   # equal-style, e.g. --upload_files=f1,f2 or -up=f1"`,
 		`echo "  $0 --json '{\"key\":\"val\"}'   # raw JSON escape hatch"`,
 		`echo "  $0 --dry-run           # print the JSON-RPC body + metrics, do NOT send"`,
+		`echo "  $0 --sleep <sec>       # sleep before sending (test long-running survival)"`,
 	}
 	if len(aliases) > 0 {
 		lines = append(lines, `echo "  $0 -<short> <value>...   # short aliases"`)
@@ -411,6 +412,7 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	ln(`TOOL="` + t.name + `"`)
 	ln(`RAW_JSON=""`)
 	ln(`DRY_RUN=0`)
+	ln(`SLEEP=0`)
 	ln(`declare -A PARAMS`)
 	if len(arrayKeys) > 0 {
 		ln(`declare -A ARR_PARAMS`)
@@ -455,6 +457,7 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	ln(`  case "$1" in`)
 	ln(`    --json)  RAW_JSON="$2"; shift 2 ;;`)
 	ln(`    --dry-run) DRY_RUN=1; shift ;;`)
+	ln(`    --sleep) SLEEP="$2"; shift 2 ;;`)
 	ln(`    --help|-h)`)
 	for _, l := range buildHelpStatementsOpt(t, url, aliases) {
 		ln("      " + l)
@@ -524,6 +527,18 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	ln(`  echo "upload_files  : $(echo "$PAYLOAD" | jq 'if (.params.arguments.upload_files | type) == "array" then (.params.arguments.upload_files | length) elif (.params.arguments.upload_files | type) == "string" then 1 else 0 end')"`)
 	ln(`  echo "payload_bytes : $(printf '%s' "$PAYLOAD" | wc -c | tr -d ' ')"`)
 	ln(`  exit 0`)
+	ln(`fi`)
+	ln("")
+
+	// Optional delay before the request — lets agents test that a long-running
+	// wrapper survives the caller's command timeout without a real HTTP call.
+	ln(`# Optional delay — test long-running wrapper survival without a real call`)
+	ln(`if [[ "$SLEEP" != "0" ]]; then`)
+	ln(`  if [[ ! "$SLEEP" =~ ^[0-9]+$ ]]; then`)
+	ln(`    echo "Error: --sleep must be a non-negative integer" >&2; exit 2`)
+	ln(`  fi`)
+	ln(`  echo "sleeping ${SLEEP}s before request..."`)
+	ln(`  sleep "$SLEEP"`)
 	ln(`fi`)
 	ln("")
 
