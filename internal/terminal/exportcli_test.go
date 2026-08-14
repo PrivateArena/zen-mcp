@@ -102,7 +102,7 @@ func TestBuildWrapperScriptContent(t *testing.T) {
 		`split("\u0000")`,
 		`-X POST "http://127.0.0.1:2999/mcp" \`,
 		`7)  echo "Error: connection refused — is zenmcp running at http://127.0.0.1:2999?" >&2 ;;`,
-		`28) echo "Error: request timed out (${ZENMCP_TIMEOUT:-60}s) — server may be busy" >&2 ;;`,
+		`28) echo "Error: request timed out (${ZENMCP_TIMEOUT:-1200}s) — server may be busy" >&2 ;;`,
 		`.result.content[] | if .type == "text" then .text`,
 	} {
 		if !strings.Contains(script, want) {
