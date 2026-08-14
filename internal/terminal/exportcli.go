@@ -329,6 +329,7 @@ func buildHelpStatementsOpt(t cliTool, url string, aliases map[string]string) []
 		`echo ""`,
 		`echo "USAGE:"`,
 		`echo "  $0 --<param> <value>..."`,
+		`echo "  $0 --<param>=<value>   # equal-style, e.g. --upload_files=f1,f2 or -up=f1"`,
 		`echo "  $0 --json '{\"key\":\"val\"}'   # raw JSON escape hatch"`,
 	}
 	if len(aliases) > 0 {
@@ -427,6 +428,10 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	ln(`fi`)
 	ln("")
 	ln(`while [[ $# -gt 0 ]]; do`)
+	ln(`  if [[ "$1" == -*=* ]]; then`)
+	ln(`    _fl="${1%%=*}"; _vl="${1#*=}"`)
+	ln(`    set -- "$_fl" "$_vl" "${@:2}"`)
+	ln(`  fi`)
 	ln(`  case "$1" in`)
 	ln(`    --json)  RAW_JSON="$2"; shift 2 ;;`)
 	ln(`    --help|-h)`)

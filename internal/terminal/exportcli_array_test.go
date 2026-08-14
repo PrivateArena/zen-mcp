@@ -199,6 +199,97 @@ func TestArrayHarnessCommaPlusRepeated(t *testing.T) {
 	}
 }
 
+func TestArrayHarnessShortEqualStyle(t *testing.T) {
+	harness := arrayHarness(t, arraySampleTool(), true)
+	got := runArrayHarness(t, harness, "-a", "chat", "-up=/tmp/f1,/tmp/f2")
+	files, ok := got["upload_files"].([]any)
+	if !ok {
+		t.Fatalf("short equal-style must yield an array, got %#v", got["upload_files"])
+	}
+	if len(files) != 2 || files[0] != "/tmp/f1" || files[1] != "/tmp/f2" {
+		t.Fatalf("short equal-style split failed, got %v", files)
+	}
+	if got["action"] != "chat" {
+		t.Fatalf("scalar action lost: %v", got)
+	}
+}
+
+func TestArrayHarnessShortEqualStyleSingleStaysString(t *testing.T) {
+	harness := arrayHarness(t, arraySampleTool(), true)
+	got := runArrayHarness(t, harness, "-a=chat", "-up=/tmp/f1")
+	if got["action"] != "chat" {
+		t.Fatalf("scalar equal-style action failed: %v", got)
+	}
+	if got["upload_files"] != "/tmp/f1" {
+		t.Fatalf("single equal-style value must stay a string, got %#v", got["upload_files"])
+	}
+}
+
+func TestArrayHarnessLongEqualStyle(t *testing.T) {
+	harness := arrayHarness(t, arraySampleTool(), false)
+	got := runArrayHarness(t, harness, "--action", "chat", "--upload_files=/tmp/f1,/tmp/f2,/tmp/f3")
+	files, ok := got["upload_files"].([]any)
+	if !ok {
+		t.Fatalf("long equal-style must yield an array, got %#v", got["upload_files"])
+	}
+	if len(files) != 3 {
+		t.Fatalf("long equal-style split failed, got %v", files)
+	}
+}
+
+func TestArrayHarnessEqualStyleValueKeepsEquals(t *testing.T) {
+	harness := arrayHarness(t, arraySampleTool(), false)
+	got := runArrayHarness(t, harness, "--action", "chat", "--url=https://example.com?a=b")
+	if got["url"] != "https://example.com?a=b" {
+		t.Fatalf("equal-style value with embedded '=' must be preserved, got %#v", got["url"])
+	}
+}
+
+func TestArrayHarnessMixedStyles(t *testing.T) {
+	harness := arrayHarness(t, arraySampleTool(), true)
+	got := runArrayHarness(t, harness, "-a=chat", "-p", "gemini", "-up=/tmp/f1,/tmp/f2", "--upload_files=/tmp/f3", "--provider=openai")
+	files, ok := got["upload_files"].([]any)
+	if !ok || len(files) != 3 {
+		t.Fatalf("mixed-style arrays must accumulate, got %#v", got["upload_files"])
+	}
+	providers, ok := got["provider"].([]any)
+	if !ok || len(providers) != 2 || providers[0] != "gemini" || providers[1] != "openai" {
+		t.Fatalf("mixed-style provider should accumulate across styles, got %#v", got["provider"])
+	}
+	if got["action"] != "chat" {
+		t.Fatalf("scalar action lost: %v", got)
+	}
+}
+
+func TestArrayHarnessEmptyEqualValueOmitted(t *testing.T) {
+	harness := arrayHarness(t, arraySampleTool(), true)
+	got := runArrayHarness(t, harness, "-a", "chat", "-up=")
+	if _, ok := got["upload_files"]; ok {
+		t.Fatalf("empty equal-style value must be omitted, got %v", got)
+	}
+}
+
+func TestArrayWrapperHelpDocumentsEqualStyle(t *testing.T) {
+	script := buildWrapperScriptOpt(arraySampleTool(), "http://127.0.0.1:2999", true)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "zen-browser")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(path, "--help").CombinedOutput()
+	if err != nil {
+		t.Fatalf("--help failed: %v\n%s", err, out)
+	}
+	for _, want := range []string{
+		"--<param>=<value>",
+		"-up=f1",
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("equal-style help missing %q\n%s", want, out)
+		}
+	}
+}
+
 func TestArrayHarnessSingleValueStaysString(t *testing.T) {
 	// Backward-compat: a single array value is sent as a plain string, exactly
 	// as every pre-change wrapper did.
