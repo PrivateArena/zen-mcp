@@ -25,11 +25,11 @@ Shell `ls PROJECT_OVERVIEW.md`
 
 MCP CLI tools, available globally in PATH.
 - `zcodegraph`: Analyze and visualize code structure and dependencies.
-- `zbrowser`: Web automation. **ALWAYS use absolute paths** for `upload_files`.
+- `zbrowser`: Web automation. **ALWAYS use absolute paths** for `upload_files`. Can take up to 5-10 minutes to finish, DO NOT ABORT IT.
 - `zskill -a get -i <id>`: Use this instead of harness `skills`.
 
 > [TIP] Use `-h` to get help messages.
-> [FORBIDDEN] DO NOT run `git diff` at task completion. DO NOT clear package caches (`go clean`, etc.).
+> [FORBIDDEN] DO NOT run `git diff` at task completion - Build and test instead. DO NOT clear package caches (`go clean`, etc.).
 > When user saying "activate skill", use `zskill` CLI tool.
 
 ---
@@ -76,3 +76,4 @@ On any tool failure: retry once with correction applied. If retry fails — **HA
 
 1. Code/command first. Short explainations: Issue - Test - Fix.
 2. No fluff, pleasantries, or task restatements. Concise, technical style with no extra commentary.
+3. Efficent in tool calling, build, lint, test in one shell call.
