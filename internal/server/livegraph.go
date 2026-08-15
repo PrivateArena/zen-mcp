@@ -14,12 +14,12 @@ import (
 	"zen-mcp/internal/shared"
 )
 
-// SetupLiveGraphRoutes registers GET /codegraph (SPA) and GET /api/codegraph/data
-// (JSON graph dump) on the given mux. It is called ONLY for the CLI mux
-// (port 2999) in runHTTPServers — never through SetupRoutes — so the MCP mux
-// stays free of non-MCP routes.
+// SetupLiveGraphRoutes registers the codegraph live viewer routes on the given
+// mux. It is called ONLY for the CLI mux (port 2999) in runHTTPServers — never
+// through SetupRoutes — so the MCP mux stays free of non-MCP routes.
 func SetupLiveGraphRoutes(mux *http.ServeMux, store *shared.Store) {
 	mux.HandleFunc("GET /codegraph", serveHTML)
+	mux.HandleFunc("GET /d3.v7.min.js", serveD3Asset)
 	mux.HandleFunc("GET /api/codegraph/data", func(w http.ResponseWriter, r *http.Request) {
 		serveGraphData(w, r, store)
 	})
@@ -29,6 +29,13 @@ func SetupLiveGraphRoutes(mux *http.ServeMux, store *shared.Store) {
 func serveHTML(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = io.WriteString(w, liveGraphHTML)
+}
+
+// serveD3Asset writes the embedded D3.js v7 bundle. Served same-origin from the
+// CLI port so the SPA makes zero external requests.
+func serveD3Asset(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	_, _ = io.WriteString(w, d3V7MinJS)
 }
 
 // serveGraphData resolves the active workspace from the shared store, builds the
@@ -218,9 +225,10 @@ type GraphStats struct {
 	EdgeCount int `json:"edge_count"`
 }
 
-// liveGraphHTML is the full standalone SPA document: inline D3.js v7 (see
-// d3v7.go) plus the viewer logic (see liveGraphAppJS). No external requests.
-const liveGraphHTML = liveGraphHTMLHead + d3v7MinJS + liveGraphHTMLApp
+// liveGraphHTML is the full standalone SPA document: it loads D3.js v7 from the
+// embedded asset served at /d3.v7.min.js (see embed.go), plus the viewer logic
+// (see liveGraphAppJS). Same-origin only — no external requests.
+const liveGraphHTML = liveGraphHTMLHead + liveGraphHTMLApp
 
 const liveGraphHTMLHead = `<!DOCTYPE html>
 <html>
@@ -236,6 +244,7 @@ const liveGraphHTMLHead = `<!DOCTYPE html>
     .node-symbol circle { stroke:#aaa; stroke-width:0.8; cursor:pointer; }
     .link { stroke:#334; stroke-opacity:0.6; }
     .link.symbol { stroke:#446; stroke-dasharray:3,3; }
+    .link.highlight { stroke:#ffd700; stroke-opacity:1; stroke-width:1.8; }
     #sidebar h3 { color:#00d4ff; margin-top:0; }
     #sidebar .field { margin:4px 0; font-size:12px; }
     #sidebar .label { color:#888; }
@@ -245,10 +254,10 @@ const liveGraphHTMLHead = `<!DOCTYPE html>
   <svg id="graph"></svg>
   <div id="sidebar"><p style="color:#555">Click a node to inspect.</p></div>
   <div id="statusbar">Loading...</div>
+  <script src="/d3.v7.min.js"></script>
   <script>`
 
-const liveGraphHTMLApp = `</script>
-<script>
+const liveGraphHTMLApp = `
 // === Constants ===
 const LANGUAGE_COLORS = {
   "go":         "#00ADD8",
@@ -265,6 +274,7 @@ const LANGUAGE_COLORS = {
   "":           "#888888"
 };
 const MAX_SATELLITES = 20;
+const MAX_CROSS_PER_SYMBOL = 12;
 const FILE_RADIUS_MIN = 6;
 const FILE_RADIUS_MAX = 20;
 const SYMBOL_RADIUS = 4;
@@ -315,18 +325,20 @@ function initGraph(payload) {
   svg.call(d3.zoom().on("zoom", ev => g.attr("transform", ev.transform)));
 
   const sim = d3.forceSimulation(d3nodes)
-    .force("link", d3.forceLink(d3links).id(d => d.id).distance(80))
-    .force("charge", d3.forceManyBody().strength(-300))
-    .force("center", d3.forceCenter(width / 2, height / 2))
-    .force("collide", d3.forceCollide(d => d.r + 4));
+    .alphaDecay(0.06)
+    .force("link", d3.forceLink(d3links).id(d => d.id).distance(100).strength(0.4))
+    .force("charge", d3.forceManyBody().strength(-180))
+    .force("center", d3.forceCenter(width / 2, height / 2).strength(0.02))
+    .force("collide", d3.forceCollide(d => d.r + 4))
+    .force("ring", ringForce);
 
   let linkSel = g.append("g").selectAll("line");
   let nodeSel = g.append("g").selectAll("g");
 
-  function update(nodes, links) {
+  function update(nodes, links, heat) {
     sim.nodes(nodes);
     sim.force("link").links(links);
-    sim.alpha(0.3).restart();
+    sim.alpha(heat).restart();
 
     linkSel = linkSel.data(links, d => d.source.id + "-" + d.target.id + "-" + d.relation)
       .join("line")
@@ -337,9 +349,22 @@ function initGraph(payload) {
         const grp = enter.append("g")
           .attr("class", d => "node-" + d._type)
           .call(d3.drag()
-            .on("start", (ev, d) => { if (!ev.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
-            .on("drag", (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
-            .on("end", (ev, d) => { if (!ev.active) sim.alphaTarget(0); if (!d.pinned) { d.fx = null; d.fy = null; } }));
+            .on("start", (ev, d) => {
+              if (!ev.active) sim.alphaTarget(0);
+              d._ringParent = null; // a manually dragged node leaves its ring slot
+              d.fx = d.x; d.fy = d.y;
+              sim.alpha(0.08).restart();
+              highlightConnectedLinks(d);
+            })
+            .on("drag", (ev, d) => {
+              d.fx = ev.x; d.fy = ev.y;
+              sim.alpha(0.1).restart(); // enough pull for connected nodes to follow
+            })
+            .on("end", (ev, d) => {
+              if (!ev.active) sim.alphaTarget(0);
+              if (!d.pinned) { d.fx = null; d.fy = null; }
+              clearLinkHighlights();
+            }));
         grp.append("circle")
           .attr("r", d => d.r)
           .attr("fill", d => d._type === "file" ? (LANGUAGE_COLORS[d.language || ""] || "#888888") : "#446");
@@ -364,19 +389,43 @@ function initGraph(payload) {
     });
   }
 
-  update(d3nodes, d3links);
+  update(d3nodes, d3links, 0.7);
+
+  // Holds each symbol satellite near its assigned ring slot around the file
+  // node, recomputed per tick so the whole ring travels when the file node is
+  // dragged. Manual drags null out _ringParent, so a symbol stays where dropped.
+  function ringForce(alpha) {
+    const nodes = sim.nodes();
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (!n._ringParent) continue;
+      const tx = n._ringParent.x + n._ringRadius * Math.cos(n._ringAngle);
+      const ty = n._ringParent.y + n._ringRadius * Math.sin(n._ringAngle);
+      n.vx += (tx - n.x) * 0.06 * alpha;
+      n.vy += (ty - n.y) * 0.06 * alpha;
+    }
+  }
+
+  function highlightConnectedLinks(d) {
+    linkSel.classed("highlight", l => l.source.id === d.id || l.target.id === d.id);
+  }
+
+  function clearLinkHighlights() {
+    linkSel.classed("highlight", false);
+  }
 
   function handleFileClick(fileNode, allNodes, allLinks, updateFn) {
     if (fileNode.expanded) {
-      // Collapse: drop satellites and any link touching them.
+      // Collapse: drop satellites and any link touching them, but keep the file
+      // node pinned where the user placed it — releasing it back into the
+      // simulation would let the center force pull it away from its spot.
       fileNode.expanded = false;
-      fileNode.pinned = false;
-      fileNode.fx = null; fileNode.fy = null;
+      fileNode.pinned = true;
       const keepNodes = allNodes.filter(n => n._parentFileId !== fileNode._fileId);
       const satelliteIds = {};
       allNodes.forEach(n => { if (n._parentFileId === fileNode._fileId) satelliteIds[n.id] = true; });
       const keepLinks = allLinks.filter(l => !(satelliteIds[l.source.id] || satelliteIds[l.target.id]));
-      updateFn(keepNodes, keepLinks);
+      updateFn(keepNodes, keepLinks, 0.08);
     } else {
       // Expand: pin the parent and reveal up to MAX_SATELLITES symbols.
       fileNode.expanded = true;
@@ -386,7 +435,14 @@ function initGraph(payload) {
       const shown = myNodes.slice(0, MAX_SATELLITES);
       const overflow = myNodes.length - shown.length;
 
-      const satellites = shown.map(n => ({
+      // Organized layout: symbols on an evenly-spaced ring around the file
+      // node (no random scatter), so the expanded view stays readable.
+      const count = shown.length;
+      const radius = clamp(16 + count * 2.5, 20, 90);
+      const baseAngle = -Math.PI / 2;
+      const step = count > 0 ? (2 * Math.PI) / count : 0;
+
+      const satellites = shown.map((n, i) => ({
         id: "n_" + n.id,
         label: n.name,
         _type: "symbol",
@@ -394,8 +450,11 @@ function initGraph(payload) {
         _parentFileId: fileNode._fileId,
         _data: n,
         r: SYMBOL_RADIUS,
-        x: fileNode.x + (Math.random() - 0.5) * 40,
-        y: fileNode.y + (Math.random() - 0.5) * 40
+        _ringParent: fileNode,
+        _ringAngle: baseAngle + i * step,
+        _ringRadius: radius,
+        x: fileNode.x + radius * Math.cos(baseAngle + i * step),
+        y: fileNode.y + radius * Math.sin(baseAngle + i * step)
       }));
 
       if (overflow > 0) {
@@ -405,7 +464,7 @@ function initGraph(payload) {
           _type: "overflow",
           _parentFileId: fileNode._fileId,
           r: SYMBOL_RADIUS,
-          x: fileNode.x, y: fileNode.y + 30
+          x: fileNode.x, y: fileNode.y + radius + 24
         });
       }
 
@@ -419,7 +478,38 @@ function initGraph(payload) {
         .filter(e => e.level === "symbol" && satIds[e.source_id] && satIds[e.target_id])
         .map(e => ({ source: "n_" + e.source_id, target: "n_" + e.target_id, relation: e.relation, level: "symbol" }));
 
-      updateFn([...allNodes, ...satellites], [...allLinks, ...satLinks, ...symLinks]);
+      // Cross-file usage links: for each spawned symbol, show links to the file
+      // nodes that use it (or that it uses), mirroring codegraph "related". Weak
+      // per-link strength so symbols stay on their ring while still hinting at
+      // their consumers.
+      const nodeFile = {};
+      payload.nodes.forEach(n => { nodeFile[n.id] = n.file_id; });
+      const crossSeen = {};
+      const crossCount = {};
+      const crossLinks = [];
+      for (const e of payload.edges) {
+        if (e.level !== "symbol") continue;
+        let satNode = 0, otherNode = 0;
+        if (satIds[e.source_id]) { satNode = e.source_id; otherNode = e.target_id; }
+        else if (satIds[e.target_id]) { satNode = e.target_id; otherNode = e.source_id; }
+        if (satNode === 0) continue;
+        const otherFile = nodeFile[otherNode];
+        if (!otherFile || otherFile === fileNode._fileId) continue;
+        const key = "n_" + satNode + "-f_" + otherFile;
+        if (crossSeen[key]) continue;
+        if ((crossCount[satNode] || 0) >= MAX_CROSS_PER_SYMBOL) continue;
+        crossSeen[key] = true;
+        crossCount[satNode] = (crossCount[satNode] || 0) + 1;
+        crossLinks.push({
+          source: "n_" + satNode,
+          target: "f_" + otherFile,
+          relation: e.relation,
+          level: "symbol",
+          strength: 0.15
+        });
+      }
+
+      updateFn([...allNodes, ...satellites], [...allLinks, ...satLinks, ...symLinks, ...crossLinks], 0.08);
     }
   }
 }

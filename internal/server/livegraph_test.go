@@ -62,15 +62,43 @@ func TestServeHTMLReturns200(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
+	if ct := w.Header().Get("Content-Type"); ct != "text/html; charset=utf-8" {
+		t.Fatalf("unexpected Content-Type: %s", ct)
+	}
+	body := w.Body.String()
+	if len(body) == 0 || !contains(body, "Codegraph Live") {
+		t.Fatalf("expected inline SPA, got %d bytes", len(body))
+	}
+	if !contains(body, `<script src="/d3.v7.min.js"></script>`) {
+		t.Fatal("expected SPA to load D3 from the embedded same-origin asset")
+	}
+	if contains(body, "!function(t,n){") {
+		t.Fatal("expected D3 NOT to be inlined in the HTML (it is embedded and served separately)")
+	}
+}
+
+func TestServeD3Asset(t *testing.T) {
+	mux := http.NewServeMux()
+	store := shared.NewStore()
+	SetupLiveGraphRoutes(mux, store)
+
+	req := httptest.NewRequest("GET", "/d3.v7.min.js", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
 	if w.Code != 200 {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	ct := w.Header().Get("Content-Type")
-	if ct != "text/html; charset=utf-8" {
+	if ct != "application/javascript; charset=utf-8" {
 		t.Fatalf("unexpected Content-Type: %s", ct)
 	}
-	if body := w.Body.String(); len(body) == 0 || !contains(body, "Codegraph Live") {
-		t.Fatalf("expected inline SPA with D3, got %d bytes", len(body))
+	body := w.Body.String()
+	if len(body) < 100_000 {
+		t.Fatalf("expected the full D3 bundle, got %d bytes", len(body))
+	}
+	if !contains(body, "d3") || !contains(body, "forceSimulation") {
+		t.Fatal("expected D3 content in the asset")
 	}
 }
 
