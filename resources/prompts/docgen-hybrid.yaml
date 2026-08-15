@@ -1,0 +1,77 @@
+- name: docgen-hybrid
+  description: Hybrid deterministic+LLM docstring generation. Phase 1 runs a pure-algorithm AST tool (zero LLM tokens) to resolve the mechanical majority of missing docstrings; Phase 2 uses codegraph to batch-finish the ambiguous remainder. Never re-derives what Phase 1 already resolved.
+  arguments: []
+  template: |-
+     Generate missing docstrings across the project using the two-phase hybrid workflow.
+
+     MANDATE — Phase 1 is deterministic and MUST run first, with zero LLM reasoning spent on symbols it can resolve. Phase 2 exists ONLY for the remainder Phase 1 explicitly declined (low confidence). FORBIDDEN: writing docs for a symbol before checking whether Phase 1 already wrote one; re-deriving naming/signature templates by hand instead of trusting the tool's output; full-file body reads in Phase 2 except the capped exception below.
+     EXCEPTION: Phase 2 MAY read a specific function body range (not the full file) for a symbol that remains ambiguous after skeletons+related — capped at ~5 such reads per run, same budget discipline as project-overview's manifest cap.
+
+     STEP 0 — DETERMINISTIC PASS:
+     Run `docgen -write ./...`.
+     Capture: files touched, symbols documented, symbols skipped (with reason: low-confidence / already-documented / generated-file).
+     Do NOT inspect or re-decide any symbol this step reports as "documented" — Phase 2 never touches those.
+
+     STEP 1 — INDEX REFRESH:
+     `zcodegraph -a index`
+     Required — Step 0 changed line numbers and inserted comments; a stale index will misreport docsless in Step 2.
+
+     STEP 2 — ENUMERATE GROUND TRUTH:
+     `zcodegraph -a docsless`
+     This is authoritative, not the Step 0 self-report. If the two lists disagree, trust this one — it means Step 0 skipped or partially failed on something.
+
+     STEP 3 — SCOPE SIZE CHECK (mirrors project-overview):
+     Group the docsless remainder by top-level scope/package.
+     - If total remainder ≤ 40 symbols: single pass, no further batching needed.
+     - If remainder > 40 symbols: batch by file, process files in groups of ~10-15, looping Steps 4-5 per batch. Never call skeletons/related across the whole remainder at once.
+
+     WORKFLOW (per batch):
+     1. **Skeletons**: `codegraph({ action: 'skeletons', query: <files in this batch> })` — full signatures for every remaining symbol in the batch, one call.
+     2. **Selective cross-links**: `codegraph({ action: 'related', query: <file> })` ONLY for symbols where name decomposition + signature give no usable verb-phrase (single-letter/abbreviated names, no error path, no distinguishing param/return shape). Skip this call entirely for a batch if every remaining symbol in it is name-resolvable.
+     3. **Write**: insert doc comments matching the file's existing comment grammar (Phase 0's output, or pre-existing human docs if Phase 0 wrote nothing in this file). Symbol-name-first, period-terminated, Go doc convention.
+     4. **No-signal fallback**: if skeleton+related+the capped body-range read still give nothing usable, write `// TODO(docgen): purpose unclear` rather than a fabricated sentence. Log it separately — don't silently count it as resolved.
+
+     STEP 4 — VALIDATION PASS:
+     `zcodegraph -a docsless`
+     - If count is 0 (or only generated files, which are intentionally excluded): done.
+     - If count dropped but is nonzero: another batch was missed — loop Steps 3-4 for the remainder, don't stop early.
+     - If count is unchanged from Step 2: something is failing silently (writes not landing, wrong file paths) — report this explicitly rather than looping forever.
+
+     OUTPUT — a short run summary, not a schema-heavy document:
+
+     ## Docstring Generation Summary
+     - Phase 0 (deterministic): <N files touched>, <N symbols documented>, <N skipped>
+     - Phase 1 (codegraph-guided): <N symbols documented>, <N marked TODO(docgen): purpose unclear>
+     - Final `docsless` count: <N> <list remaining, if any, with file:line>
+
+     DETERMINISTIC RULES:
+     - Never rewrite an existing doc comment (Phase 0's or human-written) unless the invocation explicitly asks for a "fix incorrect docs" pass — that's a different mode, not this one.
+     - Struct fields: exported fields only by default.
+     - Comment grammar must match the file's existing convention; don't introduce a second style within one file.
+     - `related` calls are opt-in per batch, not automatic — most batches should need zero.
+
+     TOKEN GUARDRAILS:
+     - Skeletons: one call per batch (10-15 files), never per-symbol.
+     - Related: only for name-unresolvable symbols; skip the call entirely if a batch has none.
+     - Body-range reads: capped at 5 per run, only after skeletons+related fail.
+     - Batches: ~10-15 files each for remainders > 40 symbols.
+
+     VALIDATION — before finishing:
+     - `docsless` count after Step 4 is 0, or the remainder is explicitly listed with a reason (generated file / genuinely no signal / marked TODO).
+     - No symbol Phase 0 already documented was touched in Phase 1.
+     - Every TODO(docgen) marker is logged in the summary, not silently left in source.
+
+     CRITICAL RULES:
+     - MUST run Step 0 before any codegraph call — Phase 2 is a finishing pass, not the primary mechanism.
+     - MUST NOT read full source file bodies in Phase 2; capped range-reads only, per the 5-read exception.
+     - MUST re-run `zcodegraph -a index` after Step 0 before trusting any codegraph output in Phase 2.
+     - MUST treat Step 2's `docsless` output as ground truth over Step 0's self-report.
+     - Write changes directly to source files; this prompt does not produce a separate report file — the run summary above is the only output artifact.
+
+     STEP FINAL — COMMIT (only if a write actually happened):
+     If `git rev-parse --is-inside-work-tree` succeeds, run once after all batches:
+     `source /media/jang/home/Deve/zen-bashrc/src/28_git_suite.sh && git_poc`
+     If not in a git repo, skip silently.
+  enabledSkills:
+    - docstring-generation
+  suggestSkills: true
