@@ -20,6 +20,7 @@ import (
 const junkOrg = "e3b0c44298fc1c149afbf4c8996fb92427ae123"
 const baseURL = "https://github.com/" + junkOrg
 
+// runGitCommand is a helper function
 func runGitCommand(workdir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = workdir
@@ -30,6 +31,7 @@ func runGitCommand(workdir string, args ...string) (string, error) {
 	return string(out), nil
 }
 
+// initializes the package
 func init() {
 	terminal.Register("git-tmp", func(args []string) error {
 		terminal.Logf("Mirroring current repo to junk GitHub org for review...")
@@ -148,6 +150,7 @@ func init() {
 	})
 }
 
+// filterEmpty is a helper function
 func filterEmpty(ss []string) []string {
 	out := make([]string, 0, len(ss))
 	for _, s := range ss {
@@ -159,6 +162,7 @@ func filterEmpty(ss []string) []string {
 	return out
 }
 
+// buildReviewPrompt is a helper function
 func buildReviewPrompt(commitMessages string, files []string) string {
 	fileList := ""
 	for _, f := range files {
@@ -170,6 +174,7 @@ func buildReviewPrompt(commitMessages string, files []string) string {
 	return fmt.Sprintf("Please review the following commit changes.\n\nChanged files:\n%s", fileList)
 }
 
+// formatResult is a helper function
 func formatResult(data map[string]any) string {
 	b, err := json.Marshal(data)
 	if err != nil {
@@ -178,6 +183,7 @@ func formatResult(data map[string]any) string {
 	return string(b)
 }
 
+// extractTar is a helper function
 func extractTar(r io.Reader, destDir string) error {
 	tr := tar.NewReader(r)
 	for {

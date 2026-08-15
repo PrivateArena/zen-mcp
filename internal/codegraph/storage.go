@@ -49,18 +49,21 @@ func (s *Storage) Close() error {
 	return nil
 }
 
+// getStmt is a helper function
 func (s *Storage) getStmt(key string) *sql.Stmt {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.stmts[key]
 }
 
+// setStmt is a helper function
 func (s *Storage) setStmt(key string, stmt *sql.Stmt) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.stmts[key] = stmt
 }
 
+// prepareStatements is a helper function
 func (s *Storage) prepareStatements() {
 	var err error
 	s.setStmt("upsertFile", mustPrepare(s.db, `
@@ -164,6 +167,7 @@ func (s *Storage) prepareStatements() {
 	_ = err
 }
 
+// mustPrepare is a helper function
 func mustPrepare(db *sql.DB, query string) *sql.Stmt {
 	stmt, err := db.Prepare(query)
 	if err != nil {
@@ -172,6 +176,7 @@ func mustPrepare(db *sql.DB, query string) *sql.Stmt {
 	return stmt
 }
 
+// initSchema is a helper function
 func (s *Storage) initSchema() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -460,6 +465,7 @@ func (s *Storage) ReindexFileData(fileID int64, nodes []NodeRecord) error {
 	})
 }
 
+// nodeKey is a helper function
 func nodeKey(name string, line int) string {
 	return fmt.Sprintf("%s\x00%d", name, line)
 }
@@ -596,6 +602,7 @@ func (s *Storage) GetNeighbors(nodeID int64, limit int) (callers []NodeRecord, c
 	return callers, callees, nil
 }
 
+// queryNeighbors is a helper function
 func (s *Storage) queryNeighbors(stmtKey string, nodeID int64, limit int) ([]NodeRecord, error) {
 	stmt := s.getStmt(stmtKey)
 	if stmt == nil {
@@ -718,6 +725,7 @@ type NodeSearchResult struct {
 	EndLine       int    `json:"end_line"`
 }
 
+// scanNodes is a helper function
 func scanNodes(rows *sql.Rows) ([]NodeRecord, error) {
 	var nodes []NodeRecord
 	for rows.Next() {
@@ -730,6 +738,7 @@ func scanNodes(rows *sql.Rows) ([]NodeRecord, error) {
 	return nodes, nil
 }
 
+// boolToInt is a helper function
 func boolToInt(b bool) int {
 	if b {
 		return 1
@@ -737,6 +746,7 @@ func boolToInt(b bool) int {
 	return 0
 }
 
+// sanitizeFtsQuery is a helper function
 func sanitizeFtsQuery(q string) string {
 	q = strings.TrimSpace(q)
 	if q == "" {
@@ -1139,6 +1149,7 @@ func (s *Storage) FindNodeByTypeAndName(typ, name string) *NodeRecord {
 	return &n
 }
 
+// getFilePathForNode is a helper function
 func (s *Storage) getFilePathForNode(fileID int64) string {
 	var path string
 	_ = s.db.QueryRow(`SELECT path FROM files WHERE id = ?`, fileID).Scan(&path)

@@ -380,6 +380,7 @@ func (cg *CodeGraph) parseManifests() {
 	}
 }
 
+// parses manifest content into nodes and relations
 func parseManifestContent(content, filename string) ([]ParsedNode, []ParsedRelation) {
 	var nodes []ParsedNode
 	var relations []ParsedRelation
@@ -1069,6 +1070,7 @@ func (cg *CodeGraph) Status() (map[string]any, error) {
 	}, nil
 }
 
+// finds nearby graph indices within a depth
 func (cg *CodeGraph) findNearbyIndices(depth int) []string {
 	if depth <= 0 {
 		depth = 2
@@ -1104,6 +1106,7 @@ func (cg *CodeGraph) findNearbyIndices(depth int) []string {
 	return indices
 }
 
+// dereferences a string pointer safely
 func derefString(s *string) string {
 	if s != nil {
 		return *s
@@ -1111,6 +1114,7 @@ func derefString(s *string) string {
 	return ""
 }
 
+// truncates a string to a maximum length
 func truncate(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
@@ -1126,10 +1130,12 @@ type stringsBuilder struct {
 	parts []string
 }
 
+// appends a string to the builder
 func (sb *stringsBuilder) WriteString(s string) {
 	sb.parts = append(sb.parts, s)
 }
 
+// returns the string representation
 func (sb *stringsBuilder) String() string {
 	return strings.Join(sb.parts, "")
 }

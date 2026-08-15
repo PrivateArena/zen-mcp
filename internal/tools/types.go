@@ -52,6 +52,7 @@ func AllDefs(workspace string, deps Deps) []ToolDef {
 	}
 }
 
+// jsonSchema is a helper function
 func jsonSchema(properties map[string]any, required []string) map[string]any {
 	return map[string]any{
 		"type":                 "object",
@@ -62,18 +63,22 @@ func jsonSchema(properties map[string]any, required []string) map[string]any {
 	}
 }
 
+// strProp is a helper function
 func strProp(desc string) map[string]any {
 	return map[string]any{"type": "string", "description": desc}
 }
 
+// strEnumProp is a helper function
 func strEnumProp(desc string, enum []string) map[string]any {
 	return map[string]any{"type": "string", "enum": enum, "description": desc}
 }
 
+// numProp is a helper function
 func numProp(desc string) map[string]any {
 	return map[string]any{"type": "number", "description": desc}
 }
 
+// boolProp is a helper function
 func boolProp(desc string) map[string]any {
 	return map[string]any{"type": "boolean", "description": desc}
 }

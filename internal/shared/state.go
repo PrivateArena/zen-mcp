@@ -11,6 +11,7 @@ type Store struct {
 	subs   map[string][]func(string)
 }
 
+// NewStore is a helper function
 func NewStore() *Store {
 	return &Store{
 		values: make(map[string]string),
@@ -18,6 +19,7 @@ func NewStore() *Store {
 	}
 }
 
+// Set is a helper function
 func (s *Store) Set(key, value string) {
 	s.mu.Lock()
 	prev, existed := s.values[key]
@@ -34,6 +36,7 @@ func (s *Store) Set(key, value string) {
 	}
 }
 
+// Get is a helper function
 func (s *Store) Get(key string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -41,6 +44,7 @@ func (s *Store) Get(key string) (string, bool) {
 	return v, ok
 }
 
+// GetAll is a helper function
 func (s *Store) GetAll() map[string]string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -51,10 +55,12 @@ func (s *Store) GetAll() map[string]string {
 	return out
 }
 
+// eqFunc is a helper function
 func eqFunc(a, b func(string)) bool {
 	return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
 }
 
+// Clear is a helper function
 func (s *Store) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

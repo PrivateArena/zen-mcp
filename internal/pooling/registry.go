@@ -212,6 +212,7 @@ func (r *Registry) EvictExpired(now time.Time) int {
 	return r.evictLocked(now)
 }
 
+// evictLocked is a helper function
 func (r *Registry) evictLocked(now time.Time) int {
 	var evicted int
 	for id, job := range r.jobs {
@@ -241,6 +242,7 @@ func (r *Registry) cancelled(job *Job) bool {
 	return job.Cancelled
 }
 
+// jobStateLocked is a helper function
 func (r *Registry) jobStateLocked(job *Job) string {
 	if job.Cancelled {
 		return StateCancelled

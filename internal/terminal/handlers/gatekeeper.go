@@ -7,6 +7,7 @@ import (
 	"zen-mcp/internal/terminal"
 )
 
+// initializes the package
 func init() {
 	terminal.Register("accept", func(args []string) error {
 		d := terminal.GetDeps()

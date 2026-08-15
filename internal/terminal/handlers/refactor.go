@@ -6,6 +6,7 @@ import (
 	"zen-mcp/internal/terminal"
 )
 
+// initializes the package
 func init() {
 	terminal.Register("refactor-copy", func(args []string) error {
 		if len(args) == 0 {

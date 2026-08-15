@@ -9,15 +9,19 @@ type typescriptPlugin struct {
 	basePlugin
 }
 
+// creates a new TypeScript language plugin
 func newTypeScriptPlugin() LanguagePlugin {
 	return &typescriptPlugin{}
 }
 
+// returns the supported file extensions
 func (p *typescriptPlugin) Extensions() []string {
 	return []string{".ts", ".tsx", ".js", ".jsx", ".mjs"}
 }
+// returns the language name
 func (p *typescriptPlugin) LanguageName() string { return "typescript" }
 
+// initializes the package
 func (p *typescriptPlugin) Init() error {
 	p.mu.Lock()
 	if p.parser != nil {
@@ -33,6 +37,7 @@ func (p *typescriptPlugin) Init() error {
 	return nil
 }
 
+// parses source bytes into nodes and relations
 func (p *typescriptPlugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, error) {
 	parser, language := p.getParser()
 	if parser == nil || language == nil {
@@ -68,6 +73,7 @@ func (p *typescriptPlugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, er
 	return DeduplicateNodes(nodes), relations, nil
 }
 
+// extracts relations from TypeScript syntax tree nodes
 func extractTypeScriptRelations(node *tree_sitter.Node, currentFn *string, relations *[]ParsedRelation, src []byte) {
 	if node == nil {
 		return

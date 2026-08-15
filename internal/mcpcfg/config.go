@@ -151,6 +151,7 @@ type ZenConfig struct {
 // climode_prefix config is unset, empty, or whitespace-only.
 const DefaultCliModePrefix = "zen-"
 
+// defaultConfig is a helper function
 func defaultConfig() ZenConfig {
 	return ZenConfig{
 		DaemonPort:         31337,
@@ -238,6 +239,7 @@ func defaultConfig() ZenConfig {
 	}
 }
 
+// toolConfigDefaults is a helper function
 func toolConfigDefaults() map[string]json.RawMessage {
 	specs := map[string]ToolConfig{
 		"browser":        {Timeout: 120000, Format: FormatRaw},
@@ -268,11 +270,13 @@ func toolConfigDefaults() map[string]json.RawMessage {
 
 var Config atomic.Pointer[ZenConfig]
 
+// initializes the package
 func init() {
 	cfg := defaultConfig()
 	Config.Store(&cfg)
 }
 
+// Get is a helper function
 func Get() *ZenConfig {
 	return Config.Load()
 }
@@ -289,6 +293,7 @@ func CliModePrefixOrDefault() string {
 	return DefaultCliModePrefix
 }
 
+// GetToolConfig is a helper function
 func GetToolConfig(toolName string) ToolConfig {
 	def := ToolConfig{Timeout: 60000, Format: FormatRaw}
 	if c := Get(); c != nil && c.McpTimeoutMs > 0 {
@@ -321,26 +326,31 @@ func GetToolConfig(toolName string) ToolConfig {
 	return def
 }
 
+// DaemonURL is a helper function
 func DaemonURL() string {
 	c := Get()
 	return "http://" + c.Host + ":" + strconv.Itoa(c.DaemonPort)
 }
 
+// ProxyURL is a helper function
 func ProxyURL() string {
 	c := Get()
 	return "http://" + c.Host + ":" + strconv.Itoa(c.ProxyPort)
 }
 
+// FirefoxBridgeURL is a helper function
 func FirefoxBridgeURL() string {
 	c := Get()
 	return "http://" + c.Host + ":" + strconv.Itoa(c.FirefoxBridgePort)
 }
 
+// ZenCapURL is a helper function
 func ZenCapURL() string {
 	c := Get()
 	return "http://" + c.Host + ":" + strconv.Itoa(c.ZenCapPort)
 }
 
+// Load is a helper function
 func Load() error {
 	def := defaultConfig()
 	user, err := readJSONMap(ConfigFilePath())
@@ -356,6 +366,7 @@ func Load() error {
 	return nil
 }
 
+// LoadWikiConfig is a helper function
 func LoadWikiConfig() WikiConfig {
 	def := WikiConfig{Domains: map[string]WikiFilter{}}
 	data, err := os.ReadFile(WikiConfigFilePath())
@@ -372,6 +383,7 @@ func LoadWikiConfig() WikiConfig {
 	return wc
 }
 
+// readJSONMap is a helper function
 func readJSONMap(path string) (map[string]any, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -387,6 +399,7 @@ func readJSONMap(path string) (map[string]any, error) {
 	return m, nil
 }
 
+// mergeConfig is a helper function
 func mergeConfig(def ZenConfig, user map[string]any) (ZenConfig, error) {
 	defBytes, _ := json.Marshal(def)
 	var defMap map[string]any
@@ -430,6 +443,7 @@ func mergeConfig(def ZenConfig, user map[string]any) (ZenConfig, error) {
 	return out, nil
 }
 
+// copyMap is a helper function
 func copyMap(src map[string]any) map[string]any {
 	out := make(map[string]any, len(src))
 	for k, v := range src {
@@ -438,6 +452,7 @@ func copyMap(src map[string]any) map[string]any {
 	return out
 }
 
+// mergeNested is a helper function
 func mergeNested(def, user map[string]any) map[string]any {
 	out := copyMap(def)
 	if user == nil {
@@ -455,6 +470,7 @@ func mergeNested(def, user map[string]any) map[string]any {
 	return out
 }
 
+// coercePorts is a helper function
 func coercePorts(m map[string]any) {
 	for _, key := range []string{"daemonPort", "mcpPort", "cliPort", "proxyPort", "firefoxBridgePort", "zenCapPort", "cdpPort", "whiteboardPort", "wikiPort"} {
 		if s, ok := m[key].(string); ok {
@@ -465,9 +481,12 @@ func coercePorts(m map[string]any) {
 	}
 }
 
+// boolPtr is a helper function
 func boolPtr(b bool) *bool { return &b }
+// intPtr is a helper function
 func intPtr(i int) *int    { return &i }
 
+// WatchConfig is a helper function
 func WatchConfig(reload func()) func() {
 	path := ConfigFilePath()
 	watcher, err := fsnotify.NewWatcher()

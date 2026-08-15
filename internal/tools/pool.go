@@ -12,6 +12,7 @@ import (
 	"zen-mcp/internal/toolresponse"
 )
 
+// defPool is a helper function
 func defPool(deps Deps) ToolDef {
 	return ToolDef{
 		Name:  "pool",
@@ -98,6 +99,7 @@ func HandlePoolAction(ctx context.Context, reg *pooling.Registry, req mcp.CallTo
 	}
 }
 
+// unknownPoolIDError is a helper function
 func unknownPoolIDError(id string) error {
 	return fmt.Errorf("unknown pool_id %q (job expired or server restarted — re-issue the original call)", id)
 }
@@ -113,6 +115,7 @@ func statusPayload(state, id string, reg *pooling.Registry) map[string]any {
 	}
 }
 
+// jobElapsedMs is a helper function
 func jobElapsedMs(reg *pooling.Registry, id string) int64 {
 	if job, ok := reg.Get(id); ok {
 		return time.Since(job.CreatedAt).Milliseconds()

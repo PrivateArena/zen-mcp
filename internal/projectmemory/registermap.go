@@ -142,6 +142,7 @@ func normalizeJSONValue(raw []byte) string {
 	return buf.String()
 }
 
+// stringifyPanic is a helper function
 func stringifyPanic(r any) string {
 	if err, ok := r.(error); ok {
 		return err.Error()

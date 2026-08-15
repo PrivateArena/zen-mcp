@@ -13,6 +13,7 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
+// defMemoryIsolate is a helper function
 func defMemoryIsolate(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "memory_isolate",
@@ -33,6 +34,7 @@ func defMemoryIsolate(workspace string, deps Deps) ToolDef {
 	}
 }
 
+// HandleMemoryIsolateAction is a helper function
 func HandleMemoryIsolateAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
@@ -60,6 +62,7 @@ func HandleMemoryIsolateAction(ctx context.Context, workspace string, deps Deps,
 	}
 }
 
+// HandleIsolateLoad is a helper function
 func HandleIsolateLoad(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
 	state, err := client.LoadBoardState(ctx)
 	if err != nil {
@@ -83,6 +86,7 @@ func HandleIsolateLoad(ctx context.Context, client *whiteboard.Client, ws string
 	}, start)
 }
 
+// HandleIsolateSave is a helper function
 func HandleIsolateSave(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
 	sessionTitle, _ := args["session_title"].(string)
 	sessionNotes, _ := args["session_notes"].(string)
@@ -111,6 +115,7 @@ func HandleIsolateSave(ctx context.Context, client *whiteboard.Client, ws string
 	}, start)
 }
 
+// HandleIsolateScope is a helper function
 func HandleIsolateScope(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
 	state, err := client.LoadBoardState(ctx)
 	if err != nil {
@@ -137,6 +142,7 @@ func HandleIsolateScope(ctx context.Context, client *whiteboard.Client, ws strin
 	}, start)
 }
 
+// findCard is a helper function
 func findCard(cards []whiteboard.CardData, slug string) *whiteboard.CardData {
 	for i := range cards {
 		if cards[i].CardSlug == slug {
@@ -146,6 +152,7 @@ func findCard(cards []whiteboard.CardData, slug string) *whiteboard.CardData {
 	return nil
 }
 
+// findNeighbors is a helper function
 func findNeighbors(state whiteboard.BoardState, slug string) map[string]any {
 	index := map[string]whiteboard.CardData{}
 	for _, c := range state.Cards {
@@ -177,6 +184,7 @@ func findNeighbors(state whiteboard.BoardState, slug string) map[string]any {
 	return neighbors
 }
 
+// uniqueGroups is a helper function
 func uniqueGroups(cards []whiteboard.CardData) []string {
 	set := map[string]bool{}
 	for _, c := range cards {
@@ -193,6 +201,7 @@ func uniqueGroups(cards []whiteboard.CardData) []string {
 	return out
 }
 
+// filterByGroup is a helper function
 func filterByGroup(cards []whiteboard.CardData, group string) []whiteboard.CardData {
 	out := make([]whiteboard.CardData, 0)
 	for _, c := range cards {
@@ -207,6 +216,7 @@ func filterByGroup(cards []whiteboard.CardData, group string) []whiteboard.CardD
 	return out
 }
 
+// slugify is a helper function
 func slugify(s string) string {
 	s = strings.ToLower(s)
 	s = regexp.MustCompile(`[^a-z0-9]+`).ReplaceAllString(s, "-")

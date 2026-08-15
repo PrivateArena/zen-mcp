@@ -9,6 +9,7 @@ import (
 	"zen-mcp/internal/tools"
 )
 
+// initializes the package
 func init() {
 	terminal.Register("index", func(args []string) error {
 		isForce := false

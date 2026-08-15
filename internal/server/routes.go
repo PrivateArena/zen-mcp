@@ -56,6 +56,7 @@ type serverCache struct {
 	ttl      time.Duration
 }
 
+// newServerCache is a helper function
 func newServerCache() *serverCache {
 	c := &serverCache{
 		servers:  make(map[string]*mcpserver.MCPServer),
@@ -68,6 +69,7 @@ func newServerCache() *serverCache {
 	return c
 }
 
+// getOrCreate is a helper function
 func (c *serverCache) getOrCreate(logicalID string, factory func(string) *mcpserver.MCPServer, registry *toolregistry.ToolRegistry) *mcpserver.MCPServer {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -87,6 +89,7 @@ func (c *serverCache) getOrCreate(logicalID string, factory func(string) *mcpser
 	return srv
 }
 
+// getOrCreateHandler is a helper function
 func (c *serverCache) getOrCreateHandler(logicalID string, factory func(string) *mcpserver.MCPServer, registry *toolregistry.ToolRegistry) *mcpserver.StreamableHTTPServer {
 	c.getOrCreate(logicalID, factory, registry)
 	c.mu.RLock()
@@ -255,6 +258,7 @@ func SetupRoutes(mux *http.ServeMux, deps RouteDeps) {
 	})
 }
 
+// postMCP is a helper function
 func (d RouteDeps) postMCP(w http.ResponseWriter, r *http.Request) {
 	// F4: read the body exactly once. The parsed method/params drive both
 	// workspace detection and the tools/list rewrite; the body is rewound once
@@ -402,6 +406,7 @@ func detectWorkspace(msg rpcMessage, r *http.Request, st *shared.Store) string {
 	return ""
 }
 
+// fileURLToPath is a helper function
 func fileURLToPath(uri string) string {
 	u, err := url.Parse(uri)
 	if err != nil || u.Scheme != "file" {
@@ -420,12 +425,14 @@ func fileURLToPath(uri string) string {
 	return filepath.FromSlash(p)
 }
 
+// writeText is a helper function
 func writeText(w http.ResponseWriter, code int, text string) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(code)
 	_, _ = w.Write([]byte(text))
 }
 
+// writeJSON is a helper function
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)

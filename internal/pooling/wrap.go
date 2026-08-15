@@ -129,6 +129,7 @@ func jobDone(reg *Registry, id string) <-chan struct{} {
 	return closed
 }
 
+// containsStr is a helper function
 func containsStr(list []string, s string) bool {
 	for _, v := range list {
 		if v == s {

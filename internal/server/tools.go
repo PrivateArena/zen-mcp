@@ -94,6 +94,7 @@ func RegisterAllTools(ctx context.Context, srv *mcpserver.MCPServer, reg *toolre
 	return nil
 }
 
+// boolPtr is a helper function
 func boolPtr(b bool) *bool { return &b }
 
 // wrapIfPooled applies the tool-call pooling wrapper. Every tool except the

@@ -23,10 +23,12 @@ type ToolRegistry struct {
 	tools map[string]*ToolRegistration
 }
 
+// Create is a helper function
 func Create() *ToolRegistry {
 	return &ToolRegistry{tools: make(map[string]*ToolRegistration)}
 }
 
+// Track is a helper function
 func (r *ToolRegistry) Track(reg ToolRegistration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -36,6 +38,7 @@ func (r *ToolRegistry) Track(reg ToolRegistration) {
 	r.tools[reg.Name] = &reg
 }
 
+// GetTool is a helper function
 func (r *ToolRegistry) GetTool(name string) (*ToolRegistration, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -43,6 +46,7 @@ func (r *ToolRegistry) GetTool(name string) (*ToolRegistration, bool) {
 	return entry, ok
 }
 
+// ListToolNames is a helper function
 func (r *ToolRegistry) ListToolNames() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -53,6 +57,7 @@ func (r *ToolRegistry) ListToolNames() []string {
 	return out
 }
 
+// ListTools is a helper function
 func (r *ToolRegistry) ListTools() []*ToolRegistration {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -63,6 +68,7 @@ func (r *ToolRegistry) ListTools() []*ToolRegistration {
 	return out
 }
 
+// SetToolEnabled is a helper function
 func (r *ToolRegistry) SetToolEnabled(name string, enabled bool) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -74,6 +80,7 @@ func (r *ToolRegistry) SetToolEnabled(name string, enabled bool) bool {
 	return true
 }
 
+// IsToolEnabled is a helper function
 func (r *ToolRegistry) IsToolEnabled(name string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -84,6 +91,7 @@ func (r *ToolRegistry) IsToolEnabled(name string) bool {
 	return entry.Enabled
 }
 
+// Reset is a helper function
 func (r *ToolRegistry) Reset() {
 	r.mu.Lock()
 	defer r.mu.Unlock()

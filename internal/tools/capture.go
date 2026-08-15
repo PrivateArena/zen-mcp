@@ -45,6 +45,7 @@ type CollaborationRegistry struct {
 	items map[string]*collabEntry
 }
 
+// NewCollaborationRegistry is a helper function
 func NewCollaborationRegistry() *CollaborationRegistry {
 	return &CollaborationRegistry{items: make(map[string]*collabEntry)}
 }
@@ -115,6 +116,7 @@ func (r *CollaborationRegistry) Contains(id string) bool {
 	return ok && e.state == CollabPending
 }
 
+// defCapture is a helper function
 func defCapture(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "capture",
@@ -139,6 +141,7 @@ func defCapture(workspace string, deps Deps) ToolDef {
 	}
 }
 
+// HandleCaptureAction is a helper function
 func HandleCaptureAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
@@ -170,6 +173,7 @@ func HandleCaptureAction(ctx context.Context, workspace string, deps Deps, req m
 	return HandleStandardCapture(ctx, apiAddr, targetPath, mode, args, start)
 }
 
+// HandleCollaborateCapture is a helper function
 func HandleCollaborateCapture(ctx context.Context, apiAddr, targetPath string, start time.Time, deps Deps) *mcp.CallToolResult {
 	collabID := fmt.Sprintf("collab_%d_%06x", time.Now().Unix(), rand.Int31())
 	port := mcpcfg.Get().McpPort
@@ -197,6 +201,7 @@ func HandleCollaborateCapture(ctx context.Context, apiAddr, targetPath string, s
 	}
 }
 
+// HandleStandardCapture is a helper function
 func HandleStandardCapture(ctx context.Context, apiAddr, targetPath, mode string, args map[string]any, start time.Time) *mcp.CallToolResult {
 	region, _ := args["region"].(string)
 	window, _ := args["window"].(string)
@@ -277,6 +282,7 @@ func getZenCapAPIAddress() string {
 	return addr
 }
 
+// readZenCapAPIAddress is a helper function
 func readZenCapAPIAddress() string {
 	home, err := os.UserHomeDir()
 	if err != nil {

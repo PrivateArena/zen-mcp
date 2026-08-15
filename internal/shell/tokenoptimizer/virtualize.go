@@ -106,6 +106,7 @@ func CheckAndVirtualizeOutput(toolName, text, workspaceRoot string) string {
 	return string(out)
 }
 
+// orUndefined is a helper function
 func orUndefined(s string) any {
 	if s == "" {
 		return nil
@@ -113,11 +114,13 @@ func orUndefined(s string) any {
 	return s
 }
 
+// formatKb is a helper function
 func formatKb(byteLength int) string {
 	kb := float64(byteLength) / 1024
 	return twoDecimals(kb)
 }
 
+// twoDecimals is a helper function
 func twoDecimals(v float64) string {
 	n := int64(v*100 + 0.5)
 	sign := ""
@@ -128,6 +131,7 @@ func twoDecimals(v float64) string {
 	return sign + itoa(int(n/100)) + "." + pad2(int(n%100))
 }
 
+// pad2 is a helper function
 func pad2(n int) string {
 	if n < 10 {
 		return "0" + itoa(n)
@@ -135,6 +139,7 @@ func pad2(n int) string {
 	return itoa(n)
 }
 
+// extractDistinctVocabulary is a helper function
 func extractDistinctVocabulary(text string) []string {
 	words := vocabRe.FindAllString(strings.ToLower(text), -1)
 	seen := map[string]bool{}

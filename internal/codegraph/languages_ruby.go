@@ -9,13 +9,17 @@ type rubyPlugin struct {
 	basePlugin
 }
 
+// creates a new Ruby language plugin
 func newRubyPlugin() LanguagePlugin {
 	return &rubyPlugin{}
 }
 
+// returns the supported file extensions
 func (p *rubyPlugin) Extensions() []string { return []string{".rb"} }
+// returns the language name
 func (p *rubyPlugin) LanguageName() string { return "ruby" }
 
+// initializes the package
 func (p *rubyPlugin) Init() error {
 	p.mu.Lock()
 	if p.parser != nil {
@@ -31,6 +35,7 @@ func (p *rubyPlugin) Init() error {
 	return nil
 }
 
+// parses source bytes into nodes and relations
 func (p *rubyPlugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, error) {
 	parser, language := p.getParser()
 	if parser == nil || language == nil {

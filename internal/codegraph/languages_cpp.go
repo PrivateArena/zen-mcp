@@ -9,13 +9,17 @@ type cppPlugin struct {
 	basePlugin
 }
 
+// creates a new C++ language plugin
 func newCppPlugin() LanguagePlugin {
 	return &cppPlugin{}
 }
 
+// returns the supported file extensions
 func (p *cppPlugin) Extensions() []string { return []string{".cpp", ".hpp"} }
+// returns the language name
 func (p *cppPlugin) LanguageName() string { return "cpp" }
 
+// initializes the package
 func (p *cppPlugin) Init() error {
 	p.mu.Lock()
 	if p.parser != nil {
@@ -31,6 +35,7 @@ func (p *cppPlugin) Init() error {
 	return nil
 }
 
+// parses source bytes into nodes and relations
 func (p *cppPlugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, error) {
 	parser, language := p.getParser()
 	if parser == nil || language == nil {

@@ -8,6 +8,7 @@ import (
 	"zen-mcp/internal/terminal"
 )
 
+// initializes the package
 func init() {
 	terminal.Register("br", func(args []string) error {
 		if len(args) == 0 {
@@ -124,6 +125,7 @@ func init() {
 	})
 }
 
+// handleBrowserRequest is a helper function
 func handleBrowserRequest(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: request <url> [method] [body] [headersJson]")

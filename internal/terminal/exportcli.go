@@ -280,6 +280,7 @@ func strSlice(v any) []string {
 	return nil
 }
 
+// paramSuffix is a helper function
 func paramSuffix(p cliParam) (req, vals string) {
 	if p.required {
 		req = " (required)"
@@ -302,6 +303,7 @@ func q(s string) string {
 	return s
 }
 
+// oneLine is a helper function
 func oneLine(s string) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	return strings.TrimSpace(s)
@@ -605,6 +607,7 @@ func localBinDir() string {
 	return ""
 }
 
+// localBinDirLabel is a helper function
 func localBinDirLabel() string {
 	if d := localBinDir(); d != "" {
 		return d

@@ -11,6 +11,7 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
+// defColab is a helper function
 func defColab(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "colab",
@@ -29,6 +30,7 @@ func defColab(workspace string, deps Deps) ToolDef {
 	}
 }
 
+// HandleColabAction is a helper function
 func HandleColabAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()

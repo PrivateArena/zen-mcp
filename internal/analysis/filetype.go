@@ -52,6 +52,7 @@ func DetectFileType(text string) FileTypeResult {
 	return FileTypeResult{Type: "text", Confidence: 0.9, Mime: "text/plain"}
 }
 
+// checks if a sample appears to be binary data
 func isBinary(sample string) bool {
 	control := sliceRunes(sample, 1024)
 	controlCount := 0
@@ -63,6 +64,7 @@ func isBinary(sample string) bool {
 	return controlCount > len([]rune(control))*5/100
 }
 
+// attempts to parse a sample as JSON
 func tryJSON(sample string) *FileTypeResult {
 	if !strings.HasPrefix(sample, "{") && !strings.HasPrefix(sample, "[") {
 		return nil
@@ -78,6 +80,7 @@ func tryJSON(sample string) *FileTypeResult {
 	return &FileTypeResult{Type: "json", Subtype: subtype, Confidence: 0.95, Mime: "application/json"}
 }
 
+// attempts to parse a sample as HTML
 func tryHTML(sample string) *FileTypeResult {
 	lower := strings.ToLower(sample)
 	if strings.HasPrefix(lower, "<!doctype html") || strings.HasPrefix(lower, "<html") ||
@@ -87,6 +90,7 @@ func tryHTML(sample string) *FileTypeResult {
 	return nil
 }
 
+// attempts to parse a sample as XML
 func tryXML(sample string) *FileTypeResult {
 	if !strings.HasPrefix(sample, "<?xml") && !regexp.MustCompile(`^<\w+[\s>]`).MatchString(sample) {
 		return nil
@@ -101,6 +105,7 @@ func tryXML(sample string) *FileTypeResult {
 	return nil
 }
 
+// attempts to parse a sample as YAML
 func tryYAML(sample string) *FileTypeResult {
 	if strings.HasPrefix(sample, "---\n") || strings.HasPrefix(sample, "---\r\n") {
 		return &FileTypeResult{Type: "yaml", Confidence: 0.85, Mime: "application/x-yaml"}
@@ -115,6 +120,7 @@ func tryYAML(sample string) *FileTypeResult {
 	return nil
 }
 
+// attempts to parse a sample as Markdown
 func tryMarkdown(sample string) *FileTypeResult {
 	if regexp.MustCompile(`^#{1,6}\s`).MatchString(sample) {
 		return &FileTypeResult{Type: "markdown", Confidence: 0.8, Mime: "text/markdown"}
@@ -143,6 +149,7 @@ var (
 	reLogBare      = regexp.MustCompile(`^(INFO|WARN|ERROR|DEBUG|TRACE)\b`)
 )
 
+// attempts to parse a sample as a log file
 func tryLog(sample string) *FileTypeResult {
 	var lines []string
 	for _, l := range strings.Split(sample, "\n") {
@@ -169,6 +176,7 @@ func tryLog(sample string) *FileTypeResult {
 	return nil
 }
 
+// attempts to parse a sample as CSV
 func tryCSV(sample string) *FileTypeResult {
 	var lines []string
 	for _, l := range strings.Split(sample, "\n") {
@@ -209,6 +217,7 @@ func tryCSV(sample string) *FileTypeResult {
 	return nil
 }
 
+// guesses the CSV delimiter from rows
 func guessDelimiter(rows []string) string {
 	commaRe := regexp.MustCompile(`,`)
 	tabRe := regexp.MustCompile("\t")
@@ -234,6 +243,7 @@ func guessDelimiter(rows []string) string {
 	return ""
 }
 
+// attempts to parse a sample as a diff
 func tryDiff(sample string) *FileTypeResult {
 	if !regexp.MustCompile(`^---\s`).MatchString(sample) {
 		return nil
@@ -254,6 +264,7 @@ func tryDiff(sample string) *FileTypeResult {
 	return nil
 }
 
+// returns the first n runes of a string
 func sliceRunes(s string, n int) string {
 	r := []rune(s)
 	if len(r) <= n {

@@ -29,6 +29,7 @@ type TransformRule struct {
 
 var transformRules []TransformRule
 
+// initializes the package
 func init() {
 	transformRules = []TransformRule{
 		// Rule 7 — MCP skill activation (injected block) — handles both
@@ -162,6 +163,7 @@ func TransformMCPToCLI(text string) string {
 	return text
 }
 
+// parseKeyValuePairs is a helper function
 func parseKeyValuePairs(inner string) map[string]string {
 	re := regexp.MustCompile(`(\w+)\s*:\s*(?:'([^']*)'|"([^"]*)"|(\w+)|\.\.\.)`)
 	matches := re.FindAllStringSubmatch(inner, -1)
@@ -187,6 +189,7 @@ func parseKeyValuePairs(inner string) map[string]string {
 	return params
 }
 
+// buildJSONObject is a helper function
 func buildJSONObject(params map[string]string) string {
 	keys := make([]string, 0, len(params))
 	for k := range params {
@@ -205,6 +208,7 @@ func buildJSONObject(params map[string]string) string {
 	return b.String()
 }
 
+// quoteIfSpaced is a helper function
 func quoteIfSpaced(v string) string {
 	if strings.ContainsAny(v, " \t") {
 		return "'" + v + "'"
@@ -212,6 +216,7 @@ func quoteIfSpaced(v string) string {
 	return v
 }
 
+// renderCLIFlags is a helper function
 func renderCLIFlags(tool, inner string) string {
 	cli := CLITool(tool)
 	params := parseKeyValuePairs(inner)

@@ -9,13 +9,17 @@ type rustPlugin struct {
 	basePlugin
 }
 
+// creates a new Rust language plugin
 func newRustPlugin() LanguagePlugin {
 	return &rustPlugin{}
 }
 
+// returns the supported file extensions
 func (p *rustPlugin) Extensions() []string { return []string{".rs"} }
+// returns the language name
 func (p *rustPlugin) LanguageName() string { return "rust" }
 
+// initializes the package
 func (p *rustPlugin) Init() error {
 	p.mu.Lock()
 	if p.parser != nil {
@@ -31,6 +35,7 @@ func (p *rustPlugin) Init() error {
 	return nil
 }
 
+// parses source bytes into nodes and relations
 func (p *rustPlugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, error) {
 	parser, language := p.getParser()
 	if parser == nil || language == nil {
@@ -61,6 +66,7 @@ func (p *rustPlugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, error) {
 	return DeduplicateNodes(nodes), relations, nil
 }
 
+// extracts relations from Rust syntax tree nodes
 func extractRustRelations(node *tree_sitter.Node, currentFn *string, relations *[]ParsedRelation, src []byte) {
 	if node == nil {
 		return
@@ -117,6 +123,7 @@ func extractRustRelations(node *tree_sitter.Node, currentFn *string, relations *
 	}
 }
 
+// expands Rust use statement imports
 func expandRustUse(node *tree_sitter.Node, relations *[]ParsedRelation, prefix string, src []byte) {
 	if node == nil {
 		return

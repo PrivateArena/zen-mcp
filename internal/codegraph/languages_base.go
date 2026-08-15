@@ -21,6 +21,7 @@ type basePlugin struct {
 	language *tree_sitter.Language
 }
 
+// sets the parser and language for the plugin
 func (b *basePlugin) setParser(parser *tree_sitter.Parser, language *tree_sitter.Language) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -28,6 +29,7 @@ func (b *basePlugin) setParser(parser *tree_sitter.Parser, language *tree_sitter
 	b.language = language
 }
 
+// returns the parser and language for the plugin
 func (b *basePlugin) getParser() (*tree_sitter.Parser, *tree_sitter.Language) {
 	b.mu.Lock()
 	defer b.mu.Unlock()

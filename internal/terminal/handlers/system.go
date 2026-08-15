@@ -14,6 +14,7 @@ import (
 
 var startTime = time.Now()
 
+// initializes the package
 func init() {
 	terminal.Register("status", func(args []string) error {
 		var mem runtime.MemStats
@@ -179,6 +180,7 @@ func exportShortFlag(args []string) (on, set bool) {
 	return on, set
 }
 
+// buildToolCost is a helper function
 func buildToolCost() string {
 	c := mcpcfg.Get()
 	if c == nil {

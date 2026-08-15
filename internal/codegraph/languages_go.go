@@ -9,13 +9,17 @@ type goPlugin struct {
 	basePlugin
 }
 
+// creates a new Go language plugin
 func newGoPlugin() LanguagePlugin {
 	return &goPlugin{}
 }
 
+// returns the supported file extensions
 func (p *goPlugin) Extensions() []string { return []string{".go"} }
+// returns the language name
 func (p *goPlugin) LanguageName() string { return "go" }
 
+// initializes the package
 func (p *goPlugin) Init() error {
 	p.mu.Lock()
 	if p.parser != nil {
@@ -31,6 +35,7 @@ func (p *goPlugin) Init() error {
 	return nil
 }
 
+// parses source bytes into nodes and relations
 func (p *goPlugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, error) {
 	parser, language := p.getParser()
 	if parser == nil || language == nil {
@@ -59,6 +64,7 @@ func (p *goPlugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, error) {
 	return DeduplicateNodes(nodes), relations, nil
 }
 
+// extracts relations from Go syntax tree nodes
 func extractGoRelations(node *tree_sitter.Node, currentFn *string, relations *[]ParsedRelation, src []byte) {
 	if node == nil {
 		return

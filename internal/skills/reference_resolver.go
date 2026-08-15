@@ -294,6 +294,7 @@ func ResolveSkillContent(content, skillBaseDir, skillID string) ResolvedSkillCon
 	return result
 }
 
+// isValidCommandRef is a helper function
 func isValidCommandRef(name string) bool {
 	if name == "" {
 		return false

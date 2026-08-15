@@ -340,6 +340,7 @@ func ReconstructState(dataDir, memoryName string) ReconstructedState {
 	return state
 }
 
+// asString is a helper function
 func asString(v any) string {
 	switch t := v.(type) {
 	case string:
@@ -352,6 +353,7 @@ func asString(v any) string {
 	}
 }
 
+// itoa is a helper function
 func itoa(n int) string {
 	if n == 0 {
 		return "0"

@@ -35,6 +35,7 @@ type layeredGraphSession struct {
 
 var graphRegistry = new(sync.Map)
 
+// discovers all codegraph database roots within the workspace
 func discoverGraphRoots(workspaceRoot string) []string {
 	roots := []string{workspaceRoot}
 
@@ -89,6 +90,7 @@ func discoverGraphRoots(workspaceRoot string) []string {
 	return unique
 }
 
+// returns the layered graph session for a workspace, creating or rebuilding it if stale
 func getSessionByWorkspace(workspace string) (*layeredGraphSession, error) {
 	root := workspace
 	if r := resolveWorkspaceFromDeps("", workspace); r != "" {
@@ -195,12 +197,14 @@ func sessionStale(session *layeredGraphSession) bool {
 	return false
 }
 
+// ClearSessionGraph is a helper function
 func ClearSessionGraph(session *layeredGraphSession) {
 	for _, entry := range session.entries {
 		_ = entry.graph.Close()
 	}
 }
 
+// ClearSessionGraphByWorkspace is a helper function
 func ClearSessionGraphByWorkspace(workspace string) {
 	graphRegistry.Range(func(key, value any) bool {
 		session := value.(*layeredGraphSession)
@@ -212,6 +216,7 @@ func ClearSessionGraphByWorkspace(workspace string) {
 	})
 }
 
+// returns the graph entries targeted by an isolate level
 func getTargetGraphs(session *layeredGraphSession, isolate int) ([]layeredGraphEntry, error) {
 	if isolate == 0 {
 		return session.entries, nil
@@ -227,6 +232,7 @@ func getTargetGraphs(session *layeredGraphSession, isolate int) ([]layeredGraphE
 	return []layeredGraphEntry{session.entries[idx]}, nil
 }
 
+// expands a comma-separated query against indexed file paths across all graph layers
 func expandQueryPaths(query string, session *layeredGraphSession) []string {
 	rawPaths := strings.Split(query, ",")
 	var parts []string
@@ -300,6 +306,7 @@ type layeredResult struct {
 	data  string
 }
 
+// formatLayered is a helper function
 func formatLayered(results []layeredResult, single bool) string {
 	if single || len(results) == 1 {
 		return results[0].data
@@ -311,6 +318,7 @@ func formatLayered(results []layeredResult, single bool) string {
 	return strings.Join(parts, "\n\n")
 }
 
+// resolveRefactorTarget is a helper function
 func resolveRefactorTarget(session *layeredGraphSession, isolate int) (layeredGraphEntry, string, error) {
 	target := session.entries[0]
 	warning := ""
@@ -326,6 +334,7 @@ func resolveRefactorTarget(session *layeredGraphSession, isolate int) (layeredGr
 	return target, warning, nil
 }
 
+// re-indexes files in the targeted graph scopes
 func actionIndex(session *layeredGraphSession, isolate int) (string, error) {
 	targets, err := getTargetGraphs(session, isolate)
 	if err != nil {
@@ -352,6 +361,7 @@ func actionIndex(session *layeredGraphSession, isolate int) (string, error) {
 	return strings.Join(parts, "\n"), nil
 }
 
+// actionMap is a helper function
 func actionMap(session *layeredGraphSession, isolate int, limit *int) (string, error) {
 	targets, err := getTargetGraphs(session, isolate)
 	if err != nil {
@@ -369,6 +379,7 @@ func actionMap(session *layeredGraphSession, isolate int, limit *int) (string, e
 	return formatLayered(results, isolate != 0), nil
 }
 
+// actionNeighbors is a helper function
 func actionNeighbors(session *layeredGraphSession, isolate int, query string, limit *int) (string, error) {
 	targets, err := getTargetGraphs(session, isolate)
 	if err != nil {
@@ -393,6 +404,7 @@ func actionNeighbors(session *layeredGraphSession, isolate int, query string, li
 	return formatLayered(results, isolate != 0), nil
 }
 
+// actionUsage is a helper function
 func actionUsage(session *layeredGraphSession, isolate int, query string) (string, error) {
 	targets, err := getTargetGraphs(session, isolate)
 	if err != nil {
@@ -415,6 +427,7 @@ func actionUsage(session *layeredGraphSession, isolate int, query string) (strin
 	return formatLayered(results, isolate != 0), nil
 }
 
+// fmtFileList is a helper function
 func fmtFileList(paths []string) string {
 	if len(paths) == 0 {
 		return ""
@@ -446,6 +459,7 @@ func fmtFileList(paths []string) string {
 	return strings.Join(lines, "\n")
 }
 
+// actionFiles is a helper function
 func actionFiles(session *layeredGraphSession, isolate int, query string, limit *int) (string, error) {
 	targets, err := getTargetGraphs(session, isolate)
 	if err != nil {
@@ -498,6 +512,7 @@ func actionFiles(session *layeredGraphSession, isolate int, query string, limit 
 	return formatLayered(results, isolate != 0), nil
 }
 
+// actionRelated is a helper function
 func actionRelated(session *layeredGraphSession, isolate int, query string, limit *int) (string, error) {
 	expanded := expandQueryPaths(query, session)
 	if len(expanded) == 0 {
@@ -573,6 +588,7 @@ func actionRelated(session *layeredGraphSession, isolate int, query string, limi
 	return formatLayered(results, isolate != 0), nil
 }
 
+// actionSearch is a helper function
 func actionSearch(session *layeredGraphSession, isolate int, query string, limit *int) (string, error) {
 	targets, err := getTargetGraphs(session, isolate)
 	if err != nil {
@@ -591,6 +607,7 @@ func actionSearch(session *layeredGraphSession, isolate int, query string, limit
 	return formatLayered(results, isolate != 0), nil
 }
 
+// actionStatus is a helper function
 func actionStatus(session *layeredGraphSession, isolate int) (string, error) {
 	targets, err := getTargetGraphs(session, isolate)
 	if err != nil {
@@ -613,6 +630,7 @@ func actionStatus(session *layeredGraphSession, isolate int) (string, error) {
 	return text, nil
 }
 
+// returns file skeletons for the expanded query paths
 func actionSkeletons(session *layeredGraphSession, isolate int, query string) (string, error) {
 	expanded := expandQueryPaths(query, session)
 	if len(expanded) == 0 {
@@ -673,10 +691,12 @@ func formatSymbolLedger(symbols []codegraph.NodeRecord, showDocs bool) string {
 	return strings.TrimSpace(sb.String())
 }
 
+// actionDocsless is a helper function
 func actionDocsless(session *layeredGraphSession, isolate int, limit *int) (string, error) {
 	return actionSymbolLedger(session, isolate, limit, false)
 }
 
+// actionDocsfull is a helper function
 func actionDocsfull(session *layeredGraphSession, isolate int, limit *int) (string, error) {
 	return actionSymbolLedger(session, isolate, limit, true)
 }
@@ -725,6 +745,7 @@ func actionSymbolLedger(session *layeredGraphSession, isolate int, limit *int, h
 	return formatLayered(results, isolate != 0), nil
 }
 
+// actionMermaid is a helper function
 func actionMermaid(session *layeredGraphSession, isolate int, query string, limit *int) (string, error) {
 	targets, err := getTargetGraphs(session, isolate)
 	if err != nil {
@@ -746,6 +767,7 @@ func actionMermaid(session *layeredGraphSession, isolate int, query string, limi
 	return strings.Join(parts, "\n\n"), nil
 }
 
+// actionMarkdown is a helper function
 func actionMarkdown(session *layeredGraphSession, isolate int, query string) (string, error) {
 	targets, err := getTargetGraphs(session, isolate)
 	if err != nil {
@@ -835,6 +857,7 @@ func actionMarkdown(session *layeredGraphSession, isolate int, query string) (st
 	return outputPath, nil
 }
 
+// reports dead symbols and orphan files in the targeted scopes
 func actionDeadcode(session *layeredGraphSession, isolate int, query string, limit *int) (string, error) {
 	targets, err := getTargetGraphs(session, isolate)
 	if err != nil {
@@ -909,6 +932,7 @@ func actionDeadcode(session *layeredGraphSession, isolate int, query string, lim
 	return formatLayered(results, isolate != 0), nil
 }
 
+// actionExplain is a helper function
 func actionExplain(session *layeredGraphSession, isolate int, query string) (string, error) {
 	targets, err := getTargetGraphs(session, isolate)
 	if err != nil {
@@ -1056,6 +1080,7 @@ func actionExplain(session *layeredGraphSession, isolate int, query string) (str
 	return strings.Join(lines, "\n"), nil
 }
 
+// actionImpact is a helper function
 func actionImpact(session *layeredGraphSession, isolate int, query string) (string, error) {
 	targets, err := getTargetGraphs(session, isolate)
 	if err != nil {
@@ -1210,6 +1235,7 @@ func actionImpact(session *layeredGraphSession, isolate int, query string) (stri
 	return strings.Join(parts, "\n\n"), nil
 }
 
+// actionShortestPath is a helper function
 func actionShortestPath(session *layeredGraphSession, isolate int, query, format string, limit *int) (string, error) {
 	parts := strings.SplitN(query, ",", 2)
 	if len(parts) < 2 {
@@ -1248,6 +1274,7 @@ func actionShortestPath(session *layeredGraphSession, isolate int, query, format
 	return strings.Join(lines, "\n"), nil
 }
 
+// actionFindCycles is a helper function
 func actionFindCycles(session *layeredGraphSession, isolate int) (string, error) {
 	target, _, err := resolveRefactorTarget(session, isolate)
 	if err != nil {
@@ -1269,6 +1296,7 @@ func actionFindCycles(session *layeredGraphSession, isolate int) (string, error)
 	return strings.Join(lines, "\n\n"), nil
 }
 
+// dispatches a codegraph MCP action request
 func HandleCodegraphAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
@@ -1380,6 +1408,7 @@ func HandleCodegraphAction(ctx context.Context, workspace string, deps Deps, req
 	}
 }
 
+// defCodegraph is a helper function
 func defCodegraph(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "codegraph",

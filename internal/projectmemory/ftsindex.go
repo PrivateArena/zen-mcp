@@ -17,6 +17,7 @@ import (
 	"zen-mcp/internal/logfilter"
 )
 
+// randHex8 is a helper function
 func randHex8() string {
 	b := make([]byte, 4)
 	if _, err := rand.Read(b); err != nil {
@@ -43,6 +44,7 @@ var (
 	dbCache = map[string]*sql.DB{}
 )
 
+// GetDatabase is a helper function
 func GetDatabase(dbPath string) *sql.DB {
 	dbMu.Lock()
 	defer dbMu.Unlock()
@@ -65,6 +67,7 @@ func GetDatabase(dbPath string) *sql.DB {
 	return db
 }
 
+// ClearAllDatabaseCache is a helper function
 func ClearAllDatabaseCache() {
 	dbMu.Lock()
 	defer dbMu.Unlock()
@@ -74,6 +77,7 @@ func ClearAllDatabaseCache() {
 	dbCache = map[string]*sql.DB{}
 }
 
+// ClearDatabase is a helper function
 func ClearDatabase(dbPath string) error {
 	dbMu.Lock()
 	if db, ok := dbCache[dbPath]; ok {
@@ -89,6 +93,7 @@ func ClearDatabase(dbPath string) error {
 	return nil
 }
 
+// initMemorySchema is a helper function
 func initMemorySchema(db *sql.DB) {
 	const schema = `
 CREATE TABLE IF NOT EXISTS memory (
@@ -248,6 +253,7 @@ func IndexActiveMemory(dbPath string, items []MemoryIndexItem) {
 	}
 }
 
+// keyOf is a helper function
 func keyOf(typ, title, content string) string {
 	return typ + "\x00" + title + "\x00" + content
 }

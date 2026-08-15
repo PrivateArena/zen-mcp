@@ -23,6 +23,7 @@ type ToolSuggestion struct {
 	ActionRules  []ActionSuggestionRule
 }
 
+// regexRule is a helper function
 func regexRule(pattern string) ActionSuggestionRule {
 	return ActionSuggestionRule{Trigger: pattern, IsRegex: true, re: regexp.MustCompile(pattern)}
 }
@@ -120,16 +121,19 @@ var suggestions = map[string]ToolSuggestion{
 	},
 }
 
+// withHelp is a helper function
 func (r ActionSuggestionRule) withHelp(help string) ActionSuggestionRule {
 	r.Help = help
 	return r
 }
 
+// withRequired is a helper function
 func (r ActionSuggestionRule) withRequired(params ...string) ActionSuggestionRule {
 	r.RequiredParams = params
 	return r
 }
 
+// GetToolSuggestion is a helper function
 func GetToolSuggestion(toolName string) *ToolSuggestion {
 	s, ok := suggestions[toolName]
 	if !ok {
@@ -138,6 +142,7 @@ func GetToolSuggestion(toolName string) *ToolSuggestion {
 	return &s
 }
 
+// actionMatch is a helper function
 func actionMatch(rule ActionSuggestionRule, action string) bool {
 	if rule.IsRegex {
 		return rule.re.MatchString(action)
@@ -145,6 +150,7 @@ func actionMatch(rule ActionSuggestionRule, action string) bool {
 	return rule.Trigger == action
 }
 
+// msgMatch is a helper function
 func msgMatch(rule ActionSuggestionRule, msg string) bool {
 	if rule.IsRegex {
 		return rule.re.MatchString(msg)
@@ -158,6 +164,7 @@ type ValidationResult struct {
 	Suggestion      string
 }
 
+// ValidateToolCall is a helper function
 func ValidateToolCall(toolName, action string, suppliedParams map[string]any, schema any) ValidationResult {
 	base := GetToolSuggestion(toolName)
 	var missingRequired []string
@@ -191,6 +198,7 @@ func ValidateToolCall(toolName, action string, suppliedParams map[string]any, sc
 	return ValidationResult{Valid: true, MissingRequired: []string{}, Suggestion: ""}
 }
 
+// FormatSuggestion is a helper function
 func FormatSuggestion(toolName string, errorMessage string, action string, schema any) string {
 	base := GetToolSuggestion(toolName)
 	msg := strings.ToLower(errorMessage)
@@ -234,6 +242,7 @@ func FormatSuggestion(toolName string, errorMessage string, action string, schem
 	return b.String()
 }
 
+// introspectSchema is a helper function
 func introspectSchema(schema any, action string) string {
 	m, ok := schema.(map[string]any)
 	if !ok {
@@ -283,6 +292,7 @@ func introspectSchema(schema any, action string) string {
 	return b.String()
 }
 
+// SemanticPlaceholder is a helper function
 func SemanticPlaceholder(key string, typeName string) any {
 	lk := strings.ToLower(key)
 	switch typeName {
@@ -330,6 +340,7 @@ func SemanticPlaceholder(key string, typeName string) any {
 	return "<string>"
 }
 
+// MustJSON is a helper function
 func MustJSON(v any) string {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {

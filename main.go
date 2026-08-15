@@ -25,6 +25,7 @@ import (
 	"zen-mcp/internal/tools"
 )
 
+// newMcpServer is a helper function
 func newMcpServer(id string, reg *toolregistry.ToolRegistry, deps tools.Deps) *mcpserver.MCPServer {
 	cfg := mcpcfg.Get()
 	workspace := id
@@ -49,6 +50,7 @@ func newMcpServer(id string, reg *toolregistry.ToolRegistry, deps tools.Deps) *m
 	return srv
 }
 
+// entry point for the application
 func main() {
 	isStdio := false
 	for _, a := range os.Args[1:] {
@@ -111,6 +113,7 @@ func main() {
 	runHTTPServers(startTime, cfg, store, shutdownCh)
 }
 
+// runHTTPServers is a helper function
 func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.Store, shutdownCh chan struct{}) {
 	mcpPort := cfg.McpPort
 	cliPort := cfg.CliPort
@@ -243,6 +246,7 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 	}
 }
 
+// isAddrInUse is a helper function
 func isAddrInUse(err error) bool {
 	return strings.Contains(err.Error(), "address already in use")
 }

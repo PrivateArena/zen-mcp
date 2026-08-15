@@ -44,6 +44,7 @@ func AbortAll() {
 	}
 }
 
+// killGroup is a helper function
 func killGroup(cmd *exec.Cmd) {
 	if cmd.Process == nil {
 		return

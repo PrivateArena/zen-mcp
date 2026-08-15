@@ -23,6 +23,7 @@ type bufferingWriter struct {
 	flushed bool
 }
 
+// Header is a helper function
 func (b *bufferingWriter) Header() http.Header {
 	if b.status != 0 {
 		return b.rw.Header()
@@ -30,6 +31,7 @@ func (b *bufferingWriter) Header() http.Header {
 	return b.header
 }
 
+// WriteHeader is a helper function
 func (b *bufferingWriter) WriteHeader(code int) {
 	if b.status != 0 {
 		return
@@ -43,6 +45,7 @@ func (b *bufferingWriter) WriteHeader(code int) {
 	b.rw.WriteHeader(code)
 }
 
+// Write is a helper function
 func (b *bufferingWriter) Write(p []byte) (int, error) {
 	if b.status == 0 {
 		b.WriteHeader(http.StatusOK)
@@ -50,6 +53,7 @@ func (b *bufferingWriter) Write(p []byte) (int, error) {
 	return b.body.Write(p)
 }
 
+// Flush is a helper function
 func (b *bufferingWriter) Flush() {
 	if f, ok := b.rw.(http.Flusher); ok {
 		f.Flush()

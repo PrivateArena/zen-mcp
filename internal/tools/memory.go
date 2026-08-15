@@ -15,6 +15,7 @@ import (
 	"zen-mcp/internal/toolresponse"
 )
 
+// defMemory is a helper function
 func defMemory(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "memory",
@@ -34,6 +35,7 @@ func defMemory(workspace string, deps Deps) ToolDef {
 	}
 }
 
+// HandleMemoryAction is a helper function
 func HandleMemoryAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
@@ -113,6 +115,7 @@ func loadProjectMemoryState(workspace, memoryName string, deps Deps) (map[string
 	return stateMap, nil
 }
 
+// loadRecentCommands is a helper function
 func loadRecentCommands(dbPath string) []map[string]any {
 	commands := projectmemory.RecentCommands(dbPath)
 	out := make([]map[string]any, 0, len(commands))
@@ -125,6 +128,7 @@ func loadRecentCommands(dbPath string) []map[string]any {
 	return out
 }
 
+// loadDependencyContext is a helper function
 func loadDependencyContext(workspace string) []map[string]any {
 	deps := []map[string]any{}
 	mapFile := mcpcfg.MapFilePath()
@@ -239,12 +243,14 @@ func actionScope(workspace, scope string) map[string]any {
 	}
 }
 
+// dependenciesOrEmpty is a helper function
 func dependenciesOrEmpty(entry map[string]any) any {
 	if deps, ok := entry["dependencies"]; ok && deps != nil {
 		return deps
 	}
 	return []any{}
 }
+// firstNonEmpty is a helper function
 func firstNonEmpty(vals ...string) string {
 	for _, v := range vals {
 		if v != "" {

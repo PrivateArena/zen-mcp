@@ -79,10 +79,12 @@ func NewClient(baseURL, slug, title, owner string) *Client {
 	}
 }
 
+// apiURL is a helper function
 func (c *Client) apiURL(path string) string {
 	return fmt.Sprintf("%s/_zen/api%s", c.BaseURL, path)
 }
 
+// doGet is a helper function
 func (c *Client) doGet(ctx context.Context, path string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.apiURL(path), nil)
 	if err != nil {
@@ -91,6 +93,7 @@ func (c *Client) doGet(ctx context.Context, path string) (*http.Response, error)
 	return c.HTTP.Do(req)
 }
 
+// doPost is a helper function
 func (c *Client) doPost(ctx context.Context, path string, body any) (*http.Response, error) {
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
@@ -250,6 +253,7 @@ func (c *Client) Scope(ctx context.Context, scope string) (BoardState, error) {
 	return c.LoadBoardState(ctx)
 }
 
+// strconvAtoi is a helper function
 func strconvAtoi(s string) (int, error) {
 	n, err := strconv.Atoi(s)
 	return n, err

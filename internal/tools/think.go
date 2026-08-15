@@ -19,6 +19,7 @@ import (
 	"zen-mcp/internal/toolresponse"
 )
 
+// defThink is a helper function
 func defThink(workspace string, _ Deps) ToolDef {
 	return ToolDef{
 		Name:        "think",
@@ -47,6 +48,7 @@ func defThink(workspace string, _ Deps) ToolDef {
 	}
 }
 
+// arrayStringProp is a helper function
 func arrayStringProp(desc string) map[string]any {
 	return map[string]any{
 		"type":        "array",
@@ -55,6 +57,7 @@ func arrayStringProp(desc string) map[string]any {
 	}
 }
 
+// intProp is a helper function
 func intProp(desc string) map[string]any {
 	return map[string]any{
 		"type":        "integer",
@@ -79,6 +82,7 @@ type sequentialThinkingServer struct {
 	branches       map[string][]thoughtData
 }
 
+// processThought is a helper function
 func (s *sequentialThinkingServer) processThought(input thoughtData) map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -108,6 +112,7 @@ func (s *sequentialThinkingServer) processThought(input thoughtData) map[string]
 	return result
 }
 
+// formatThought is a helper function
 func (s *sequentialThinkingServer) formatThought(input thoughtData) {
 	prefix := "💭 Thought"
 	context := ""
@@ -138,6 +143,7 @@ func (s *sequentialThinkingServer) formatThought(input thoughtData) {
 	logfilter.Info(b.String())
 }
 
+// derefInt is a helper function
 func derefInt(p *int) int {
 	if p == nil {
 		return 0
@@ -176,6 +182,7 @@ type planManager struct {
 	workspace string
 }
 
+// getPlanFile is a helper function
 func (p *planManager) getPlanFile() (string, error) {
 	root := p.workspace
 	if root == "" {
@@ -191,6 +198,7 @@ func (p *planManager) getPlanFile() (string, error) {
 	return filepath.Join(dataDir, "plan.json"), nil
 }
 
+// loadPlan is a helper function
 func (p *planManager) loadPlan() *planData {
 	file, err := p.getPlanFile()
 	if err != nil {
@@ -207,6 +215,7 @@ func (p *planManager) loadPlan() *planData {
 	return &plan
 }
 
+// savePlan is a helper function
 func (p *planManager) savePlan(plan planData) error {
 	file, err := p.getPlanFile()
 	if err != nil {
@@ -223,6 +232,7 @@ func (p *planManager) savePlan(plan planData) error {
 	return nil
 }
 
+// printTaskBoard is a helper function
 func (p *planManager) printTaskBoard(plan planData) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "\n 📋 %s ", plan.ProjectName)
@@ -239,6 +249,7 @@ func (p *planManager) printTaskBoard(plan planData) {
 	logfilter.Info(b.String())
 }
 
+// compactBoard is a helper function
 func (p *planManager) compactBoard(plan planData) string {
 	header := "[" + plan.ProjectName + "] " + plan.Objective
 	rows := make([]string, 0, len(plan.Tasks))
@@ -252,6 +263,7 @@ func (p *planManager) compactBoard(plan planData) string {
 	return strings.Join(append([]string{header}, rows...), "\n")
 }
 
+// nextActionableTask is a helper function
 func (p *planManager) nextActionableTask(plan planData) *task {
 	for i := range plan.Tasks {
 		if plan.Tasks[i].Status == statusInProgress {
@@ -266,6 +278,7 @@ func (p *planManager) nextActionableTask(plan planData) *task {
 	return nil
 }
 
+// createPlan is a helper function
 func (p *planManager) createPlan(projectName, objective string, taskTitles []string) string {
 	tasks := make([]task, 0, len(taskTitles))
 	for i, title := range taskTitles {
@@ -280,6 +293,7 @@ func (p *planManager) createPlan(projectName, objective string, taskTitles []str
 	return fmt.Sprintf("Plan ready (%d tasks). Start%s", len(tasks), first)
 }
 
+// addTask is a helper function
 func (p *planManager) addTask(title string) (string, error) {
 	plan := p.loadPlan()
 	if plan == nil {
@@ -300,6 +314,7 @@ func (p *planManager) addTask(title string) (string, error) {
 	return fmt.Sprintf("Added task %d: %s", id, title), nil
 }
 
+// updateTask is a helper function
 func (p *planManager) updateTask(id int, status taskStatus, notes *string) (string, error) {
 	plan := p.loadPlan()
 	if plan == nil {
@@ -333,6 +348,7 @@ func (p *planManager) updateTask(id int, status taskStatus, notes *string) (stri
 	return fmt.Sprintf("Task %d → %s.%s", id, status, suffix), nil
 }
 
+// getPlan is a helper function
 func (p *planManager) getPlan() (string, error) {
 	plan := p.loadPlan()
 	if plan == nil {
@@ -342,6 +358,7 @@ func (p *planManager) getPlan() (string, error) {
 	return p.compactBoard(*plan), nil
 }
 
+// finishTask is a helper function
 func (p *planManager) finishTask() (string, error) {
 	plan := p.loadPlan()
 	if plan == nil {
@@ -360,6 +377,7 @@ func (p *planManager) finishTask() (string, error) {
 	return fmt.Sprintf("Finished all tasks (%d marked done).", updatedCount), nil
 }
 
+// HandleThinkAction is a helper function
 func HandleThinkAction(ctx context.Context, workspace string, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
@@ -458,6 +476,7 @@ func HandleThinkAction(ctx context.Context, workspace string, req mcp.CallToolRe
 	return result
 }
 
+// thinkLogContent is a helper function
 func thinkLogContent(action string, args map[string]any, result *mcp.CallToolResult) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Action: %s\n", action)
@@ -480,6 +499,7 @@ func thinkLogContent(action string, args map[string]any, result *mcp.CallToolRes
 	return b.String()
 }
 
+// logSessionEvent is a helper function
 func logSessionEvent(workspace, typ, title, content string) {
 	if workspace == "" {
 		return
@@ -500,6 +520,7 @@ func missingKeys(args map[string]any, keys []string) string {
 	return strings.Join(missing, ", ")
 }
 
+// toStringSlice is a helper function
 func toStringSlice(v any) []string {
 	arr, ok := v.([]any)
 	if !ok {
@@ -514,6 +535,7 @@ func toStringSlice(v any) []string {
 	return out
 }
 
+// toInt is a helper function
 func toInt(v any) int {
 	switch n := v.(type) {
 	case float64:
@@ -527,6 +549,7 @@ func toInt(v any) int {
 	return 0
 }
 
+// toIntPtr is a helper function
 func toIntPtr(v any) (*int, bool) {
 	if v == nil {
 		return nil, false
@@ -538,11 +561,13 @@ func toIntPtr(v any) (*int, bool) {
 	return nil, false
 }
 
+// toBool is a helper function
 func toBool(v any) bool {
 	b, _ := v.(bool)
 	return b
 }
 
+// toString is a helper function
 func toString(v any) string {
 	s, _ := v.(string)
 	return s

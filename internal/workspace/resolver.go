@@ -26,6 +26,7 @@ type PathResolver struct {
 	cwd        string
 }
 
+// NewPathResolver is a helper function
 func NewPathResolver(aliasMap map[string]string, cwd string) *PathResolver {
 	return &PathResolver{aliasMap: aliasMap, candidates: map[string]candidateEntry{}, cwd: cwd}
 }
@@ -158,6 +159,7 @@ func (p *PathResolver) tokenize(input string) []string {
 	return parts
 }
 
+// exists is a helper function
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil

@@ -9,13 +9,17 @@ type luaPlugin struct {
 	basePlugin
 }
 
+// creates a new Lua language plugin
 func newLuaPlugin() LanguagePlugin {
 	return &luaPlugin{}
 }
 
+// returns the supported file extensions
 func (p *luaPlugin) Extensions() []string { return []string{".lua"} }
+// returns the language name
 func (p *luaPlugin) LanguageName() string { return "lua" }
 
+// initializes the package
 func (p *luaPlugin) Init() error {
 	p.mu.Lock()
 	if p.parser != nil {
@@ -31,6 +35,7 @@ func (p *luaPlugin) Init() error {
 	return nil
 }
 
+// parses source bytes into nodes and relations
 func (p *luaPlugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, error) {
 	parser, language := p.getParser()
 	if parser == nil || language == nil {

@@ -17,6 +17,7 @@ import (
 	"zen-mcp/internal/toolresponse"
 )
 
+// defRun is a helper function
 func defRun(deps Deps) ToolDef {
 	cfg := mcpcfg.Get()
 	langs := sortedKeys2(cfg.Sandbox.Languages)
@@ -50,6 +51,7 @@ func defRun(deps Deps) ToolDef {
 	}
 }
 
+// HandleRunAction is a helper function
 func HandleRunAction(ctx context.Context, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	cfg := mcpcfg.Get()
@@ -173,6 +175,7 @@ func HandleRunAction(ctx context.Context, deps Deps, req mcp.CallToolRequest) *m
 	return toolresponse.WrapSuccess(ctx, "run", result, start)
 }
 
+// sortedKeys2 is a helper function
 func sortedKeys2(m map[string]mcpcfg.SandboxLanguage) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -186,6 +189,7 @@ func sortedKeys2(m map[string]mcpcfg.SandboxLanguage) []string {
 	return keys
 }
 
+// randHex is a helper function
 func randHex() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -196,4 +200,5 @@ func randHex() string {
 
 type runErr struct{ msg string }
 
+// returns the error message
 func (e *runErr) Error() string { return e.msg }

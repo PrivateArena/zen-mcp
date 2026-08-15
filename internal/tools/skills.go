@@ -16,6 +16,7 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
+// defSkills is a helper function
 func defSkills(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "skill",
@@ -31,6 +32,7 @@ func defSkills(workspace string, deps Deps) ToolDef {
 	}
 }
 
+// HandleSkillsAction is a helper function
 func HandleSkillsAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
@@ -51,6 +53,7 @@ func HandleSkillsAction(ctx context.Context, workspace string, deps Deps, req mc
 	}
 }
 
+// handleSkillsList is a helper function
 func handleSkillsList(ctx context.Context, start time.Time) *mcp.CallToolResult {
 	skillList, err := skills.LoadSkills()
 	if err != nil {
@@ -71,6 +74,7 @@ func handleSkillsList(ctx context.Context, start time.Time) *mcp.CallToolResult 
 	return toolresponse.WrapSuccess(ctx, "skill", strings.TrimSpace(sb.String()), start)
 }
 
+// handleSkillsGet is a helper function
 func handleSkillsGet(ctx context.Context, id string, start time.Time) *mcp.CallToolResult {
 	if id == "" {
 		return toolresponse.WrapErrorWithContext(ctx, "skill", fmt.Errorf("Skill ID is required for get"), start)

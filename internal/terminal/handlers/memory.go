@@ -106,6 +106,7 @@ func brainSafeName(q string) string {
 	return s
 }
 
+// initializes the package
 func init() {
 	terminal.Register("bl", func(args []string) error {
 		res := terminal.ExecuteTool("memory", map[string]any{"action": "load"})

@@ -15,6 +15,7 @@ import (
 	"zen-mcp/internal/toolresponse"
 )
 
+// defShell is a helper function
 func defShell(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "shell",
@@ -29,6 +30,7 @@ func defShell(workspace string, deps Deps) ToolDef {
 	}
 }
 
+// HandleShellAction is a helper function
 func HandleShellAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
@@ -125,6 +127,7 @@ func HandleShellAction(ctx context.Context, workspace string, deps Deps, req mcp
 	}, start)
 }
 
+// nullableString is a helper function
 func nullableString(s string) any {
 	if s == "" {
 		return nil
@@ -132,10 +135,12 @@ func nullableString(s string) any {
 	return s
 }
 
+// itoaStr is a helper function
 func itoaStr(n int) string {
 	return itoa(n)
 }
 
+// tokenOptConfig is a helper function
 func tokenOptConfig(cfg mcpcfg.ZenConfig) tokenoptimizer.Config {
 	t := cfg.TokenOptimization
 	return tokenoptimizer.Config{
@@ -148,6 +153,7 @@ func tokenOptConfig(cfg mcpcfg.ZenConfig) tokenoptimizer.Config {
 	}
 }
 
+// profilePath is a helper function
 func profilePath(p string) string {
 	if p == "" {
 		p = "token-profiles.json"
@@ -158,6 +164,7 @@ func profilePath(p string) string {
 	return filepath.Join(mcpcfg.ProjectRoot, p)
 }
 
+// derefInt2 is a helper function
 func derefInt2(p *int, def int) int {
 	if p == nil {
 		return def
@@ -165,6 +172,7 @@ func derefInt2(p *int, def int) int {
 	return *p
 }
 
+// toBlacklist is a helper function
 func toBlacklist(entries []mcpcfg.BlacklistEntry) []tokenoptimizer.BlacklistEntry {
 	out := make([]tokenoptimizer.BlacklistEntry, 0, len(entries))
 	for _, e := range entries {

@@ -9,13 +9,17 @@ type javaPlugin struct {
 	basePlugin
 }
 
+// creates a new Java language plugin
 func newJavaPlugin() LanguagePlugin {
 	return &javaPlugin{}
 }
 
+// returns the supported file extensions
 func (p *javaPlugin) Extensions() []string { return []string{".java"} }
+// returns the language name
 func (p *javaPlugin) LanguageName() string { return "java" }
 
+// initializes the package
 func (p *javaPlugin) Init() error {
 	p.mu.Lock()
 	if p.parser != nil {
@@ -31,6 +35,7 @@ func (p *javaPlugin) Init() error {
 	return nil
 }
 
+// parses source bytes into nodes and relations
 func (p *javaPlugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, error) {
 	parser, language := p.getParser()
 	if parser == nil || language == nil {

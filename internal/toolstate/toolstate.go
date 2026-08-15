@@ -24,10 +24,12 @@ type ToolStateLayers struct {
 	Source    string
 }
 
+// BuiltinDefaultEnabled is a helper function
 func BuiltinDefaultEnabled(toolName string) bool {
 	return true
 }
 
+// ReadWorkspaceConfigRaw is a helper function
 func ReadWorkspaceConfigRaw(workspaceRoot string) map[string]any {
 	path := filepath.Join(workspaceRoot, workspaceDir, workspaceCfgName)
 	data, err := os.ReadFile(path)
@@ -42,6 +44,7 @@ func ReadWorkspaceConfigRaw(workspaceRoot string) map[string]any {
 	return parsed
 }
 
+// ReadWorkspaceToolConfig is a helper function
 func ReadWorkspaceToolConfig(workspaceRoot string) map[string]bool {
 	raw := ReadWorkspaceConfigRaw(workspaceRoot)
 	if raw == nil {
@@ -60,6 +63,7 @@ func ReadWorkspaceToolConfig(workspaceRoot string) map[string]bool {
 	return out
 }
 
+// ResolveToolState is a helper function
 func ResolveToolState(name string, workspaceRoot string, workspaceCfg map[string]bool, reg *toolregistry.ToolRegistry) ToolStateLayers {
 	builtin := true
 	if entry, ok := reg.GetTool(name); ok {
@@ -108,6 +112,7 @@ type ApplyResult struct {
 	Skipped []string
 }
 
+// ApplyToolStates is a helper function
 func ApplyToolStates(workspaceRoot string, reg *toolregistry.ToolRegistry) ApplyResult {
 	var workspaceCfg map[string]bool
 	if workspaceRoot != "" {

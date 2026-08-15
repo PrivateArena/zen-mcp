@@ -11,6 +11,7 @@ import (
 	"zen-mcp/internal/terminal"
 )
 
+// initializes the package
 func init() {
 	terminal.Register("prompt", func(args []string) error {
 		if len(args) == 0 {
@@ -72,6 +73,7 @@ func init() {
 	})
 }
 
+// generateCommands is a helper function
 func generateCommands() error {
 	promptsDir := filepath.Join(mcpcfg.ProjectRoot, "resources", "prompts")
 	commandsDir := filepath.Join(mcpcfg.ProjectRoot, "resources", "commands")

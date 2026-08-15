@@ -67,10 +67,12 @@ type ProfileAction struct {
 	Message   *string         `json:"message"`
 }
 
+// CountTokens is a helper function
 func CountTokens(text string) int {
 	return (len([]byte(text)) + 3) / 4
 }
 
+// GetSavings is a helper function
 func GetSavings(original, filtered string) int {
 	orig := CountTokens(original)
 	if orig == 0 {
@@ -80,6 +82,7 @@ func GetSavings(original, filtered string) int {
 	return int((float64(orig-f)/float64(orig))*100 + 0.5)
 }
 
+// compactGitStatus is a helper function
 func compactGitStatus(output string) string {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	var modified, deleted, untracked, staged []string
@@ -114,6 +117,7 @@ func compactGitStatus(output string) string {
 	return strings.Join(sections, "\n")
 }
 
+// sectionLine is a helper function
 func sectionLine(name string, items []string) string {
 	first := items
 	if len(first) > 10 {
@@ -128,6 +132,7 @@ func sectionLine(name string, items []string) string {
 
 var statRe = regexp.MustCompile(`^(\S+)\s*\|\s*(\d+)\s*([+-]+)`)
 
+// compactGitDiff is a helper function
 func compactGitDiff(output string) string {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	if len(lines) == 0 {
@@ -169,6 +174,7 @@ func compactGitDiff(output string) string {
 	return result
 }
 
+// compactGitLog is a helper function
 func compactGitLog(output string, options Options) string {
 	var lines []string
 	for _, l := range strings.Split(strings.TrimSpace(output), "\n") {
@@ -197,6 +203,7 @@ func compactGitLog(output string, options Options) string {
 	return strings.Join(lines, "\n")
 }
 
+// compactLs is a helper function
 func compactLs(output string, options Options) string {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	if options.UltraCompact {
@@ -246,6 +253,7 @@ var listModeRe = regexp.MustCompile(`^[a-zA-Z]:\\|\/|^[^\/]+$`)
 var fileColonRe = regexp.MustCompile(`^([^:]+):`)
 var grepLineRe = regexp.MustCompile(`^([^:]+):(\d+):?(.*)$`)
 
+// compactGrep is a helper function
 func compactGrep(output string, options Options) string {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	if len(lines) == 0 {
@@ -351,6 +359,7 @@ func compactGrep(output string, options Options) string {
 	return strings.TrimSpace(result.String())
 }
 
+// compactCat is a helper function
 func compactCat(output string, options Options) string {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	totalLines := len(lines)
@@ -379,6 +388,7 @@ type benchResult struct {
 	allocs int
 }
 
+// compactGoBench is a helper function
 func compactGoBench(output string) string {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	var benchmarks []benchResult
@@ -445,15 +455,18 @@ func compactGoBench(output string) string {
 	return strings.TrimSpace(result.String())
 }
 
+// formatMicros is a helper function
 func formatMicros(v float64) string {
 	return strings.TrimSuffix(strings.TrimSuffix(formatFloat(v, 1), "0"), ".") + "µs"
 }
 
+// formatFloat is a helper function
 func formatFloat(v float64, _ int) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }
 
+// compactTestOutput is a helper function
 func compactTestOutput(output, command string) string {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	lowerOutput := strings.ToLower(output)
@@ -611,6 +624,7 @@ func compactTestOutput(output, command string) string {
 	return strings.TrimSpace(result)
 }
 
+// replaceCheckmarks is a helper function
 func replaceCheckmarks(s string) string {
 	for _, r := range []rune{'✓', '✗', '✕'} {
 		s = strings.ReplaceAll(s, string(r), "")
@@ -618,6 +632,7 @@ func replaceCheckmarks(s string) string {
 	return s
 }
 
+// compactRuff is a helper function
 func compactRuff(output string) string {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	if len(lines) == 0 || (len(lines) == 1 && strings.TrimSpace(lines[0]) == "") {
@@ -679,6 +694,7 @@ func compactRuff(output string) string {
 	return strings.TrimSpace(result)
 }
 
+// anyString is a helper function
 func anyString(m map[string]any, keys ...string) string {
 	last := keys[len(keys)-1]
 	keys = keys[:len(keys)-1]
@@ -698,6 +714,7 @@ func anyString(m map[string]any, keys ...string) string {
 	return last
 }
 
+// sortedKeys is a helper function
 func sortedKeys(m map[string]int) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -707,6 +724,7 @@ func sortedKeys(m map[string]int) []string {
 	return keys
 }
 
+// compactJq is a helper function
 func compactJq(output string) string {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	if len(lines) <= 2 {
@@ -722,6 +740,7 @@ func compactJq(output string) string {
 	return output
 }
 
+// compactJSONStructure is a helper function
 func compactJSONStructure(v any, depth int) string {
 	if depth > 3 {
 		return "..."
@@ -780,6 +799,7 @@ func compactJSONStructure(v any, depth int) string {
 	}
 }
 
+// compactGitAdd is a helper function
 func compactGitAdd(output string) string {
 	if strings.Contains(output, "No files") {
 		return "✓ No files to stage"
@@ -787,6 +807,7 @@ func compactGitAdd(output string) string {
 	return "✓ Staged"
 }
 
+// compactGitCommit is a helper function
 func compactGitCommit(output string) string {
 	m := regexp.MustCompile(`^(\S{7,})`).FindStringSubmatch(output)
 	hash := ""
@@ -802,6 +823,7 @@ func compactGitCommit(output string) string {
 	return "✓ Committed"
 }
 
+// compactGitPush is a helper function
 func compactGitPush(output string) string {
 	if strings.Contains(output, "Everything up-to-date") {
 		return "✓ Up to date"
@@ -836,11 +858,13 @@ func optimizeChainedCommand(output string, cfg Config) string {
 	return result
 }
 
+// collapseNewlines is a helper function
 func collapseNewlines(s string) string {
 	re := regexp.MustCompile(`\n{3,}`)
 	return re.ReplaceAllString(s, "\n\n")
 }
 
+// deduplicateWithThreshold is a helper function
 func deduplicateWithThreshold(text string, minCount int) string {
 	lines := strings.Split(text, "\n")
 	counts := map[string]int{}
@@ -875,10 +899,12 @@ func deduplicateWithThreshold(text string, minCount int) string {
 	return text
 }
 
+// regexpQuoteMeta is a helper function
 func regexpQuoteMeta(s string) string {
 	return regexp.QuoteMeta(s)
 }
 
+// safeGlobalOptimize is a helper function
 func safeGlobalOptimize(output string) string {
 	lines := strings.Split(output, "\n")
 	var optimized []string
@@ -903,6 +929,7 @@ func safeGlobalOptimize(output string) string {
 	return strings.Join(optimized, "\n")
 }
 
+// OptimizeOutput is a helper function
 func OptimizeOutput(command, output string, options Options, cfg Config) string {
 	trimmed := strings.TrimSpace(command)
 
@@ -1044,6 +1071,7 @@ func OptimizeOutput(command, output string, options Options, cfg Config) string 
 	return output
 }
 
+// testCommand is a helper function
 func testCommand(firstWord, subcommand string) bool {
 	switch firstWord {
 	case "npm", "yarn", "pnpm":
@@ -1122,6 +1150,7 @@ type ProfileResult struct {
 	Applied bool
 }
 
+// ApplyTokenProfiles is a helper function
 func ApplyTokenProfiles(command, stdout, stderr string, options Options, cfg Config) ProfileResult {
 	if options.SkipOptimization {
 		return ProfileResult{Stdout: stdout, Stderr: stderr, Applied: false}
@@ -1215,6 +1244,7 @@ func ApplyTokenProfiles(command, stdout, stderr string, options Options, cfg Con
 	return ProfileResult{Stdout: finalStdout, Stderr: finalStderr, Applied: applied}
 }
 
+// compileWithFlags is a helper function
 func compileWithFlags(pattern, flags string) (*regexp.Regexp, error) {
 	if strings.Contains(flags, "i") {
 		pattern = "(?i)" + pattern
@@ -1222,6 +1252,7 @@ func compileWithFlags(pattern, flags string) (*regexp.Regexp, error) {
 	return regexp.Compile(pattern)
 }
 
+// redirectToFile is a helper function
 func redirectToFile(command, targetPath, stdout, stderr string) string {
 	lastSegment := ""
 	if idx := strings.LastIndexAny(targetPath, "/\\"); idx >= 0 {
@@ -1262,6 +1293,7 @@ func redirectToFile(command, targetPath, stdout, stderr string) string {
 	return writeProfileFile(targetPath, command, stdout, stderr)
 }
 
+// writeProfileFile is a helper function
 func writeProfileFile(filePath, command, stdout, stderr string) string {
 	content := "COMMAND: " + command + "\n\nSTDOUT:\n" + stdout + "\n\nSTDERR:\n" + stderr + "\n"
 	if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
@@ -1272,6 +1304,7 @@ func writeProfileFile(filePath, command, stdout, stderr string) string {
 	return filePath
 }
 
+// timestampName is a helper function
 func timestampName() string {
 	return time.Now().UTC().Format("2006-01-02-150405")
 }
@@ -1286,6 +1319,7 @@ func containsAny(s string, subs ...string) bool {
 	return false
 }
 
+// atoi is a helper function
 func atoi(s string) int {
 	n := 0
 	for _, c := range s {
@@ -1297,6 +1331,7 @@ func atoi(s string) int {
 	return n
 }
 
+// atoiOr is a helper function
 func atoiOr(s string, def int) int {
 	if s == "" {
 		return def
@@ -1311,6 +1346,7 @@ func atoiOr(s string, def int) int {
 	return n
 }
 
+// itoa is a helper function
 func itoa(n int) string {
 	if n == 0 {
 		return "0"
@@ -1333,6 +1369,7 @@ func itoa(n int) string {
 	return string(b[i:])
 }
 
+// min is a helper function
 func min(a, b int) int {
 	if a < b {
 		return a

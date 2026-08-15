@@ -32,6 +32,7 @@ type CommandResult struct {
 	Savings      *string `json:"savings,omitempty"`
 }
 
+// RenderOutput is a helper function
 func RenderOutput(format string, data any) string {
 	if data == nil {
 		return ""
@@ -67,6 +68,7 @@ func RenderOutput(format string, data any) string {
 	return string(serialized)
 }
 
+// renderCommandResult is a helper function
 func renderCommandResult(format string, cr CommandResult) string {
 	if format == "raw" {
 		outputText := strings.TrimSpace(cr.Stdout)
@@ -175,6 +177,7 @@ func renderCommandResult(format string, cr CommandResult) string {
 	return string(serialized)
 }
 
+// asCommandResult is a helper function
 func asCommandResult(v any) (CommandResult, bool) {
 	switch t := v.(type) {
 	case CommandResult:
@@ -222,15 +225,18 @@ type ToolContext struct {
 
 type toolContextKey struct{}
 
+// WithToolContext is a helper function
 func WithToolContext(ctx context.Context, tc ToolContext) context.Context {
 	return context.WithValue(ctx, toolContextKey{}, tc)
 }
 
+// ToolContextFrom is a helper function
 func ToolContextFrom(ctx context.Context) (ToolContext, bool) {
 	tc, ok := ctx.Value(toolContextKey{}).(ToolContext)
 	return tc, ok
 }
 
+// ToolActionFromContext is a helper function
 func ToolActionFromContext(ctx context.Context) string {
 	tc, ok := ToolContextFrom(ctx)
 	if !ok {
@@ -268,12 +274,14 @@ var (
 	toolSchemas = make(map[string]map[string]any)
 )
 
+// SetToolSchema is a helper function
 func SetToolSchema(name string, schema map[string]any) {
 	schemaMu.Lock()
 	defer schemaMu.Unlock()
 	toolSchemas[name] = schema
 }
 
+// GetToolSchema is a helper function
 func GetToolSchema(name string) map[string]any {
 	schemaMu.RLock()
 	defer schemaMu.RUnlock()
@@ -284,6 +292,7 @@ func GetToolSchema(name string) map[string]any {
 
 var virtualizeFunc func(tool, text string) (string, error)
 
+// SetVirtualizer is a helper function
 func SetVirtualizer(fn func(tool, text string) (string, error)) {
 	virtualizeFunc = fn
 }
@@ -348,14 +357,17 @@ func reportCommandTimeout(tool, action, kind string, elapsedMs int64) {
 // onCommandTimeout is a test-only observer, invoked after a timeout is logged.
 var onCommandTimeout func(tool, kind string, elapsedMs int64)
 
+// WrapError is a helper function
 func WrapError(tool string, err error, start time.Time) *mcp.CallToolResult {
 	return WrapErrorWithContext(context.Background(), tool, err, start)
 }
 
+// WrapErrorWithContext is a helper function
 func WrapErrorWithContext(ctx context.Context, tool string, err error, start time.Time) *mcp.CallToolResult {
 	return wrapErrorCtx(ctx, tool, err, start)
 }
 
+// wrapErrorCtx is a helper function
 func wrapErrorCtx(ctx context.Context, tool string, err error, start time.Time) *mcp.CallToolResult {
 	errorMessage := err.Error()
 	duration := time.Since(start).Milliseconds()
@@ -429,6 +441,7 @@ func wrapErrorCtx(ctx context.Context, tool string, err error, start time.Time) 
 	}
 }
 
+// filterEmpty is a helper function
 func filterEmpty(lines []string) []string {
 	out := make([]string, 0, len(lines))
 	for _, l := range lines {
@@ -439,6 +452,7 @@ func filterEmpty(lines []string) []string {
 	return out
 }
 
+// contains is a helper function
 func contains(list []string, s string) bool {
 	for _, item := range list {
 		if item == s {
@@ -448,6 +462,7 @@ func contains(list []string, s string) bool {
 	return false
 }
 
+// errorStack is a helper function
 func errorStack(err error) string {
 	pcs := make([]uintptr, 8)
 	n := runtime.Callers(3, pcs)

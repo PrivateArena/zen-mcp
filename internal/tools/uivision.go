@@ -19,6 +19,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// defUiVision is a helper function
 func defUiVision(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "ui-vision",
@@ -34,6 +35,7 @@ func defUiVision(workspace string, deps Deps) ToolDef {
 	}
 }
 
+// HandleUiVisionAction is a helper function
 func HandleUiVisionAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
@@ -110,6 +112,7 @@ func HandleUiVisionAction(ctx context.Context, workspace string, deps Deps, req 
 	return toolresponse.WrapSuccess(ctx, "ui-vision", map[string]any{"path": screenshotPath, "response": response}, start)
 }
 
+// setPgidSysProcAttr is a helper function
 func setPgidSysProcAttr() *unix.SysProcAttr {
 	return &unix.SysProcAttr{Setpgid: true}
 }

@@ -48,10 +48,12 @@ var (
 	commanderDone = make(chan struct{}, 1)
 )
 
+// initializes the package
 func init() {
 	close(commanderDone)
 }
 
+// initializes the terminal commander package
 func init() {
 	Register("help", func(_ []string) error {
 		Logf("Available commands: %s", strings.Join(List(), ", "))

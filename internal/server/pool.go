@@ -22,18 +22,21 @@ var (
 	cacheReg   = map[*serverCache]struct{}{}
 )
 
+// registerServerCache is a helper function
 func registerServerCache(c *serverCache) {
 	cacheRegMu.Lock()
 	defer cacheRegMu.Unlock()
 	cacheReg[c] = struct{}{}
 }
 
+// unregisterServerCache is a helper function
 func unregisterServerCache(c *serverCache) {
 	cacheRegMu.Lock()
 	defer cacheRegMu.Unlock()
 	delete(cacheReg, c)
 }
 
+// snapshotServerCaches is a helper function
 func snapshotServerCaches() []*serverCache {
 	cacheRegMu.Lock()
 	defer cacheRegMu.Unlock()

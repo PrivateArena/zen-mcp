@@ -75,6 +75,7 @@ func DetectSkills(argText string, enableTrigger bool, enableName bool, alreadyIn
 	return results, nil
 }
 
+// phraseMatch is a helper function
 func phraseMatch(text, phrase string) bool {
 	if phrase == "" || text == "" {
 		return false
@@ -85,6 +86,7 @@ func phraseMatch(text, phrase string) bool {
 	return matched
 }
 
+// isPlaceholderText is a helper function
 func isPlaceholderText(text string) bool {
 	trimmed := strings.TrimSpace(text)
 	return trimmed == "" ||
@@ -93,6 +95,7 @@ func isPlaceholderText(text string) bool {
 		regexp.MustCompile(`^\$\{\d+\}$`).MatchString(trimmed)
 }
 
+// getWorkspaceContext is a helper function
 func getWorkspaceContext() (string, error) {
 	wsRoot := mcpcfg.ProjectRoot
 	if wsRoot == "" {
@@ -115,6 +118,7 @@ func getWorkspaceContext() (string, error) {
 	return ctx.String(), nil
 }
 
+// min is a helper function
 func min(a, b int) int {
 	if a < b {
 		return a

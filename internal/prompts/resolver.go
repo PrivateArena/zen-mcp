@@ -84,6 +84,7 @@ func ResolvePrompt(p PromptDefinition, args map[string]string, workspace string)
 	return text, nil
 }
 
+// argsValues is a helper function
 func argsValues(args map[string]string) []string {
 	var vals []string
 	for _, v := range args {
@@ -92,6 +93,7 @@ func argsValues(args map[string]string) []string {
 	return vals
 }
 
+// isTrue is a helper function
 func isTrue(b *bool) bool {
 	return b != nil && *b
 }

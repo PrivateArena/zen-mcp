@@ -6,6 +6,7 @@ import (
 	"zen-mcp/internal/terminal"
 )
 
+// initializes the package
 func init() {
 	terminal.Register("sl", func(args []string) error {
 		fmt.Println(terminal.ExecuteTool("skill", map[string]any{"action": "list"}))

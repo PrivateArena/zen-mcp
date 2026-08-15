@@ -71,6 +71,7 @@ Please follow this plan:
 	},
 }
 
+// boolPtr is a helper function
 func boolPtr(b bool) *bool {
 	return &b
 }

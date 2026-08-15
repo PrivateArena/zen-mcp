@@ -76,4 +76,5 @@ func SuggestReadingTool(ft FileTypeResult) ReadingAdvice {
 	}
 }
 
+// returns a pointer to the given string
 func strPtr(s string) *string { return &s }

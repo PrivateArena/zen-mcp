@@ -16,6 +16,7 @@ import (
 	wspkg "zen-mcp/internal/workspace"
 )
 
+// defWorkspace is a helper function
 func defWorkspace(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "workspace",
@@ -31,6 +32,7 @@ func defWorkspace(workspace string, deps Deps) ToolDef {
 	}
 }
 
+// HandleWorkspaceAction is a helper function
 func HandleWorkspaceAction(ctx context.Context, path, workspace string, deps Deps) *mcp.CallToolResult {
 	start := time.Now()
 	cwd, _ := os.Getwd()
@@ -93,4 +95,5 @@ func HandleWorkspaceAction(ctx context.Context, path, workspace string, deps Dep
 
 type workspaceErr struct{ msg string }
 
+// returns the error message
 func (e *workspaceErr) Error() string { return e.msg }

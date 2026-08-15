@@ -32,6 +32,7 @@ var (
 	stdioFile *os.File
 )
 
+// severity is a helper function
 func severity(level string) int {
 	if v, ok := levelSeverity[strings.ToLower(level)]; ok {
 		return v
@@ -39,10 +40,12 @@ func severity(level string) int {
 	return sevDebug
 }
 
+// Setup is a helper function
 func Setup(level string) {
 	currentSeverity.Store(int32(severity(level)))
 }
 
+// SetStdioFile is a helper function
 func SetStdioFile(path string) error {
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -57,6 +60,7 @@ func SetStdioFile(path string) error {
 	return nil
 }
 
+// shouldBypass is a helper function
 func shouldBypass(trimmed string) bool {
 	if trimmed == "" {
 		return false
@@ -81,6 +85,7 @@ func shouldBypass(trimmed string) bool {
 		strings.HasPrefix(trimmed, "Commands:")
 }
 
+// getMessageLevel is a helper function
 func getMessageLevel(methodDefault, trimmed string) string {
 	switch {
 	case strings.HasPrefix(trimmed, "[DEBUG]"):
@@ -95,16 +100,25 @@ func getMessageLevel(methodDefault, trimmed string) string {
 	return methodDefault
 }
 
+// Debug is a helper function
 func Debug(args ...any) { emit("debug", args...) }
+// Info is a helper function
 func Info(args ...any)  { emit("info", args...) }
+// Warn is a helper function
 func Warn(args ...any)  { emit("warn", args...) }
+// returns the error message
 func Error(args ...any) { emit("error", args...) }
 
+// Debugf is a helper function
 func Debugf(format string, args ...any) { emit("debug", fmt.Sprintf(format, args...)) }
+// Infof is a helper function
 func Infof(format string, args ...any)  { emit("info", fmt.Sprintf(format, args...)) }
+// Warnf is a helper function
 func Warnf(format string, args ...any)  { emit("warn", fmt.Sprintf(format, args...)) }
+// Errorf is a helper function
 func Errorf(format string, args ...any) { emit("error", fmt.Sprintf(format, args...)) }
 
+// emit is a helper function
 func emit(methodDefault string, args ...any) {
 	now := time.Now()
 	ts := fmt.Sprintf("[%02d:%02d:%02d.%03d]", now.Hour(), now.Minute(), now.Second(), now.Nanosecond()/1e6)
@@ -126,6 +140,7 @@ func emit(methodDefault string, args ...any) {
 	}
 }
 
+// write is a helper function
 func write(methodDefault, ts string, args []any) {
 	line := ts + " " + join(args)
 
@@ -148,6 +163,7 @@ func write(methodDefault, ts string, args []any) {
 	_, _ = fmt.Fprintln(out, line)
 }
 
+// join is a helper function
 func join(args []any) string {
 	var b strings.Builder
 	for i, a := range args {

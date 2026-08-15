@@ -78,6 +78,7 @@ func ResolveProjectSlug(workspace string) SlugInfo {
 
 var aliasMapCache map[string]any
 
+// loadAliasMap is a helper function
 func loadAliasMap() map[string]any {
 	if aliasMapCache != nil {
 		return aliasMapCache
@@ -94,6 +95,7 @@ func loadAliasMap() map[string]any {
 	return aliasMapCache
 }
 
+// gitRemoteURL is a helper function
 func gitRemoteURL(workspace string) string {
 	cmd := exec.Command("git", "-C", workspace, "remote", "get-url", "origin")
 	cmd.Dir = workspace
@@ -104,6 +106,7 @@ func gitRemoteURL(workspace string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// readJSONSafe is a helper function
 func readJSONSafe(path string) map[string]any {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -116,6 +119,7 @@ func readJSONSafe(path string) map[string]any {
 	return nil
 }
 
+// readTextSafe is a helper function
 func readTextSafe(path string) string {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -124,6 +128,7 @@ func readTextSafe(path string) string {
 	return string(data)
 }
 
+// regexpMatch is a helper function
 func regexpMatch(pattern, s string) string {
 	re := regexp.MustCompile(pattern)
 	m := re.FindStringSubmatch(s)
@@ -133,6 +138,7 @@ func regexpMatch(pattern, s string) string {
 	return ""
 }
 
+// slugify is a helper function
 func slugify(s string) string {
 	s = strings.ToLower(s)
 	s = regexp.MustCompile(`[^a-z0-9]+`).ReplaceAllString(s, "-")

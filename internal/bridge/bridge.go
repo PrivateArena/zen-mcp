@@ -21,6 +21,7 @@ type ErrBridgeFailure struct {
 	Body       string
 }
 
+// returns the error message
 func (e *ErrBridgeFailure) Error() string {
 	return fmt.Sprintf("Bridge failure: %d %s - %s", e.Status, e.StatusText, e.Body)
 }
@@ -90,6 +91,7 @@ func CallBridge(ctx context.Context, action string, params map[string]any) (map[
 	return map[string]any{"raw": result}, nil
 }
 
+// sanitizes bridge parameters for safe usage
 func sanitizeBridgeParams(params map[string]any) map[string]any {
 	out := make(map[string]any, len(params))
 	for k, v := range params {
@@ -106,6 +108,7 @@ func sanitizeBridgeParams(params map[string]any) map[string]any {
 	return out
 }
 
+// sanitizes a chat message value
 func sanitizeChatMessage(value any) any {
 	if value == nil {
 		return nil
@@ -164,6 +167,7 @@ func FixMojibake(text string) string {
 	return text
 }
 
+// decodes a Latin-1 string to UTF-8
 func decodeLatin1ToUTF8(s string) (string, error) {
 	decoded := make([]byte, 0, len(s))
 	for i := 0; i < len(s); i++ {
@@ -172,6 +176,7 @@ func decodeLatin1ToUTF8(s string) (string, error) {
 	return string(decoded), nil
 }
 
+// sanitizeBridgeResponse is a helper function
 func sanitizeBridgeResponse(value any) any {
 	switch v := value.(type) {
 	case string:

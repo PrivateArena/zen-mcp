@@ -16,6 +16,7 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
+// defMemoryShared is a helper function
 func defMemoryShared(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "memory_shared",
@@ -36,6 +37,7 @@ func defMemoryShared(workspace string, deps Deps) ToolDef {
 	}
 }
 
+// HandleMemorySharedAction is a helper function
 func HandleMemorySharedAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
@@ -63,6 +65,7 @@ func HandleMemorySharedAction(ctx context.Context, workspace string, deps Deps, 
 	}
 }
 
+// HandleSharedLoad is a helper function
 func HandleSharedLoad(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
 	state, err := client.LoadBoardState(ctx)
 	if err != nil {
@@ -137,6 +140,7 @@ func HandleSharedLoad(ctx context.Context, client *whiteboard.Client, ws string,
 	}, start)
 }
 
+// HandleSharedSave is a helper function
 func HandleSharedSave(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
 	sessionTitle, _ := args["session_title"].(string)
 	sessionNotes, _ := args["session_notes"].(string)
@@ -199,6 +203,7 @@ func HandleSharedSave(ctx context.Context, client *whiteboard.Client, ws string,
 	return toolresponse.WrapSuccess(ctx, "memory_shared", result, start)
 }
 
+// HandleSharedScope is a helper function
 func HandleSharedScope(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
 	state, err := client.LoadBoardState(ctx)
 	if err != nil {
@@ -233,6 +238,7 @@ func HandleSharedScope(ctx context.Context, client *whiteboard.Client, ws string
 	}, start)
 }
 
+// loadRelatedProjects is a helper function
 func loadRelatedProjects() map[string][]string {
 	configPath := filepath.Join(mcpcfg.ProjectRoot, "config.json")
 	data, err := os.ReadFile(configPath)

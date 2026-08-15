@@ -13,6 +13,7 @@ import (
 	"zen-mcp/internal/toolresponse"
 )
 
+// defContext is a helper function
 func defContext(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "context",
@@ -28,6 +29,7 @@ func defContext(workspace string, deps Deps) ToolDef {
 	}
 }
 
+// HandleContextAction is a helper function
 func HandleContextAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
@@ -77,11 +79,13 @@ func actionRetrieveContext(dbPath, query string) map[string]any {
 	return map[string]any{"content": content}
 }
 
+// formatPercent is a helper function
 func formatPercent(conf float64) string {
 	pct := int(conf*100 + 0.5)
 	return itoa(pct) + "%"
 }
 
+// itoa is a helper function
 func itoa(n int) string {
 	if n == 0 {
 		return "0"

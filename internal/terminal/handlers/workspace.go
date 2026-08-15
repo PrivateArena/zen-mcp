@@ -10,6 +10,7 @@ import (
 	"zen-mcp/internal/workspace"
 )
 
+// initializes the package
 func init() {
 	terminal.Register("root", func(args []string) error {
 		return cd(args)
@@ -74,6 +75,7 @@ func cd(args []string) error {
 	return nil
 }
 
+// exists is a helper function
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil

@@ -7,6 +7,7 @@ import (
 	"zen-mcp/internal/terminal"
 )
 
+// initializes the package
 func init() {
 	terminal.Register("shell", func(args []string) error {
 		if len(args) == 0 {

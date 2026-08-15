@@ -9,13 +9,17 @@ type pythonPlugin struct {
 	basePlugin
 }
 
+// creates a new Python language plugin
 func newPythonPlugin() LanguagePlugin {
 	return &pythonPlugin{}
 }
 
+// returns the supported file extensions
 func (p *pythonPlugin) Extensions() []string { return []string{".py"} }
+// returns the language name
 func (p *pythonPlugin) LanguageName() string { return "python" }
 
+// initializes the package
 func (p *pythonPlugin) Init() error {
 	p.mu.Lock()
 	if p.parser != nil {
@@ -31,6 +35,7 @@ func (p *pythonPlugin) Init() error {
 	return nil
 }
 
+// parses source bytes into nodes and relations
 func (p *pythonPlugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, error) {
 	parser, language := p.getParser()
 	if parser == nil || language == nil {
@@ -59,6 +64,7 @@ func (p *pythonPlugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, error)
 	return DeduplicateNodes(nodes), relations, nil
 }
 
+// extracts relations from Python syntax tree nodes
 func extractPythonRelations(node *tree_sitter.Node, currentFn *string, relations *[]ParsedRelation, src []byte) {
 	if node == nil {
 		return

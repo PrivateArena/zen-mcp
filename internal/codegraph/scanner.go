@@ -123,6 +123,7 @@ func (s *Scanner) GetFilesToProcess() ([]FileRecord, error) {
 	return toProcess, nil
 }
 
+// getDiskFiles is a helper function
 func (s *Scanner) getDiskFiles() ([]string, error) {
 	var files []string
 	err := filepath.WalkDir(s.rootDir, func(path string, d fs.DirEntry, err error) error {
@@ -160,6 +161,7 @@ func (s *Scanner) GetDiskFiles() ([]string, error) {
 	return s.getDiskFiles()
 }
 
+// isSupported is a helper function
 func isSupported(relPath string) bool {
 	ext := strings.ToLower(filepath.Ext(relPath))
 	switch ext {
@@ -172,6 +174,7 @@ func isSupported(relPath string) bool {
 	return false
 }
 
+// detectLanguage is a helper function
 func detectLanguage(relPath string) string {
 	ext := strings.ToLower(filepath.Ext(relPath))
 	switch ext {
@@ -197,6 +200,7 @@ func detectLanguage(relPath string) string {
 	return "unknown"
 }
 
+// isTest is a helper function
 func isTest(relPath string, lang string) bool {
 	lower := strings.ToLower(relPath)
 	if strings.Contains(lower, "/tests/") || strings.Contains(lower, "/test/") || strings.Contains(lower, "/__tests__/") {
@@ -222,6 +226,7 @@ func isTest(relPath string, lang string) bool {
 	}
 }
 
+// loadIgnorePatterns is a helper function
 func (s *Scanner) loadIgnorePatterns() {
 	patterns := []string{".git", "node_modules", ".venv", "venv", "dist", ".zen", ".zenmcp", "__pycache__", ".next", ".nuxt", ".output"}
 
@@ -312,6 +317,7 @@ func (s *Scanner) GetFileDetails(relPath string) (content string, hash string, m
 	return content, hash, mtime, language, isTest, nil
 }
 
+// detects the language for a relative path using the scanner configuration
 func (s *Scanner) detectLanguage(relPath string) string {
 	if s.parser != nil {
 		ext := "." + strings.ToLower(filepath.Ext(relPath))
@@ -322,6 +328,7 @@ func (s *Scanner) detectLanguage(relPath string) string {
 	}
 	return detectLanguage(relPath)
 }
+// checks whether a relative path belongs to a test file
 
 func (s *Scanner) isTest(relPath string, language string) bool {
 	return isTest(relPath, language)

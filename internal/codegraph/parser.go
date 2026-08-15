@@ -136,6 +136,7 @@ func ExtractQueryMatches(lang *tree_sitter.Language, node *tree_sitter.Node, src
 	}
 }
 
+// extracts detailed information from syntax tree nodes
 func extractDetails(defNode *tree_sitter.Node, src []byte) (string, string) {
 	var sig string
 	bodyNode := defNode.ChildByFieldName("body")
@@ -165,6 +166,7 @@ func extractDetails(defNode *tree_sitter.Node, src []byte) (string, string) {
 	return sig, doc
 }
 
+// trims trailing braces or colons from a string
 func trimTrailingBraceOrColon(s string) string {
 	b := []byte(s)
 	b = bytesTrimSpace(b)
@@ -177,6 +179,7 @@ func trimTrailingBraceOrColon(s string) string {
 	return string(bytesTrimSpace(b))
 }
 
+// trims comment markers from a string
 func trimCommentMarkers(s string) string {
 	b := []byte(s)
 	b = bytesReplaceAll(b, []byte("/*"), []byte(""))
@@ -186,6 +189,7 @@ func trimCommentMarkers(s string) string {
 	return string(bytesTrimSpace(b))
 }
 
+// builds a qualified name from node parts
 func buildQualifiedName(defNode *tree_sitter.Node, name string, root *tree_sitter.Node, src []byte) string {
 	scopeTypes := map[string]bool{
 		"class_declaration": true, "interface_declaration": true,
@@ -208,6 +212,7 @@ func buildQualifiedName(defNode *tree_sitter.Node, name string, root *tree_sitte
 	return name
 }
 
+// joinQualified is a helper function
 func joinQualified(parts []string) string {
 	out := parts[0]
 	for _, p := range parts[1:] {
@@ -216,6 +221,7 @@ func joinQualified(parts []string) string {
 	return out
 }
 
+// DeduplicateNodes is a helper function
 func DeduplicateNodes(nodes []ParsedNode) []ParsedNode {
 	seen := map[string]bool{}
 	out := make([]ParsedNode, 0, len(nodes))
@@ -238,10 +244,12 @@ func bytesTrimSpace(b []byte) []byte {
 	return bytes.TrimSpace(b)
 }
 
+// bytesReplaceAll is a helper function
 func bytesReplaceAll(b, old, new []byte) []byte {
 	return bytes.ReplaceAll(b, old, new)
 }
 
+// bytesIndex is a helper function
 func bytesIndex(b, sub []byte) int {
 	return bytes.Index(b, sub)
 }

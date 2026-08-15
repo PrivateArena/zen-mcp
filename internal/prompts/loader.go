@@ -72,6 +72,7 @@ func GetPromptDefinition(name string) (PromptDefinition, bool) {
 	return PromptDefinition{}, false
 }
 
+// loadYAMLFile is a helper function
 func loadYAMLFile(dir, name string) ([]PromptDefinition, error) {
 	path := filepath.Join(dir, name)
 	data, err := os.ReadFile(path)
@@ -85,6 +86,7 @@ func loadYAMLFile(dir, name string) ([]PromptDefinition, error) {
 	return defs, nil
 }
 
+// loadModularPrompts is a helper function
 func loadModularPrompts() ([]PromptDefinition, error) {
 	promptsDir := mcpcfg.PromptDir()
 	if _, err := os.Stat(promptsDir); os.IsNotExist(err) {
@@ -116,6 +118,7 @@ func loadModularPrompts() ([]PromptDefinition, error) {
 	return results, nil
 }
 
+// generateSkillPrompts is a helper function
 func generateSkillPrompts() ([]PromptDefinition, error) {
 	skillsDir := mcpcfg.SkillsDir()
 	if _, err := os.Stat(skillsDir); os.IsNotExist(err) {
@@ -178,6 +181,7 @@ func generateSkillPrompts() ([]PromptDefinition, error) {
 	return results, nil
 }
 
+// isSymlinkDir is a helper function
 func isSymlinkDir(dir, name string) bool {
 	target := filepath.Join(dir, name)
 	info, err := os.Stat(target)
@@ -192,6 +196,7 @@ type frontmatter struct {
 	Triggers    []string
 }
 
+// parseFrontmatter is a helper function
 func parseFrontmatter(content string) frontmatter {
 	fm := frontmatter{}
 	lines := strings.Split(content, "\n")

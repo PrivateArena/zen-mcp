@@ -31,6 +31,7 @@ var CONTAINER_MAP = map[string]string{
 	"localhost":   "Development",
 }
 
+// defBrowser is a helper function
 func defBrowser(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "browser",
@@ -58,6 +59,7 @@ func defBrowser(workspace string, deps Deps) ToolDef {
 	}
 }
 
+// HandleBrowserAction is a helper function
 func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
@@ -292,6 +294,7 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 	return toolresponse.WrapSuccess(ctx, "browser", output, start)
 }
 
+// wrapBridgeOutput is a helper function
 func wrapBridgeOutput(ctx context.Context, action string, bridgeParams map[string]any, deps Deps, workspace string, start time.Time) any {
 	res, err := bridge.CallBridge(ctx, action, bridgeParams)
 	if err != nil {
@@ -426,6 +429,7 @@ func wrapBridgeOutput(ctx context.Context, action string, bridgeParams map[strin
 	return output
 }
 
+// isChatLike is a helper function
 func isChatLike(action string) bool {
 	switch action {
 	case "chat", "brainstorm", "brainstorm_status":
@@ -434,6 +438,7 @@ func isChatLike(action string) bool {
 	return false
 }
 
+// postJSON is a helper function
 func postJSON(ctx context.Context, url string, body map[string]any) (map[string]any, error) {
 	data, err := json.Marshal(body)
 	if err != nil {
@@ -491,6 +496,7 @@ func resolveUploadFiles(v any, workspaceRoot string) any {
 	return v
 }
 
+// resolveUploadPath is a helper function
 func resolveUploadPath(f, workspaceRoot string) string {
 	if filepath.IsAbs(f) {
 		return f
@@ -498,6 +504,7 @@ func resolveUploadPath(f, workspaceRoot string) string {
 	return filepath.Join(workspaceRoot, f)
 }
 
+// sanitizeBrowserParams is a helper function
 func sanitizeBrowserParams(args map[string]any) map[string]any {
 	out := make(map[string]any, len(args))
 	for k, v := range args {
@@ -522,6 +529,7 @@ func sanitizeBrowserParams(args map[string]any) map[string]any {
 	return out
 }
 
+// parseURL is a helper function
 func parseURL(s string) (*url.URL, error) {
 	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
 		s = "https://" + s
@@ -529,6 +537,7 @@ func parseURL(s string) (*url.URL, error) {
 	return url.Parse(s)
 }
 
+// extractData is a helper function
 func extractData(v any) any {
 	m, ok := v.(map[string]any)
 	if !ok {

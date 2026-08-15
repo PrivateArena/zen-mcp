@@ -50,6 +50,7 @@ type Gatekeeper struct {
 	lastLoadedPath     string
 }
 
+// New is a helper function
 func New(store *shared.Store) *Gatekeeper {
 	cwd, _ := os.Getwd()
 	return &Gatekeeper{
@@ -62,6 +63,7 @@ func New(store *shared.Store) *Gatekeeper {
 	}
 }
 
+// GetActiveWorkspaceRoot is a helper function
 func (g *Gatekeeper) GetActiveWorkspaceRoot() string {
 	if g.store != nil {
 		if ws, ok := g.store.Get("workspace-root"); ok && ws != "" {
@@ -75,6 +77,7 @@ func (g *Gatekeeper) GetActiveWorkspaceRoot() string {
 	return cwd
 }
 
+// IsLikelyFilePath is a helper function
 func IsLikelyFilePath(token string) bool {
 	isAbsolute := strings.HasPrefix(token, "/") || strings.HasPrefix(token, "\\") || driveLetterRegex.MatchString(token)
 	hasTraversal := strings.Contains(token, "..")
@@ -88,6 +91,7 @@ func IsLikelyFilePath(token string) bool {
 	return systemRootsRegex.MatchString(token) || driveLetterRegex.MatchString(token) || extensionRegex.MatchString(token)
 }
 
+// resolvePath is a helper function
 func (g *Gatekeeper) resolvePath(input string) string {
 	if filepath.IsAbs(input) {
 		return filepath.Clean(input)
@@ -95,6 +99,7 @@ func (g *Gatekeeper) resolvePath(input string) string {
 	return filepath.Join(g.cwd, input)
 }
 
+// getAllowedPathsFilePath is a helper function
 func (g *Gatekeeper) getAllowedPathsFilePath() string {
 	var activeWorkspace string
 	if g.store != nil {
@@ -116,6 +121,7 @@ func (g *Gatekeeper) getAllowedPathsFilePath() string {
 	return filepath.Join(home, ".gemini", "allowed-paths.json")
 }
 
+// ClearAllowedPathsCache is a helper function
 func (g *Gatekeeper) ClearAllowedPathsCache() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -123,6 +129,7 @@ func (g *Gatekeeper) ClearAllowedPathsCache() {
 	g.lastLoadedPath = ""
 }
 
+// LoadAllowedPaths is a helper function
 func (g *Gatekeeper) LoadAllowedPaths() []string {
 	filePath := g.getAllowedPathsFilePath()
 	if filePath == "" {
@@ -150,6 +157,7 @@ func (g *Gatekeeper) LoadAllowedPaths() []string {
 	return []string{}
 }
 
+// SaveAllowedPaths is a helper function
 func (g *Gatekeeper) SaveAllowedPaths(paths []string) {
 	filePath := g.getAllowedPathsFilePath()
 	if filePath == "" {
@@ -174,6 +182,7 @@ func (g *Gatekeeper) SaveAllowedPaths(paths []string) {
 	g.mu.Unlock()
 }
 
+// AddAllowedPath is a helper function
 func (g *Gatekeeper) AddAllowedPath(path string) {
 	if c := mcpcfg.Get(); c != nil && !c.GatekeeperRemember {
 		return
@@ -187,16 +196,19 @@ func (g *Gatekeeper) AddAllowedPath(path string) {
 	}
 }
 
+// normalizeForMatch is a helper function
 func normalizeForMatch(p string) string {
 	return strings.ToLower(strings.TrimRight(p, "/"))
 }
 
+// matchesRule is a helper function
 func matchesRule(normalizedTarget, normalizedRule string) bool {
 	return normalizedTarget == normalizedRule ||
 		strings.HasPrefix(normalizedTarget, normalizedRule+"/") ||
 		strings.HasPrefix(normalizedTarget, normalizedRule+"\\")
 }
 
+// IsPathAllowed is a helper function
 func (g *Gatekeeper) IsPathAllowed(path string) bool {
 	normalizedTarget := normalizeForMatch(g.resolvePath(path))
 
@@ -221,6 +233,7 @@ func (g *Gatekeeper) IsPathAllowed(path string) bool {
 	return false
 }
 
+// GetDangerousRoots is a helper function
 func (g *Gatekeeper) GetDangerousRoots() []string {
 	home, _ := os.UserHomeDir()
 	return []string{
@@ -237,6 +250,7 @@ func (g *Gatekeeper) GetDangerousRoots() []string {
 	}
 }
 
+// GetRecursivelyRestrictedRoots is a helper function
 func (g *Gatekeeper) GetRecursivelyRestrictedRoots() []string {
 	return []string{
 		"/etc", "/var", "/usr", "/boot", "/sys", "/proc", "/dev",
@@ -244,6 +258,7 @@ func (g *Gatekeeper) GetRecursivelyRestrictedRoots() []string {
 	}
 }
 
+// IsPathUnderRestrictedRoot is a helper function
 func (g *Gatekeeper) IsPathUnderRestrictedRoot(targetPath string) bool {
 	normalizedTarget := normalizeForMatch(g.resolvePath(targetPath))
 
@@ -261,6 +276,7 @@ func (g *Gatekeeper) IsPathUnderRestrictedRoot(targetPath string) bool {
 	return false
 }
 
+// RequestUserConfirmation is a helper function
 func (g *Gatekeeper) RequestUserConfirmation(description, targetPath string) Decision {
 	cfg := mcpcfg.Get()
 	if cfg == nil || !cfg.GatekeeperEnabled {
@@ -332,6 +348,7 @@ func (g *Gatekeeper) RequestUserConfirmation(description, targetPath string) Dec
 	}
 }
 
+// AcceptConfirmation is a helper function
 func (g *Gatekeeper) AcceptConfirmation(id string) bool {
 	g.mu.Lock()
 	var conf *pendingConfirmation
@@ -356,6 +373,7 @@ func (g *Gatekeeper) AcceptConfirmation(id string) bool {
 	return true
 }
 
+// RejectConfirmation is a helper function
 func (g *Gatekeeper) RejectConfirmation(id string, suggestion string) bool {
 	g.mu.Lock()
 	var conf *pendingConfirmation
@@ -377,6 +395,7 @@ func (g *Gatekeeper) RejectConfirmation(id string, suggestion string) bool {
 	return true
 }
 
+// removeFromOrder is a helper function
 func (g *Gatekeeper) removeFromOrder(id string) {
 	for i, pid := range g.pendingOrder {
 		if pid == id {
@@ -386,6 +405,7 @@ func (g *Gatekeeper) removeFromOrder(id string) {
 	}
 }
 
+// GetPendingConfirmations is a helper function
 func (g *Gatekeeper) GetPendingConfirmations() []PendingInfo {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -396,6 +416,7 @@ func (g *Gatekeeper) GetPendingConfirmations() []PendingInfo {
 	return out
 }
 
+// ValidatePathSafety is a helper function
 func (g *Gatekeeper) ValidatePathSafety(path, operationName string) error {
 	cfg := mcpcfg.Get()
 	if cfg != nil && !cfg.GatekeeperEnabled {
@@ -452,6 +473,7 @@ func (g *Gatekeeper) ValidatePathSafety(path, operationName string) error {
 	return nil
 }
 
+// ValidateCommandPayload is a helper function
 func (g *Gatekeeper) ValidateCommandPayload(command, execDir string) error {
 	cfg := mcpcfg.Get()
 	if cfg != nil && !cfg.GatekeeperEnabled {
@@ -530,6 +552,7 @@ func (g *Gatekeeper) ValidateCommandPayload(command, execDir string) error {
 	return nil
 }
 
+// containsStr is a helper function
 func containsStr(list []string, s string) bool {
 	for _, item := range list {
 		if item == s {

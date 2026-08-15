@@ -9,13 +9,17 @@ type cPlugin struct {
 	basePlugin
 }
 
+// creates a new C language plugin
 func newCPlugin() LanguagePlugin {
 	return &cPlugin{}
 }
 
+// returns the supported file extensions
 func (p *cPlugin) Extensions() []string { return []string{".c", ".h"} }
+// returns the language name
 func (p *cPlugin) LanguageName() string { return "c" }
 
+// initializes the package
 func (p *cPlugin) Init() error {
 	p.mu.Lock()
 	if p.parser != nil {
@@ -31,6 +35,7 @@ func (p *cPlugin) Init() error {
 	return nil
 }
 
+// parses source bytes into nodes and relations
 func (p *cPlugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, error) {
 	parser, language := p.getParser()
 	if parser == nil || language == nil {

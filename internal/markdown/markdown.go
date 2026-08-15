@@ -18,6 +18,7 @@ const (
 	kindArray
 )
 
+// kindOf is a helper function
 func kindOf(raw json.RawMessage) rawKind {
 	s := bytes.TrimSpace(raw)
 	if len(s) == 0 {
@@ -35,10 +36,12 @@ func kindOf(raw json.RawMessage) rawKind {
 	}
 }
 
+// scalarText is a helper function
 func scalarText(raw json.RawMessage) string {
 	return string(bytes.TrimSpace(raw))
 }
 
+// tokToText is a helper function
 func tokToText(tok any) string {
 	switch v := tok.(type) {
 	case nil:

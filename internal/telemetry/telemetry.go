@@ -21,6 +21,7 @@ var (
 	db *sql.DB
 )
 
+// getDb is a helper function
 func getDb() (*sql.DB, error) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -127,6 +128,7 @@ func LogToolCall(tool string, action string, success bool, errorMessage string, 
 	return err
 }
 
+// isBusy is a helper function
 func isBusy(err error) bool {
 	var sqlErr interface{ Error() string }
 	ok := errors.As(err, &sqlErr)
@@ -137,6 +139,7 @@ func isBusy(err error) bool {
 	return strings.Contains(msg, "database is locked") || strings.Contains(msg, "busy") || strings.Contains(msg, "SQLITE_BUSY")
 }
 
+// QueryTelemetry is a helper function
 func QueryTelemetry(args []string) string {
 	defer func() {
 		if r := recover(); r != nil {
@@ -265,6 +268,7 @@ func QueryTelemetry(args []string) string {
 	return telemetrySummary(d)
 }
 
+// telemetrySummary is a helper function
 func telemetrySummary(d *sql.DB) string {
 	enabled := true
 	if c := mcpcfg.Get(); c != nil {
@@ -337,10 +341,12 @@ func telemetrySummary(d *sql.DB) string {
 	return out.String()
 }
 
+// formatRate is a helper function
 func formatRate(r float64) string {
 	return strconv.FormatFloat(r, 'f', 1, 64)
 }
 
+// Close is a helper function
 func Close() error {
 	mu.Lock()
 	defer mu.Unlock()
