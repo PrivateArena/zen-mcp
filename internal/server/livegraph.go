@@ -326,7 +326,7 @@ function initGraph(payload) {
 
   const sim = d3.forceSimulation(d3nodes)
     .alphaDecay(0.06)
-    .force("link", d3.forceLink(d3links).id(d => d.id).distance(100).strength(0.4))
+    .force("link", d3.forceLink(d3links).id(d => d.id).distance(300).strength(0.4))
     .force("charge", d3.forceManyBody().strength(-180))
     .force("center", d3.forceCenter(width / 2, height / 2).strength(0.02))
     .force("collide", d3.forceCollide(d => d.r + 4))
