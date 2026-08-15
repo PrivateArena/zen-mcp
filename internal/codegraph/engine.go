@@ -287,35 +287,62 @@ func slowestSuffix(path string, d time.Duration) string {
 // common symbol name cannot produce a Cartesian product of edges.
 const maxEdgeFanout = 64
 
-// nodeResolver memoizes node lookups by name for one Index run. Phase 3
-// resolves each relation endpoint against the database; without memoization a
-// relation-heavy repo issues one SQL query per endpoint (two per relation),
-// which dominates index time. The resolver collapses those into one query per
-// unique name. It is created per Index call and never shared across goroutines
-// or runs, so a fresh resolver never serves stale node rows.
+// nodeResolver resolves node lookups by name for one Index run. Phase 3
+// resolves each relation endpoint against every indexed node; a naive
+// implementation issues one SQL query per endpoint (two per relation), which
+// dominates index time. The resolver instead loads the full node index into
+// memory once (a single query) and serves every lookup from it, so edge
+// building issues zero per-relation database queries. It is created per Index
+// call and never shared across goroutines or runs, so a fresh resolver never
+// serves stale node rows.
 type nodeResolver struct {
 	storage *Storage
+	index   map[string][]NodeRecord
 	cache   map[string][]NodeRecord
 }
 
-// newNodesResolver creates a resolver backed by storage. The backing tables
-// must be stable for the resolver's lifetime (Phase 3 runs after Phase 2 has
-// written every changed file's nodes).
+// newNodesResolver loads the complete node index for one Index run. The
+// backing tables must be stable for the resolver's lifetime (Phase 3 runs
+// after Phase 2 has written every changed file's nodes). If the one-shot index
+// load fails, the resolver degrades to per-name queries so a transient read
+// error degrades the result exactly like the pre-index behavior instead of
+// aborting the index.
 func newNodesResolver(storage *Storage) *nodeResolver {
-	return &nodeResolver{
+	r := &nodeResolver{
 		storage: storage,
 		cache:   make(map[string][]NodeRecord),
 	}
+
+	all, err := storage.GetAllNodes()
+	if err != nil {
+		logfilter.Errorf("[CodeGraph] build node index failed, falling back to per-name queries: %v", err)
+		return r
+	}
+
+	index := make(map[string][]NodeRecord, len(all))
+	for i := range all {
+		n := all[i]
+		index[n.Name] = append(index[n.Name], n)
+		if n.QualifiedName != "" && n.QualifiedName != n.Name {
+			index[n.QualifiedName] = append(index[n.QualifiedName], n)
+		}
+	}
+	r.index = index
+	return r
 }
 
 // find returns every node matching name, reusing the result on repeat lookups.
+// name and qualified_name are indexed separately so the result is equivalent
+// to the FindNodesByName predicate (name = ? OR qualified_name = ?).
 func (r *nodeResolver) find(name string) []NodeRecord {
 	if nodes, ok := r.cache[name]; ok {
 		return nodes
 	}
-	nodes, err := r.storage.FindNodesByName(name)
-	if err != nil {
-		nodes = nil
+	var nodes []NodeRecord
+	if r.index != nil {
+		nodes = r.index[name]
+	} else {
+		nodes, _ = r.storage.FindNodesByName(name)
 	}
 	r.cache[name] = nodes
 	return nodes

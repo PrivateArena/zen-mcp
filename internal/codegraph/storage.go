@@ -159,6 +159,12 @@ func (s *Storage) prepareStatements() {
 		JOIN files f ON n.file_id = f.id
 		WHERE n.name = ? OR n.qualified_name = ?
 	`))
+	s.setStmt("getAllNodes", mustPrepare(s.db, `
+		SELECT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content
+		FROM nodes n
+		JOIN files f ON n.file_id = f.id
+		ORDER BY n.id
+	`))
 	s.setStmt("setMetadata", mustPrepare(s.db, `INSERT INTO metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`))
 	s.setStmt("getMetadata", mustPrepare(s.db, `SELECT value FROM metadata WHERE key = ?`))
 	_ = err
@@ -566,6 +572,34 @@ func (s *Storage) FindNodesByName(name string) ([]NodeRecord, error) {
 		return nil, nil
 	}
 	rows, err := stmt.Query(name, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var nodes []NodeRecord
+	for rows.Next() {
+		var n NodeRecord
+		if err := rows.Scan(&n.ID, &n.FileID, &n.Type, &n.Name, &n.Language, &n.Path, &n.QualifiedName, &n.Signature, &n.Docstring, &n.StartLine, &n.EndLine, &n.Content); err != nil {
+			continue
+		}
+		nodes = append(nodes, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return nodes, nil
+}
+
+// GetAllNodes returns every indexed node joined with its file path, ordered by
+// node id. It backs the Phase 3 in-memory resolution index so edge building
+// resolves relation endpoints without issuing per-name database queries.
+func (s *Storage) GetAllNodes() ([]NodeRecord, error) {
+	stmt := s.getStmt("getAllNodes")
+	if stmt == nil {
+		return nil, nil
+	}
+	rows, err := stmt.Query()
 	if err != nil {
 		return nil, err
 	}
