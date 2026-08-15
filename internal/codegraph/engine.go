@@ -833,20 +833,64 @@ func (cg *CodeGraph) GetRepositoryMap(maxItems int) (string, error) {
 		return "", err
 	}
 
-	result := map[string]interface{}{
-		"languages":    languages,
-		"majorPaths":   majorPaths,
-		"hotspots":     hotspots,
-		"hotspotFiles": hotspotFiles,
-		"heavyFiles":   heavyFiles,
-		"complexFiles": complexFiles,
+	var sb strings.Builder
+	sb.WriteString("# Repository Map\n\n")
+
+	sb.WriteString("## Languages\n\n")
+	sb.WriteString("| Language | Count |\n")
+	sb.WriteString("|----------|-------|\n")
+	for lang, count := range languages {
+		sb.WriteString(fmt.Sprintf("| %s | %d |\n", lang, count))
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("## Major Paths\n\n")
+	for _, p := range majorPaths {
+		sb.WriteString(fmt.Sprintf("- `%s`\n", p))
+	}
+	sb.WriteString("\n")
+
+	if len(hotspots) > 0 {
+		sb.WriteString("## Hotspots\n\n")
+		sb.WriteString("| Name | Type | File | Degree |\n")
+		sb.WriteString("|------|------|------|--------|\n")
+		for _, h := range hotspots {
+			sb.WriteString(fmt.Sprintf("| %s | %s | %s | %d |\n", h.Name, h.Type, h.File, h.Degree))
+		}
+		sb.WriteString("\n")
 	}
 
-	data, err := json.Marshal(result)
-	if err != nil {
-		return "", err
+	if len(hotspotFiles) > 0 {
+		sb.WriteString("## Hotspot Files\n\n")
+		sb.WriteString("| Path | References |\n")
+		sb.WriteString("|------|------------|\n")
+		for _, hf := range hotspotFiles {
+			sb.WriteString(fmt.Sprintf("| %s | %d |\n", hf.Path, hf.References))
+		}
+		sb.WriteString("\n")
 	}
-	return string(data), nil
+
+	if len(heavyFiles) > 0 {
+		sb.WriteString("## Heavy Files\n\n")
+		sb.WriteString("| Path | Lines |\n")
+		sb.WriteString("|------|-------|\n")
+		for _, hf := range heavyFiles {
+			sb.WriteString(fmt.Sprintf("| %s | %d |\n", hf.Path, hf.Lines))
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(complexFiles) > 0 {
+		sb.WriteString("## Complex Files\n\n")
+		sb.WriteString("| Path | Symbols |\n")
+		sb.WriteString("|------|---------|\n")
+		for _, cf := range complexFiles {
+			sb.WriteString(fmt.Sprintf("| %s | %d |\n", cf.Path, cf.Symbols))
+		}
+		sb.WriteString("\n")
+	}
+
+	return sb.String(), nil
 }
 
 // Map returns the graph map as markdown.

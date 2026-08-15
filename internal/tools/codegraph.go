@@ -384,8 +384,36 @@ func actionNeighbors(session *layeredGraphSession, isolate int, query string, li
 		if err != nil {
 			continue
 		}
-		data, _ := json.Marshal(neighbors)
-		results = append(results, layeredResult{label: target.label, data: string(data)})
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("Neighbors of %s:\n\n", query))
+
+		callers := neighbors["callers"]
+		if len(callers) > 0 {
+			sb.WriteString("### Callers\n\n")
+			sb.WriteString("| Name | Type | Relation | Path | StartLine | EndLine |\n")
+			sb.WriteString("|------|------|----------|------|-----------|---------|\n")
+			for _, n := range callers {
+				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %d | %d |\n", n.Name, n.Type, n.Relation, n.Path, n.StartLine, n.EndLine))
+			}
+			sb.WriteString("\n")
+		}
+
+		callees := neighbors["callees"]
+		if len(callees) > 0 {
+			sb.WriteString("### Callees\n\n")
+			sb.WriteString("| Name | Type | Relation | Path | StartLine | EndLine |\n")
+			sb.WriteString("|------|------|----------|------|-----------|---------|\n")
+			for _, n := range callees {
+				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %d | %d |\n", n.Name, n.Type, n.Relation, n.Path, n.StartLine, n.EndLine))
+			}
+			sb.WriteString("\n")
+		}
+
+		if len(callers) == 0 && len(callees) == 0 {
+			sb.WriteString("No neighbors found.\n")
+		}
+
+		results = append(results, layeredResult{label: target.label, data: strings.TrimSpace(sb.String())})
 	}
 	if len(results) == 0 {
 		return "", fmt.Errorf(`No neighbors found for "%s" in any of the active scopes.`, query)
@@ -405,8 +433,14 @@ func actionUsage(session *layeredGraphSession, isolate int, query string) (strin
 			continue
 		}
 		if len(usages) > 0 {
-			data, _ := json.Marshal(usages)
-			results = append(results, layeredResult{label: target.label, data: string(data)})
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("Usages of %s:\n\n", query))
+			sb.WriteString("| Name | QualifiedName | Type | Path | StartLine | EndLine |\n")
+			sb.WriteString("|------|---------------|------|------|-----------|---------|\n")
+			for _, u := range usages {
+				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %d | %d |\n", u.Name, u.QualifiedName, u.Type, u.Path, u.StartLine, u.EndLine))
+			}
+			results = append(results, layeredResult{label: target.label, data: sb.String()})
 		}
 	}
 	if len(results) == 0 {
@@ -585,8 +619,18 @@ func actionSearch(session *layeredGraphSession, isolate int, query string, limit
 	}
 	for _, target := range targets {
 		graphResults, _ := target.graph.Search(query, l)
-		data, _ := json.Marshal(graphResults)
-		results = append(results, layeredResult{label: target.label, data: string(data)})
+		var sb strings.Builder
+		if len(graphResults) > 0 {
+			sb.WriteString(fmt.Sprintf("Search results for %q:\n\n", query))
+			sb.WriteString("| Name | QualifiedName | Type | Path | StartLine | EndLine |\n")
+			sb.WriteString("|------|---------------|------|------|-----------|---------|\n")
+			for _, r := range graphResults {
+				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %d | %d |\n", r.Name, r.QualifiedName, r.Type, r.Path, r.StartLine, r.EndLine))
+			}
+		} else {
+			sb.WriteString(fmt.Sprintf("No results found for %q.\n", query))
+		}
+		results = append(results, layeredResult{label: target.label, data: sb.String()})
 	}
 	return formatLayered(results, isolate != 0), nil
 }
@@ -599,8 +643,33 @@ func actionStatus(session *layeredGraphSession, isolate int) (string, error) {
 	results := make([]layeredResult, 0, len(targets))
 	for _, target := range targets {
 		stats, _ := target.graph.Status()
-		data, _ := json.Marshal(stats)
-		results = append(results, layeredResult{label: target.label, data: string(data)})
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("Status for %s:\n\n", target.label))
+		sb.WriteString(fmt.Sprintf("- **Working Dir**: `%s`\n", stats["workingDir"]))
+		sb.WriteString(fmt.Sprintf("- **DB Path**: `%s`\n", stats["dbPath"]))
+		sb.WriteString(fmt.Sprintf("- **Last Indexed**: %s\n", stats["lastIndexed"]))
+
+		if counts, ok := stats["counts"].(map[string]int); ok {
+			sb.WriteString("\n### Counts\n\n")
+			sb.WriteString("| Metric | Count |\n")
+			sb.WriteString("|--------|-------|\n")
+			for k, v := range counts {
+				sb.WriteString(fmt.Sprintf("| %s | %d |\n", k, v))
+			}
+		}
+
+		if nearby, ok := stats["nearbyIndices"].([]string); ok && len(nearby) > 0 {
+			sb.WriteString("\n### Nearby Indices\n\n")
+			for _, n := range nearby {
+				sb.WriteString(fmt.Sprintf("- `%s`\n", n))
+			}
+		}
+
+		if advice, ok := stats["advice"].(string); ok && advice != "" {
+			sb.WriteString(fmt.Sprintf("\n> **Advice**: %s\n", advice))
+		}
+
+		results = append(results, layeredResult{label: target.label, data: strings.TrimSpace(sb.String())})
 	}
 	text := formatLayered(results, isolate != 0)
 	if isolate == 0 && len(session.entries) > 1 {
@@ -1226,10 +1295,6 @@ func actionShortestPath(session *layeredGraphSession, isolate int, query, format
 		l = *limit
 	}
 	result, _ := target.graph.FindShortestPath(from, to, l)
-	if format == "json" {
-		data, _ := json.MarshalIndent(result, "", "  ")
-		return string(data), nil
-	}
 	if !result.Found {
 		return fmt.Sprintf("No path found from \"%s\" to \"%s\".", from, to), nil
 	}

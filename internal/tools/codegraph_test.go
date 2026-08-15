@@ -260,3 +260,202 @@ func toolText(res *mcp.CallToolResult) string {
 	}
 	return ""
 }
+
+// TestSearchReturnsMarkdownTable verifies that the search action returns a
+// Markdown table rather than a JSON array.
+func TestSearchReturnsMarkdownTable(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "calc.go", `package foo
+
+// Adds a and b.
+func Add(a int, b int) int {
+	return a + b
+}
+`)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	res = HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "search", "query": "Add"}))
+	text := toolText(res)
+	t.Logf("search output:\n%s", text)
+
+	if !strings.Contains(text, "| Name |") {
+		t.Fatalf("search should return a Markdown table, got:\n%s", text)
+	}
+	if strings.Contains(text, `"name":"Add"`) {
+		t.Fatalf("search should not return JSON, got:\n%s", text)
+	}
+	ClearSessionGraphByWorkspace(ws)
+}
+
+// TestUsageReturnsMarkdownTable verifies that the usage action returns a
+// Markdown table rather than a JSON array.
+func TestUsageReturnsMarkdownTable(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "calc.go", `package foo
+
+// Adds a and b.
+func Add(a int, b int) int {
+	return a + b
+}
+`)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	res = HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "usage", "query": "Add"}))
+	text := toolText(res)
+	t.Logf("usage output:\n%s", text)
+
+	if !strings.Contains(text, "| Name |") {
+		t.Fatalf("usage should return a Markdown table, got:\n%s", text)
+	}
+	if strings.Contains(text, `"name":"Add"`) {
+		t.Fatalf("usage should not return JSON, got:\n%s", text)
+	}
+	ClearSessionGraphByWorkspace(ws)
+}
+
+// TestNeighborsReturnsMarkdownTable verifies that the neighbors action returns
+// a Markdown table rather than a JSON object.
+func TestNeighborsReturnsMarkdownTable(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "calc.go", `package foo
+
+func Add(a int, b int) int {
+	return a + b
+}
+
+func Calculate() int {
+	return Add(1, 2)
+}
+`)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	res = HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "neighbors", "query": "Calculate"}))
+	text := toolText(res)
+	t.Logf("neighbors output:\n%s", text)
+
+	if !strings.Contains(text, "| Name |") {
+		t.Fatalf("neighbors should return a Markdown table, got:\n%s", text)
+	}
+	if strings.Contains(text, `"callers"`) && strings.Contains(text, `"callees"`) {
+		t.Fatalf("neighbors should not return JSON object, got:\n%s", text)
+	}
+	ClearSessionGraphByWorkspace(ws)
+}
+
+// TestStatusReturnsMarkdown verifies that the status action returns Markdown
+// rather than a JSON object.
+func TestStatusReturnsMarkdown(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "calc.go", `package foo
+
+func Add(a int, b int) int {
+	return a + b
+}
+`)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	res = HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "status"}))
+	text := toolText(res)
+	t.Logf("status output:\n%s", text)
+
+	if !strings.Contains(text, "**Working Dir**") {
+		t.Fatalf("status should return Markdown with bold keys, got:\n%s", text)
+	}
+	if strings.Contains(text, `"workingDir"`) {
+		t.Fatalf("status should not return JSON, got:\n%s", text)
+	}
+	ClearSessionGraphByWorkspace(ws)
+}
+
+// TestMapReturnsMarkdown verifies that the map action returns Markdown
+// rather than a JSON object.
+func TestMapReturnsMarkdown(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "calc.go", `package foo
+
+func Add(a int, b int) int {
+	return a + b
+}
+`)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	res = HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "map"}))
+	text := toolText(res)
+	t.Logf("map output:\n%s", text)
+
+	if !strings.Contains(text, "# Repository Map") {
+		t.Fatalf("map should return Markdown with a title, got:\n%s", text)
+	}
+	if !strings.Contains(text, "| Language |") {
+		t.Fatalf("map should return Markdown tables, got:\n%s", text)
+	}
+	ClearSessionGraphByWorkspace(ws)
+}
+
+// TestShortestPathReturnsMarkdownNotJSON verifies that shortestPath returns
+// Markdown text and never emits JSON even when a path exists.
+func TestShortestPathReturnsMarkdownNotJSON(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "calc.go", `package foo
+
+func Add(a int, b int) int {
+	return a + b
+}
+
+func Calculate() int {
+	return Add(1, 2)
+}
+`)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	res = HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "shortestPath", "query": "Calculate,Add"}))
+	text := toolText(res)
+	t.Logf("shortestPath output:\n%s", text)
+
+	if strings.Contains(text, "{") && strings.Contains(text, `"Found"`) {
+		t.Fatalf("shortestPath should not return JSON, got:\n%s", text)
+	}
+	ClearSessionGraphByWorkspace(ws)
+}
