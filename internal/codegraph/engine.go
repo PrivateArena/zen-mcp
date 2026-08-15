@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -928,12 +929,22 @@ func (cg *CodeGraph) GetSkeleton(relPath string) (string, error) {
 		return fmt.Sprintf("File %s has no indexed symbols.", relPath), nil
 	}
 
+	specific := map[string]bool{}
+	for _, n := range nodes {
+		if n.Type == "struct" || n.Type == "interface" {
+			specific[n.Name+":"+strconv.Itoa(n.StartLine)] = true
+		}
+	}
+
 	var sb stringsBuilder
 	sb.WriteString(fmt.Sprintf("File Skeleton: %s\n", relPath))
 	sb.WriteString(fmt.Sprintf("Language: %s\n", file.Language))
 	sb.WriteString("----------------------------------------\n")
 
 	for _, n := range nodes {
+		if n.Type == "type" && specific[n.Name+":"+strconv.Itoa(n.StartLine)] {
+			continue
+		}
 		loc := fmt.Sprintf("(lines %d-%d)", n.StartLine, n.EndLine)
 		sig := strings.TrimSpace(n.Signature)
 		if sig != "" {

@@ -538,3 +538,68 @@ type Handler func()
 		}
 	}
 }
+
+func TestGetSkeletonGoStructNoDuplicateType(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	src := `package foo
+
+type Config struct {
+	Host string
+	Port int
+}
+
+type Reader interface {
+	Read() error
+}
+
+func DoNothing() {}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "types.go"), []byte(src), 0644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	cg, err := NewCodeGraph(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCodeGraph: %v", err)
+	}
+	defer cg.Close()
+
+	if _, err := cg.Index(); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	got, err := cg.GetSkeleton("types.go")
+	if err != nil {
+		t.Fatalf("GetSkeleton error: %v", err)
+	}
+
+	lines := strings.Split(got, "\n")
+	typeLines := 0
+	structLines := 0
+	interfaceLines := 0
+	for _, line := range lines {
+		if strings.Contains(line, "type Config") {
+			typeLines++
+		}
+		if strings.Contains(line, "struct Config") {
+			structLines++
+		}
+		if strings.Contains(line, "interface Reader") {
+			interfaceLines++
+		}
+	}
+
+	if typeLines > 0 {
+		t.Fatalf("expected generic 'type' entry to be filtered for struct/interface, got:\n%s", got)
+	}
+	if structLines != 1 {
+		t.Fatalf("expected exactly 1 struct line, got %d in:\n%s", structLines, got)
+	}
+	if interfaceLines != 1 {
+		t.Fatalf("expected exactly 1 interface line, got %d in:\n%s", interfaceLines, got)
+	}
+	if !strings.Contains(got, "func DoNothing") {
+		t.Fatalf("expected unrelated function to still appear, got:\n%s", got)
+	}
+}

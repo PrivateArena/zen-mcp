@@ -459,3 +459,75 @@ func Calculate() int {
 	}
 	ClearSessionGraphByWorkspace(ws)
 }
+
+func TestExplainReturnsMarkdownWithCallersCalleesAndTwoHop(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "main.go", `package foo
+
+func main() {
+	Process()
+}
+`)
+	writeFixture(t, ws, "processor.go", `package foo
+
+func Process() {
+	Validate()
+	Save()
+}
+`)
+	writeFixture(t, ws, "validator.go", `package foo
+
+func Validate() {
+	Check()
+}
+`)
+	writeFixture(t, ws, "checker.go", `package foo
+
+func Check() {}
+`)
+	writeFixture(t, ws, "saver.go", `package foo
+
+func Save() {}
+`)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	res = HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "explain", "query": "Process"}))
+	text := toolText(res)
+	t.Logf("explain output:\n%s", text)
+
+	if !strings.Contains(text, "Callers (1-hop") {
+		t.Fatalf("expected Callers section in explain output, got:\n%s", text)
+	}
+	if !strings.Contains(text, "Callees (1-hop") {
+		t.Fatalf("expected Callees section in explain output, got:\n%s", text)
+	}
+	if !strings.Contains(text, "2-hop neighbors") {
+		t.Fatalf("expected 2-hop neighbors section in explain output, got:\n%s", text)
+	}
+	if !strings.Contains(text, "← main") {
+		t.Fatalf("expected caller arrow for main, got:\n%s", text)
+	}
+	if !strings.Contains(text, "→ Validate") {
+		t.Fatalf("expected callee arrow for Validate, got:\n%s", text)
+	}
+	if !strings.Contains(text, "→ Save") {
+		t.Fatalf("expected callee arrow for Save, got:\n%s", text)
+	}
+	if !strings.Contains(text, "[via main]") {
+		t.Fatalf("expected 2-hop 'via main' suffix, got:\n%s", text)
+	}
+	if !strings.Contains(text, "[via Validate]") {
+		t.Fatalf("expected 2-hop 'via Validate' suffix, got:\n%s", text)
+	}
+	if strings.Contains(text, "[via calls]") {
+		t.Fatalf("explain must not contain stale [via calls] placeholder, got:\n%s", text)
+	}
+	ClearSessionGraphByWorkspace(ws)
+}

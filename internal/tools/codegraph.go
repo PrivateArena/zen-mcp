@@ -1083,10 +1083,10 @@ func actionExplain(session *layeredGraphSession, isolate int, query string) (str
 	}
 
 	type hop2Node struct {
-		name        string
-		path        string
-		relation    string
-		hopRelation string
+		name     string
+		path     string
+		relation string
+		via      string
 	}
 	var hop2Nodes []hop2Node
 	for _, n := range append(hop1Callers, hop1Callees...) {
@@ -1096,7 +1096,7 @@ func actionExplain(session *layeredGraphSession, isolate int, query string) (str
 		key := n.Name + ":" + n.Path
 		delete(seen, key)
 		if neighbors2, err := target.graph.GetNeighbors(n.Name, 5); err == nil {
-			for _, c := range append(neighbors2["callers"], neighbors2["callees"]...) {
+			for _, c := range neighbors2["callers"] {
 				if len(hop2Nodes) >= 20 {
 					break
 				}
@@ -1106,10 +1106,26 @@ func actionExplain(session *layeredGraphSession, isolate int, query string) (str
 				}
 				seen[k2] = true
 				hop2Nodes = append(hop2Nodes, hop2Node{
-					name:        c.Name,
-					path:        c.Path,
-					relation:    "calls",
-					hopRelation: "calls",
+					name:     c.Name,
+					path:     c.Path,
+					relation: "calls",
+					via:      n.Name,
+				})
+			}
+			for _, c := range neighbors2["callees"] {
+				if len(hop2Nodes) >= 20 {
+					break
+				}
+				k2 := c.Name + ":" + c.Path
+				if seen[k2] || k2 == key {
+					continue
+				}
+				seen[k2] = true
+				hop2Nodes = append(hop2Nodes, hop2Node{
+					name:     c.Name,
+					path:     c.Path,
+					relation: "is called by",
+					via:      n.Name,
 				})
 			}
 		}
@@ -1118,7 +1134,7 @@ func actionExplain(session *layeredGraphSession, isolate int, query string) (str
 	if len(hop2Nodes) > 0 {
 		lines = append(lines, "", fmt.Sprintf("2-hop neighbors (%d, capped at 20):", len(hop2Nodes)))
 		for _, n := range hop2Nodes {
-			lines = append(lines, fmt.Sprintf("  • %s (%s) --%s--> [via %s]", n.name, n.path, n.relation, n.hopRelation))
+			lines = append(lines, fmt.Sprintf("  • %s (%s) --%s--> %s [via %s]", n.name, n.path, n.relation, best.Name, n.via))
 		}
 	}
 
@@ -1456,7 +1472,7 @@ func defCodegraph(workspace string, deps Deps) ToolDef {
 				"usage", "neighbors", "files", "explain", "related",
 				"deadcode", "shortestPath", "findCycles", "markdown", "impact",
 			}),
-			"query":   strProp("Search query or symbol name"),
+			"query": strProp("Search query or symbol name"),
 			//"format":  strEnumProp("Output format: text (default) or json", []string{"text", "json"}),
 			//"limit":   numProp("Result limit"),
 			//"isolate": numProp("Graph isolate level (0 = root)"),
