@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"zen-mcp/internal/logfilter"
 )
 
 // CodeGraph is the main code graph engine.
@@ -79,10 +81,13 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 	cg.indexMu.Lock()
 	defer cg.indexMu.Unlock()
 
+	indexStart := time.Now()
+
 	files, err := cg.scanner.GetFilesToProcess()
 	if err != nil {
 		return nil, err
 	}
+	logfilter.Infof("[CodeGraph] Scan: %d file(s) to process in %s", len(files), time.Since(indexStart))
 
 	result := &IndexResult{
 		Total: len(files),
@@ -91,23 +96,39 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 	// Phase 1: parse every changed file and collect nodes + relations
 	var parseResults []fileParseResult
 
+	phaseStart := time.Now()
+	totalNodes := 0
+	totalRelations := 0
+	slowest, slowestPath := time.Duration(0), ""
+	recordSlowest := func(path string, d time.Duration) {
+		if d > slowest {
+			slowest = d
+			slowestPath = path
+		}
+	}
+
 	for _, fr := range files {
+		fileStart := time.Now()
+
 		// Single-read pipeline: the scanner already read the bytes for hashing.
 		content := fr.content
 		if len(content) == 0 {
 			content, err = os.ReadFile(filepath.Join(cg.rootDir, fr.Path))
 			if err != nil {
+				logfilter.Debugf("[CodeGraph] skip %s: read failed: %v", fr.Path, err)
 				continue
 			}
 		}
 
 		fileID, err := cg.storage.UpsertFile(fr)
 		if err != nil {
+			logfilter.Debugf("[CodeGraph] skip %s: upsert failed: %v", fr.Path, err)
 			continue
 		}
 
 		nodes, relations, err := cg.parser.Parse(filepath.Ext(fr.Path), content)
 		if err != nil {
+			logfilter.Debugf("[CodeGraph] skip %s: parse failed: %v", fr.Path, err)
 			continue
 		}
 
@@ -142,7 +163,15 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 			nodeRecords: nodeRecords,
 			relations:   relations,
 		})
+
+		totalNodes += len(nodes)
+		totalRelations += len(relations)
+		fileDur := time.Since(fileStart)
+		recordSlowest(fr.Path, fileDur)
+		logfilter.Debugf("[CodeGraph] parse %s: %d node(s), %d relation(s) in %s", fr.Path, len(nodes), len(relations), fileDur)
 	}
+	logfilter.Infof("[CodeGraph] Phase 1 (parse): %d file(s), %d node(s), %d relation(s) in %s%s",
+		len(parseResults), totalNodes, totalRelations, time.Since(phaseStart), slowestSuffix(slowestPath, slowest))
 
 	for i := range parseResults {
 		for j := range parseResults[i].relations {
@@ -153,17 +182,29 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 	// Phase 2: atomically replace each changed file's data in a single
 	// transaction — upsert nodes in place, drop stale nodes, remove only
 	// source-side edges. Incoming edges from unchanged files are preserved.
+	phaseStart = time.Now()
+	slowest, slowestPath = 0, ""
 	for _, pr := range parseResults {
+		fileStart := time.Now()
 		if err := cg.storage.ReindexFileData(pr.fileID, pr.nodeRecords); err != nil {
+			logfilter.Debugf("[CodeGraph] reindex %s failed: %v", pr.fr.Path, err)
 			continue
 		}
+		recordSlowest(pr.fr.Path, time.Since(fileStart))
 	}
+	logfilter.Infof("[CodeGraph] Phase 2 (write nodes): %d file(s) in %s%s",
+		len(parseResults), time.Since(phaseStart), slowestSuffix(slowestPath, slowest))
 
 	// Phase 3: build edges now that every target node exists in the DB.
 	// Resolution is scoped: same file first, then same directory, then a
 	// global fallback tagged INFERRED, with a fan-out cap so common symbol
 	// names cannot materialize a Cartesian edge product.
+	phaseStart = time.Now()
+	processedRelations := 0
+	edgeCount := 0
+	slowest, slowestPath = 0, ""
 	for _, pr := range parseResults {
+		fileStart := time.Now()
 		var edgeRecords []EdgeRecord
 		for _, rel := range pr.relations {
 			if rel.Relation == "imports" {
@@ -171,6 +212,7 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 				_ = cg.storage.RecordImport(pr.fileID, importPath, rel.IsSideEffect)
 				continue
 			}
+			processedRelations++
 
 			sourceNodes, srcConf := resolveNodesForScope(cg.storage, rel.SourceName, pr.fr.Path, true)
 			if len(sourceNodes) == 0 {
@@ -206,19 +248,38 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 				}
 			}
 		}
+		edgeCount += len(edgeRecords)
 		if len(edgeRecords) > 0 {
 			cg.storage.InsertEdges(edgeRecords)
 		}
+		recordSlowest(pr.fr.Path, time.Since(fileStart))
 	}
+	logfilter.Infof("[CodeGraph] Phase 3 (edges): %d relation(s) -> %d edge(s) across %d file(s) in %s%s",
+		processedRelations, edgeCount, len(parseResults), time.Since(phaseStart), slowestSuffix(slowestPath, slowest))
 
 	result.Indexed = len(parseResults)
 
 	// C4: drop index entries for files that no longer exist on disk.
+	phaseStart = time.Now()
 	result.Deleted = cg.cleanupDeletedFiles(parseResults)
+	logfilter.Infof("[CodeGraph] Cleanup deleted: %d file(s) in %s", result.Deleted, time.Since(phaseStart))
 
+	phaseStart = time.Now()
 	cg.parseManifests()
+	logfilter.Infof("[CodeGraph] Manifests: %s", time.Since(phaseStart))
+
+	logfilter.Infof("[CodeGraph] Index total: %s (%d indexed, %d deleted)", time.Since(indexStart), result.Indexed, result.Deleted)
 
 	return result, nil
+}
+
+// slowestSuffix renders the per-phase slowest-file annotation for the phase
+// summary log lines, or an empty string when no file was processed.
+func slowestSuffix(path string, d time.Duration) string {
+	if path == "" {
+		return ""
+	}
+	return fmt.Sprintf("; slowest: %s (%s)", path, d)
 }
 
 // maxEdgeFanout caps the number of edges emitted for a single relation so a
