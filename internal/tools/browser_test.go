@@ -264,9 +264,9 @@ func TestBrowserChatUploadAndScreenshotConflict(t *testing.T) {
 	pointBridgeAt(t, ts.URL)
 
 	res := HandleBrowserAction(context.Background(), t.TempDir(), Deps{}, browserReq(map[string]any{
-		"action":         "chat",
-		"message":        "hello",
-		"upload_files":   []any{"a.md"},
+		"action":          "chat",
+		"message":         "hello",
+		"upload_files":    []any{"a.md"},
 		"take_screenshot": true,
 	}))
 	if res == nil {

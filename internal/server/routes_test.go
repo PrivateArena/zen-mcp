@@ -34,7 +34,6 @@ func echoHandler(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult,
 	return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "ok"}}}, nil
 }
 
-
 // setRequestAbortObserver registers a callback invoked whenever an in-flight
 // MCP request is cancelled by the client. Intended for tests; nil by default.
 func setRequestAbortObserver(fn func(method string, elapsedMs int64, reason string)) {

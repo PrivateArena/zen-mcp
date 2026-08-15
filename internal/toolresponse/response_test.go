@@ -18,7 +18,6 @@ import (
 
 func intPtr(v int) *int { return &v }
 
-
 func IsCommandResult(v any) bool {
 	m, ok := v.(map[string]any)
 	if !ok {

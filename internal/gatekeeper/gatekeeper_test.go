@@ -28,7 +28,6 @@ func (g *Gatekeeper) ValidatePathSafetySync(path, operationName string) error {
 	return nil
 }
 
-
 func setupGatekeeper(t *testing.T) (*Gatekeeper, string) {
 	t.Helper()
 	ws := t.TempDir()

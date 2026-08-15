@@ -17,10 +17,10 @@ func defColab(workspace string, deps Deps) ToolDef {
 		Title:       "Google Colab Controller",
 		Description: "Interact with Google Colab notebooks via Firefox bridge. Actions: get_status, get_cells, add_cell, update_cell, run_cell, delete_cell, clear_outputs, restart.",
 		Schema: jsonSchema(map[string]any{
-			"action":  strEnumProp("Colab notebook action", []string{"get_status", "get_cells", "add_cell", "update_cell", "run_cell", "delete_cell", "clear_outputs", "restart"}),
-			"index":   numProp("0-based cell index (required update/run/delete/clear)"),
-			"type":    strEnumProp("[add_cell] \"code\" or \"text\" (default \"code\")", []string{"code", "text"}),
-			"text":    strProp("[update_cell] Source/markdown to write"),
+			"action": strEnumProp("Colab notebook action", []string{"get_status", "get_cells", "add_cell", "update_cell", "run_cell", "delete_cell", "clear_outputs", "restart"}),
+			"index":  numProp("0-based cell index (required update/run/delete/clear)"),
+			"type":   strEnumProp("[add_cell] \"code\" or \"text\" (default \"code\")", []string{"code", "text"}),
+			"text":   strProp("[update_cell] Source/markdown to write"),
 			//"timeout": numProp("Bridge call timeout ms (default 60000)"),
 		}, []string{"action"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

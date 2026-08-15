@@ -20,7 +20,6 @@ func NormalizeKey(s string) string {
 	return s
 }
 
-
 func TestNormalizeKey(t *testing.T) {
 	if got := NormalizeKey("Hello World!"); got != "hello world" {
 		t.Errorf("NormalizeKey() = %q, want %q", got, "hello world")

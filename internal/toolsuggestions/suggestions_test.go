@@ -18,7 +18,6 @@ func schema() map[string]any {
 	}
 }
 
-
 func GetAllToolNames() []string {
 	names := make([]string, 0, len(suggestions))
 	for name := range suggestions {
@@ -84,7 +83,6 @@ type MistakeCorrection struct {
 	Message      string
 	CorrectUsage string
 }
-
 
 func TestGetToolSuggestionKnown(t *testing.T) {
 	if GetToolSuggestion("browser") == nil {
