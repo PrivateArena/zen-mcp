@@ -561,7 +561,11 @@ func (s *Storage) SearchFTS(query string) ([]NodeSearchResult, error) {
 
 // FindNodesByName finds nodes by name or qualified name.
 func (s *Storage) FindNodesByName(name string) ([]NodeRecord, error) {
-	rows, err := s.db.Query(`SELECT n.id, n.file_id, n.type, n.name, n.language, f.path, n.qualified_name, n.signature, n.docstring, n.start_line, n.end_line, n.content FROM nodes n JOIN files f ON n.file_id = f.id WHERE n.name = ? OR n.qualified_name = ?`, name, name)
+	stmt := s.getStmt("findNodesByName")
+	if stmt == nil {
+		return nil, nil
+	}
+	rows, err := stmt.Query(name, name)
 	if err != nil {
 		return nil, err
 	}

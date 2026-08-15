@@ -203,6 +203,7 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 	processedRelations := 0
 	edgeCount := 0
 	slowest, slowestPath = 0, ""
+	resolver := newNodesResolver(cg.storage)
 	for _, pr := range parseResults {
 		fileStart := time.Now()
 		var edgeRecords []EdgeRecord
@@ -214,11 +215,11 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 			}
 			processedRelations++
 
-			sourceNodes, srcConf := resolveNodesForScope(cg.storage, rel.SourceName, pr.fr.Path, true)
+			sourceNodes, srcConf := resolveNodesForScope(resolver, rel.SourceName, pr.fr.Path, true)
 			if len(sourceNodes) == 0 {
 				continue
 			}
-			targetNodes, tgtConf := resolveNodesForScope(cg.storage, rel.TargetName, pr.fr.Path, false)
+			targetNodes, tgtConf := resolveNodesForScope(resolver, rel.TargetName, pr.fr.Path, false)
 			if len(targetNodes) == 0 {
 				continue
 			}
@@ -286,13 +287,47 @@ func slowestSuffix(path string, d time.Duration) string {
 // common symbol name cannot produce a Cartesian product of edges.
 const maxEdgeFanout = 64
 
+// nodeResolver memoizes node lookups by name for one Index run. Phase 3
+// resolves each relation endpoint against the database; without memoization a
+// relation-heavy repo issues one SQL query per endpoint (two per relation),
+// which dominates index time. The resolver collapses those into one query per
+// unique name. It is created per Index call and never shared across goroutines
+// or runs, so a fresh resolver never serves stale node rows.
+type nodeResolver struct {
+	storage *Storage
+	cache   map[string][]NodeRecord
+}
+
+// newNodesResolver creates a resolver backed by storage. The backing tables
+// must be stable for the resolver's lifetime (Phase 3 runs after Phase 2 has
+// written every changed file's nodes).
+func newNodesResolver(storage *Storage) *nodeResolver {
+	return &nodeResolver{
+		storage: storage,
+		cache:   make(map[string][]NodeRecord),
+	}
+}
+
+// find returns every node matching name, reusing the result on repeat lookups.
+func (r *nodeResolver) find(name string) []NodeRecord {
+	if nodes, ok := r.cache[name]; ok {
+		return nodes
+	}
+	nodes, err := r.storage.FindNodesByName(name)
+	if err != nil {
+		nodes = nil
+	}
+	r.cache[name] = nodes
+	return nodes
+}
+
 // resolveNodesForScope resolves relation endpoints with file-scope awareness:
 // same file first, then same directory, then the global name match as a
 // fallback. requireSameFile forces an in-file match for edge sources, since a
 // relation is always emitted from the file being parsed.
-func resolveNodesForScope(storage *Storage, name, scopeFile string, requireSameFile bool) ([]NodeRecord, string) {
-	all, err := storage.FindNodesByName(name)
-	if err != nil || len(all) == 0 {
+func resolveNodesForScope(resolver *nodeResolver, name, scopeFile string, requireSameFile bool) ([]NodeRecord, string) {
+	all := resolver.find(name)
+	if len(all) == 0 {
 		return nil, "EXTRACTED"
 	}
 
@@ -346,6 +381,7 @@ func (cg *CodeGraph) cleanupDeletedFiles(processed []fileParseResult) int {
 // gated by its own hash/mtime so incremental runs skip unchanged manifests.
 func (cg *CodeGraph) parseManifests() {
 	manifestFiles := []string{"package.json", "go.mod", "Cargo.toml", "pom.xml"}
+	resolver := newNodesResolver(cg.storage)
 	for _, manifest := range manifestFiles {
 		fullPath := filepath.Join(cg.rootDir, manifest)
 		info, err := os.Stat(fullPath)
@@ -406,8 +442,8 @@ func (cg *CodeGraph) parseManifests() {
 
 		var edgeRecords []EdgeRecord
 		for _, rel := range fileRelations {
-			sourceNodes, srcConf := resolveNodesForScope(cg.storage, rel.SourceName, manifest, false)
-			targetNodes, tgtConf := resolveNodesForScope(cg.storage, rel.TargetName, manifest, false)
+			sourceNodes, srcConf := resolveNodesForScope(resolver, rel.SourceName, manifest, false)
+			targetNodes, tgtConf := resolveNodesForScope(resolver, rel.TargetName, manifest, false)
 			if len(sourceNodes) == 0 || len(targetNodes) == 0 {
 				continue
 			}
