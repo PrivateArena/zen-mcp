@@ -170,6 +170,8 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 		StartTime:             startTime,
 		Tag:                   fmt.Sprintf("%d", cliPort),
 	})
+	// codegraph live viewer — CLI port only
+	server.SetupLiveGraphRoutes(cliMux, store)
 
 	// F9: bind the configured host explicitly. config.json's "host" defaults
 	// to 127.0.0.1 so both listeners stay loopback-only unless widened.

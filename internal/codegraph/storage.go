@@ -38,6 +38,28 @@ func NewStorage(dbPath string) (*Storage, error) {
 	return s, nil
 }
 
+// NewReadOnlyStorage opens the codegraph database in SQLite query_only mode.
+// The schema (tables/triggers/indexes) must already exist; the connection can
+// never write, so it never takes the write lock and never blocks a concurrent
+// re-index (WAL readers and writers proceed independently). Read queries reuse
+// the same prepared statements as NewStorage.
+func NewReadOnlyStorage(dbPath string) (*Storage, error) {
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=query_only(1)")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := db.Exec("PRAGMA journal_mode = WAL;"); err != nil {
+		return nil, err
+	}
+	if _, err := db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
+		return nil, err
+	}
+
+	s := &Storage{db: db, stmts: make(map[string]*sql.Stmt)}
+	s.prepareStatements()
+	return s, nil
+}
+
 // Close closes the database.
 func (s *Storage) Close() error {
 	if s.db != nil {
@@ -323,6 +345,30 @@ func (s *Storage) DeleteImportsForFile(fileID int64) error {
 	defer s.mu.Unlock()
 	_, err := s.db.Exec(`DELETE FROM imports WHERE file_id = ?`, fileID)
 	return err
+}
+
+// GetAllImports returns all import records (file_id → import specifier).
+func (s *Storage) GetAllImports() []ImportRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rows, err := s.db.Query(`SELECT file_id, import_path, is_side_effect FROM imports`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var results []ImportRecord
+	for rows.Next() {
+		var ir ImportRecord
+		var side int
+		if err := rows.Scan(&ir.FileID, &ir.ImportPath, &side); err != nil {
+			continue
+		}
+		ir.IsSideEffect = side != 0
+		results = append(results, ir)
+	}
+	return results
 }
 
 // IsFileImported returns true if any other file imports the given path
@@ -1426,4 +1472,11 @@ type RawEdgeRecord struct {
 	SourceID int64
 	TargetID int64
 	Relation string
+}
+
+// ImportRecord is a single import-table row: fileID imports ImportPath.
+type ImportRecord struct {
+	FileID       int64
+	ImportPath   string
+	IsSideEffect bool
 }
