@@ -63,13 +63,11 @@ func cd(args []string) error {
 		return nil
 	}
 
-	if resolvedPath != current && exists(resolvedPath) {
-		d.Store.Set("workspace-root", resolvedPath)
-		terminal.Logf("OK: Workspace root -> %s", resolvedPath)
-	} else if !exists(resolvedPath) {
+	if !exists(resolvedPath) {
 		terminal.Logf("ERROR: %s does not exist. Workspace root unchanged: %s", resolvedPath, current)
 	} else {
-		terminal.Logf("OK: Workspace root -> %s", current)
+		d.Store.Set("workspace-root", resolvedPath)
+		terminal.Logf("OK: Workspace root -> %s", resolvedPath)
 	}
 	return nil
 }
