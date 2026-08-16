@@ -1,7 +1,7 @@
 {
   "/media/jang/home/Deve/zen-mcp": {
     "description": "ZenMCP is multi-purpose MCP server designed for ZenECO system.",
-    "lastVisited": "2026-08-13T07:05:03.162Z",
+    "lastVisited": "2026-08-16T09:35:59.289Z",
     "scopes": {
       "browser": [
         "cli/zen-browser",
@@ -76,6 +76,7 @@
     }
   },
   "/media/jang/home/Deve/zen-ovpn": {
+    "description": "OpenVPN tunnel without polluting system IP.",
     "lastVisited": "2026-08-12T08:11:10.553Z"
   },
   "/media/jang/home/Deve/zen-board": {
