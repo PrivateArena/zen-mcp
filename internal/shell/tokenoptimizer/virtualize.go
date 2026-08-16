@@ -9,6 +9,7 @@ import (
 
 	"zen-mcp/internal/analysis"
 	"zen-mcp/internal/logfilter"
+	"zen-mcp/internal/mcpcfg"
 	"zen-mcp/internal/projectmemory"
 )
 
@@ -81,6 +82,11 @@ func CheckAndVirtualizeOutput(toolName, text, workspaceRoot string) string {
 	lineCount := len(strings.Split(text, "\n"))
 	kbSize := formatKb(byteLength)
 
+	actionRequired := `Use MCP: context({ query: "` + virtID + `" })`
+	if mcpcfg.Get().Mcp2Cli {
+		actionRequired = "Use Shell: zcontext -q " + virtID
+	}
+
 	out, err := json.MarshalIndent(map[string]any{
 		"status":       "success",
 		"summary":      "Successfully virtualized large output from tool '" + toolName + "'.",
@@ -98,7 +104,7 @@ func CheckAndVirtualizeOutput(toolName, text, workspaceRoot string) string {
 		"vocabulary_preview": distinctTerms,
 		"match_count":        lineCount,
 		"volume_kb":          kbSize,
-		"action_required":    "Use 'context' tool with query set to '" + virtID + "'.",
+		"action_required":    actionRequired,
 	}, "", "  ")
 	if err != nil {
 		return text
