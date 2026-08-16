@@ -132,6 +132,7 @@
   },
   "bypassTools": [
     "context",
+    "browser",
     "codegraph",
     "session",
     "memory",
