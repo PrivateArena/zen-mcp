@@ -297,10 +297,13 @@ func setRawMode(fd int) (*unix.Termios, error) {
 // completeCommand attempts TAB completion of the command position of line
 // against registered command names. It only acts while the user is still on
 // the first token (no whitespace yet), since only command names are indexed:
-//   - advanced=true: exactly one command matches the prefix, so line is
-//     completed to that command plus a trailing space.
-//   - suggestions non-empty: several commands share the prefix, so they are
-//     returned for listing and the line is left unchanged.
+//   - advanced=true: line is completed. If exactly one command matches the
+//     prefix it gets a trailing space (unambiguous); if several share the
+//     prefix, line is advanced to their longest common prefix (like a real
+//     terminal), so a further TAB then lists the remaining candidates.
+//   - suggestions non-empty: several commands share the prefix and no further
+//     shared characters exist, so they are returned for listing and the line
+//     is left unchanged.
 //   - otherwise: no match, callers must leave the line untouched.
 func completeCommand(line []byte) (completed []byte, suggestions []string, advanced bool) {
 	if strings.IndexByte(string(line), ' ') >= 0 {
@@ -319,8 +322,32 @@ func completeCommand(line []byte) (completed []byte, suggestions []string, advan
 	case 1:
 		return []byte(matches[0] + " "), nil, true
 	default:
+		common := longestCommonPrefix(matches)
+		if len(common) > len(prefix) {
+			return []byte(common), nil, true
+		}
 		return line, matches, false
 	}
+}
+
+// longestCommonPrefix returns the longest string every name in names starts
+// with, stopping early once it is empty.
+func longestCommonPrefix(names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+	common := names[0]
+	for _, n := range names[1:] {
+		i := 0
+		for i < len(common) && i < len(n) && common[i] == n[i] {
+			i++
+		}
+		common = common[:i]
+		if common == "" {
+			break
+		}
+	}
+	return common
 }
 
 // runCommanderLoop is the raw-mode line REPL loop, split out so that

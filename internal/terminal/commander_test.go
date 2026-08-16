@@ -317,15 +317,40 @@ func TestRunCommanderLoopTabCompletion(t *testing.T) {
 		defer unregister("alpha")
 		defer unregister("alpine")
 
-		exited, prompt, _ := runLoopWithBytes(t, "al\x09\n")
+		// First TAB advances to the common prefix "alp"; a second TAB (no
+		// further shared chars) lists both candidates.
+		exited, prompt, _ := runLoopWithBytes(t, "al\x09\x09\n")
 		if exited {
 			t.Error("exit flag should be false")
 		}
 		if !strings.Contains(prompt.String(), "alpha") || !strings.Contains(prompt.String(), "alpine") {
 			t.Errorf("multi-match TAB must list both suggestions: %q", prompt.String())
 		}
-		if !strings.Contains(prompt.String(), "Unknown command: al") {
+		if !strings.Contains(prompt.String(), "Unknown command: alp") {
 			t.Errorf("line must dispatch uncompleted after listing: %q", prompt.String())
+		}
+	})
+
+	t.Run("multipleMatchesAdvanceToCommonPrefix", func(t *testing.T) {
+		Register("export-cli", func([]string) error { return nil })
+		Register("export-commands", func([]string) error { return nil })
+		defer unregister("export-cli")
+		defer unregister("export-commands")
+
+		// A single TAB fills the longest common prefix instead of just
+		// listing: "ex" + TAB -> "export-c".
+		exited, prompt, _ := runLoopWithBytes(t, "ex\x09\n")
+		if exited {
+			t.Error("exit flag should be false")
+		}
+		if !strings.Contains(prompt.String(), "export-c") {
+			t.Errorf("TAB must advance to common prefix 'export-c': %q", prompt.String())
+		}
+		if strings.Contains(prompt.String(), "export-cli") {
+			t.Errorf("candidate list must not be shown on first TAB: %q", prompt.String())
+		}
+		if !strings.Contains(prompt.String(), "Unknown command: export-c") {
+			t.Errorf("line must dispatch the common-prefix command: %q", prompt.String())
 		}
 	})
 
