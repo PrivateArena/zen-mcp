@@ -17,29 +17,21 @@ This is the fastest path to understanding a specific feature or subsystem.
 
 ### 1. File Discovery
 Get the complete project file tree.
-```bash
-codegraph({ action: files })
-```
+`codegraph({ action: files })`
 
 ### 2. Dependency Mapping
 Understand how directories and entry points connect.
-```bash
-codegraph({ action: map })
+`codegraph({ action: map })`
 # or for visual graph:
-codegraph({ action: mermaid, query: "/path/to/entry" })
-```
+`codegraph({ action: mermaid, query: "/path/to/entry" })`
 
 ### 3. Skeleton Extraction
 Extract exports, classes, function signatures, and interfaces WITHOUT body content.
-```bash
-codegraph({ action: skeletons, query: "src/index.ts,src/types.ts,src/lib/core/config.ts" })
-```
+`codegraph({ action: skeletons, query: "src/index.ts,src/types.ts,src/lib/core/config.ts" })`
 
 ### 4. Cross-Link Discovery
 Find what links to the entry point and how the dependency graph flows.
-```bash
-codegraph({ action: related, query: "src/index.ts" })
-```
+`codegraph({ action: related, query: "src/index.ts" })`
 
 ## 🛠️ Surgical Deep Dive (Strategy B)
 
