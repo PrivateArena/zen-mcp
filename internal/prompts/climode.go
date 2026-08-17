@@ -163,7 +163,7 @@ func TransformMCPToCLI(text string) string {
 }
 
 func parseKeyValuePairs(inner string) map[string]string {
-	re := regexp.MustCompile(`(\w+)\s*:\s*(?:'([^']*)'|"([^"]*)"|(\w+)|\.\.\.)`)
+	re := regexp.MustCompile(`(\w+)\s*:\s*(?:'([^']*)'|"([^"]*)"|(\w+)|(<[^>]*>)|\.\.\.)`)
 	matches := re.FindAllStringSubmatch(inner, -1)
 	params := make(map[string]string)
 	for _, m := range matches {
@@ -176,6 +176,8 @@ func parseKeyValuePairs(inner string) map[string]string {
 			val = m[3]
 		case m[4] != "":
 			val = m[4]
+		case m[5] != "":
+			val = m[5]
 		default:
 			continue
 		}
