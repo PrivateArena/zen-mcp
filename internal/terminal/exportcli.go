@@ -507,7 +507,7 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	ln(`# Resolve @file values into their on-disk contents before the JSON build`)
 	ln(`for k in "${!PARAMS[@]}"; do`)
 	ln(`  _v="${PARAMS[$k]}"`)
-	ln(`  if [[ "$_v" == @* ]]; then`)
+	ln(`  if [[ "$_v" == @* && "$_v" == */* ]]; then`)
 	ln(`    _f="${_v#@}"`)
 	ln(`    if [[ ! -f "$_f" ]]; then`)
 	ln(`      echo "Error: file not found for parameter $k: $_f" >&2`)
@@ -525,7 +525,7 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	if len(arrayKeys) > 0 {
 		ln(`for k in "${!ARR_PARAMS[@]}"; do`)
 		ln(`  _v="${ARR_PARAMS[$k]}"`)
-		ln(`  if [[ "$_v" == @* ]]; then`)
+		ln(`  if [[ "$_v" == @* && "$_v" == */* ]]; then`)
 		ln(`    _f="${_v#@}"`)
 		ln(`    if [[ ! -f "$_f" ]]; then`)
 		ln(`      echo "Error: file not found for parameter $k: $_f" >&2`)

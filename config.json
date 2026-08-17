@@ -24,6 +24,8 @@
     "capture": false,
     "colab": false,
     "run": false,
+    "shell": false,
+    "scope": false,
     "think": false,
     "memory_isolate": false,
     "memory_shared": false

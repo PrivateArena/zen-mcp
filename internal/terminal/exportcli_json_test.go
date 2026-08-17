@@ -199,6 +199,50 @@ func TestAtFileScalarReadsDisk(t *testing.T) {
 	}
 }
 
+// TestAtFileMidStringAtStaysLiteral: an @ mid-string (e.g. "Because @1 = @2
+// so..") must never be treated as a file reference.
+func TestAtFileMidStringAtStaysLiteral(t *testing.T) {
+	harness := arrayHarness(t, memorySampleTool(), false)
+	got := runJsonHarness(t, harness, "", "--action", "save", "--session_notes", "Because @1 = @2 so..")
+	if got["session_notes"] != "Because @1 = @2 so.." {
+		t.Fatalf("mid-string @ must stay literal, got %q", got["session_notes"])
+	}
+}
+
+// TestAtFileAtPrefixNoSlashStaysLiteral: values that start with @ but carry no
+// path separator (mentions, arithmetic like "@1 = @2") must stay literal — no
+// false-positive file lookup, no hard error.
+func TestAtFileAtPrefixNoSlashStaysLiteral(t *testing.T) {
+	harness := arrayHarness(t, memorySampleTool(), false)
+	for _, val := range []string{"@everyone ping", "@1 = @2 so..", "@user", "@notes.md"} {
+		got := runJsonHarness(t, harness, "", "--action", "save", "--session_notes", val)
+		if got["session_notes"] != val {
+			t.Errorf("@-prefix without '/' must stay literal %q, got %q", val, got["session_notes"])
+		}
+	}
+}
+
+// TestAtFileRelativeSlashPath: a ./-relative path with a slash is a file ref.
+func TestAtFileRelativeSlashPath(t *testing.T) {
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origWd)
+	dir := t.TempDir()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("notes.md", []byte("relative content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	harness := arrayHarness(t, memorySampleTool(), false)
+	got := runJsonHarness(t, harness, "", "--action", "save", "--session_notes", "@./notes.md")
+	if got["session_notes"] != "relative content" {
+		t.Fatalf("@./relative path not read as file, got %q", got["session_notes"])
+	}
+}
+
 // TestAtFileMissing: a @file that does not exist fails with the param name so
 // agents immediately catch typos instead of sending junk payloads.
 func TestAtFileMissing(t *testing.T) {
