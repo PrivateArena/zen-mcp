@@ -330,7 +330,9 @@ func buildHelpStatementsOpt(t cliTool, url string, aliases map[string]string) []
 		`echo "USAGE:"`,
 		`echo "  $0 --<param> <value>..."`,
 		`echo "  $0 --<param>=<value>   # equal-style, e.g. --upload_files=f1,f2 or -up=f1"`,
-		`echo "  $0 --json '{\"key\":\"val\"}'   # raw JSON escape hatch"`,
+		`echo "  $0 --json '{\"key\":\"val\"}'   # raw JSON escape hatch; '-' reads JSON from STDIN (heredoc/paste)"`,
+		`echo "  $0 --json-file <path>  # read raw JSON from a file (massive payloads)"`,
+		`echo "  $0 --<param> @<file>   # any param value may read from a file, e.g. --session_notes @notes.md"`,
 		`echo "  $0 --dry-run           # print the JSON-RPC body + metrics, do NOT send"`,
 		`echo "  $0 --sleep <sec>       # sleep before sending (test long-running survival)"`,
 	}
@@ -456,6 +458,14 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	ln(`  fi`)
 	ln(`  case "$1" in`)
 	ln(`    --json)  RAW_JSON="$2"; shift 2 ;;`)
+	ln(`    --json-file)`)
+	ln(`      _jf="$2"`)
+	ln(`      if [[ ! -f "$_jf" ]]; then`)
+	ln(`        echo "Error: file not found: $_jf" >&2`)
+	ln(`        exit 1`)
+	ln(`      fi`)
+	ln(`      RAW_JSON="$(cat "$_jf")"`)
+	ln(`      shift 2 ;;`)
 	ln(`    --dry-run) DRY_RUN=1; shift ;;`)
 	ln(`    --sleep) SLEEP="$2"; shift 2 ;;`)
 	ln(`    --help|-h)`)
@@ -490,22 +500,57 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	ln(`done`)
 	ln("")
 
-	// Injection-safe JSON build via jq.
-	ln(`# Build arguments JSON safely via jq (no string concatenation — injection-safe)`)
-	ln(`if [[ -n "$RAW_JSON" ]]; then`)
-	ln(`  ARGS_JSON="$RAW_JSON"`)
-	ln(`else`)
-	ln(`  ARGS_JSON=$(`)
-	ln(`    for k in "${!PARAMS[@]}"; do printf "%s\0%s\0" "$k" "${PARAMS[$k]}"; done \`)
-	ln(`    | jq -Rsc 'split("\u0000") | . as $a | [range(0; length-1; 2)] | map({key: $a[.], value: $a[.+1]}) | from_entries'`)
-	ln(`  )`)
+	// Injection-safe JSON build via jq (no string concatenation — injection-safe).
+	// @file values resolve to their on-disk contents first so massive payloads
+	// never cross the shell ARG_MAX / argv ceiling; --json "-" reads the base
+	// JSON from STDIN; --json/--json-file bases merge with CLI flags (flags win).
+	ln(`# Resolve @file values into their on-disk contents before the JSON build`)
+	ln(`for k in "${!PARAMS[@]}"; do`)
+	ln(`  _v="${PARAMS[$k]}"`)
+	ln(`  if [[ "$_v" == @* ]]; then`)
+	ln(`    _f="${_v#@}"`)
+	ln(`    if [[ ! -f "$_f" ]]; then`)
+	ln(`      echo "Error: file not found for parameter $k: $_f" >&2`)
+	ln(`      exit 1`)
+	ln(`    fi`)
+	ln(`    IFS= read -r -d '' PARAMS["$k"] < "$_f" || true`)
+	ln(`  fi`)
+	ln(`done`)
+	ln("")
+	ln(`# Build CLI flags JSON safely via jq (no string concatenation — injection-safe)`)
+	ln(`ARGS_JSON=$(`)
+	ln(`  for k in "${!PARAMS[@]}"; do printf "%s\0%s\0" "$k" "${PARAMS[$k]}"; done \`)
+	ln(`  | jq -Rsc 'split("\u0000") | . as $a | [range(0; length-1; 2)] | map({key: $a[.], value: $a[.+1]}) | from_entries'`)
+	ln(`)`)
 	if len(arrayKeys) > 0 {
-		ln(`  ARRS_JSON=$(`)
+		ln(`for k in "${!ARR_PARAMS[@]}"; do`)
+		ln(`  _v="${ARR_PARAMS[$k]}"`)
+		ln(`  if [[ "$_v" == @* ]]; then`)
+		ln(`    _f="${_v#@}"`)
+		ln(`    if [[ ! -f "$_f" ]]; then`)
+		ln(`      echo "Error: file not found for parameter $k: $_f" >&2`)
+		ln(`      exit 1`)
+		ln(`    fi`)
+ln(`    IFS= read -r -d '' ARR_PARAMS["$k"] < "$_f" || true`)
+	ln(`  fi`)
+	ln(`done`)
+	ln(`  ARRS_JSON=$(`)
 		ln(`    for k in "${!ARR_PARAMS[@]}"; do printf "%s\0%s\0" "$k" "${ARR_PARAMS[$k]}"; done \`)
 		ln(`    | jq -Rsc 'split("\u0000") | . as $a | [range(0; length-1; 2)] | map({key: $a[.], value: ($a[.+1] | split("\u0001") | if length > 1 then . else .[0] end)}) | from_entries'`)
 		ln(`  )`)
 		ln(`  ARGS_JSON=$(jq -n --argjson base "$ARGS_JSON" --argjson extra "$ARRS_JSON" '$base * $extra')`)
 	}
+	ln("")
+	ln(`if [[ -n "$RAW_JSON" ]]; then`)
+	ln(`  if [[ "$RAW_JSON" == "-" ]]; then`)
+	ln(`    BASE_JSON=$(cat)`)
+	ln(`  else`)
+	ln(`    BASE_JSON="$RAW_JSON"`)
+	ln(`  fi`)
+	ln(`  ARGS_JSON=$(jq -n --argjson base "$BASE_JSON" --argjson flags "$ARGS_JSON" '$base * $flags') || {`)
+	ln(`    echo "Error: invalid JSON passed via --json/--json-file" >&2`)
+	ln(`    exit 1`)
+	ln(`  }`)
 	ln(`fi`)
 	ln("")
 	ln(`PAYLOAD=$(jq -n --arg tool "$TOOL" --argjson args "$ARGS_JSON" '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":$tool,"arguments":$args}}')`)

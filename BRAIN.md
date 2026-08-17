@@ -32,6 +32,15 @@ MCP CLI tools, available globally in PATH.
 > [FORBIDDEN] DO NOT run `git diff` at task completion - Build and test instead. DO NOT clear package caches (`go clean`, etc.).
 > When user saying "activate skill", use `zskill` CLI tool.
 
+> [TIP] Big/multiline payload? Write to a file, then `--<param> @<file>`:
+
+```bash
+cat << 'EOF' > /tmp/payload.md
+UpsertFile'd (with parentheses) works now!
+EOF
+zmemory -a save --session_notes @/tmp/payload.md
+```
+
 ---
 
 ## CONFIDENCE & LABELS
