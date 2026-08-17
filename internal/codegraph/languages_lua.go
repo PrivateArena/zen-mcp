@@ -47,9 +47,66 @@ func (p *luaPlugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, error) {
 	nodes := make([]ParsedNode, 0)
 	relations := make([]ParsedRelation, 0)
 
-	ExtractQueryMatches(language, root, src, "(chunk (function_declaration name: (identifier) @name) @def)", "function", &nodes)
-	ExtractQueryMatches(language, root, src, "(chunk (function_statement name: (identifier) @name) @def)", "function", &nodes)
-	ExtractQueryMatches(language, root, src, "(chunk (local_function name: (identifier) @name) @def)", "function", &nodes)
+	// Named function declarations (function foo(), local function foo(),
+	// function t.method(), function t:method()).
+	ExtractQueryMatches(language, root, src, "(function_declaration name: [(identifier) (dot_index_expression) (method_index_expression)] @name) @def", "function", &nodes)
+
+	// Table/module definitions: local M = {}
+	ExtractQueryMatches(language, root, src, "(variable_declaration (assignment_statement (variable_list name: (identifier) @name) (expression_list (table_constructor))) @def)", "class", &nodes)
+
+	extractLuaRelations(root, nil, &relations, src)
 
 	return DeduplicateNodes(nodes), relations, nil
+}
+
+func extractLuaRelations(node *tree_sitter.Node, currentFn *string, relations *[]ParsedRelation, src []byte) {
+	if node == nil {
+		return
+	}
+
+	kind := node.Kind()
+	var fnName string
+	if currentFn != nil {
+		fnName = *currentFn
+	}
+
+	if kind == "function_declaration" {
+		if nameNode := node.ChildByFieldName("name"); nameNode != nil {
+			fnName = nameNode.Utf8Text(src)
+		}
+	}
+
+	if kind == "function_call" && fnName != "" {
+		nameNode := node.ChildByFieldName("name")
+		if nameNode == nil && node.NamedChildCount() > 0 {
+			nameNode = node.NamedChild(0)
+		}
+		if nameNode != nil {
+			callee := nameNode.Utf8Text(src)
+			if callee == "require" {
+				if argsNode := node.ChildByFieldName("arguments"); argsNode != nil && argsNode.NamedChildCount() > 0 {
+					mod := argsNode.NamedChild(0).Utf8Text(src)
+					mod = trimQuotesAndAngles(mod)
+					*relations = append(*relations, ParsedRelation{
+						SourceName: "",
+						TargetName: mod,
+						Relation:   "imports",
+					})
+				}
+			} else if callee != "" {
+				*relations = append(*relations, ParsedRelation{
+					SourceName: fnName,
+					TargetName: callee,
+					Relation:   "calls",
+				})
+			}
+		}
+	}
+
+	for i := uint(0); i < node.NamedChildCount(); i++ {
+		child := node.NamedChild(i)
+		if child != nil {
+			extractLuaRelations(child, &fnName, relations, src)
+		}
+	}
 }
