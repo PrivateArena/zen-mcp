@@ -1,4 +1,14 @@
 {
+  "/media/jang/home/Deve/zen-mcp/": {
+    "lastVisited": "2026-08-17T11:09:56.117Z"
+  },
+  "/media/jang/home/Deve/sfizzzmd/": {
+    "lastVisited": "2026-08-17T11:08:57.511Z"
+  },
+  "/media/jang/home/Deve/zen-board": {
+    "description": "ZenBoard is whiteboard video generator.",
+    "lastVisited": "2026-08-17T06:35:33.854Z"
+  },
   "/media/jang/home/Deve/zen-mcp": {
     "description": "ZenMCP is multi-purpose MCP server designed for ZenECO system.",
     "lastVisited": "2026-08-16T09:35:59.289Z",
@@ -78,10 +88,6 @@
   "/media/jang/home/Deve/zen-ovpn": {
     "description": "OpenVPN tunnel without polluting system IP.",
     "lastVisited": "2026-08-12T08:11:10.553Z"
-  },
-  "/media/jang/home/Deve/zen-board": {
-    "description": "ZenBoard is whiteboard video generator.",
-    "lastVisited": "2026-08-12T06:55:23.811Z"
   },
   "/media/jang/home/Deve/zen-contact": {
     "description": "ZenContact is Kontakt, Heptewerk... sample libraries extractor and reconstructor.",
