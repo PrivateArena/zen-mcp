@@ -104,7 +104,7 @@ func writeTimeline(t *testing.T, workspace string) {
 	if err := os.MkdirAll(zenDir, 0o755); err != nil {
 		t.Fatalf("mkdir .zenmcp: %v", err)
 	}
-	line := `{"schema_version":3,"timestamp":"2024-01-02T00:00:00.000Z","session_title":"Port memory","objective":"finish prompts","session_notes":"## Progress\n- Resolver ported"}`
+	line := `{"schema_version":3,"timestamp":"2024-01-02T00:00:00.000Z","title":"Port memory","objective":"finish prompts","notes":"## Progress\n- Resolver ported"}`
 	if err := os.WriteFile(filepath.Join(zenDir, "brain_timeline.jsonl"), []byte(line+"\n"), 0o644); err != nil {
 		t.Fatalf("write timeline: %v", err)
 	}

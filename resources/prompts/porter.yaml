@@ -1,7 +1,7 @@
 - name: porter
   test: |-
     **MANDATORY FINAL STEP — Save Session Memory**:
-    Before closing this task, call `memory({ action: 'save', session_notes: <the markdown above>, session_title: <session title>, objective: <what we have achieved> })`.
+    Before closing this task, call `memory({ action: 'save', notes: <the markdown above>, title: <session title>, objective: <what we have achieved> })`.
     This save is **non-negotiable** — it ensures any future agent or compacted session can resume without losing context, and can pick up the placeholder registry where this session left it. Do NOT summarize the context field; write it thoroughly.
   description: Plan a port of a project (or subsystem) from one language to another, stress-tested via a browser.chat second opinion. Every function not fully ported in this pass gets a standardized, codegraph-discoverable placeholder so a future agent can resume without re-deriving scope. Writes interfaces/signatures/stubs, not full implementation bodies; no file edits outside the deliverables. Output is a build-ready blueprint another agent can execute without re-reading this conversation.
   arguments:

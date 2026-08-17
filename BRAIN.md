@@ -38,7 +38,7 @@ MCP CLI tools, available globally in PATH.
 cat << 'EOF' > /tmp/payload.md
 UpsertFile'd (with parentheses) works now!
 EOF
-zmemory -a save --session_notes @/tmp/payload.md
+zmemory -a save --notes @/tmp/payload.md
 ```
 
 ---

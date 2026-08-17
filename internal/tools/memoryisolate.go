@@ -21,9 +21,9 @@ func defMemoryIsolate(workspace string, deps Deps) ToolDef {
 		Schema: jsonSchema(map[string]any{
 			"action":        strEnumProp("Action", []string{"load", "save", "scope"}),
 			"workspace":     strProp("Project path (default: current session workspace)"),
-			"session_title": strProp("[save] One-line label, only if changed"),
+			"title": strProp("[save] One-line label, only if changed"),
 			"objective":     strProp("[save] 1-2 sentence goal, only if changed"),
-			"session_notes": strProp("[save] This session's notes as markdown"),
+			"notes": strProp("[save] This session's notes as markdown"),
 			"scope":         strProp("[scope] Scope ID to view/update"),
 			"card_slug":     strProp("[load] Card slug for single-card drill-down (omit for full board map)"),
 		}, []string{"action"}),
@@ -84,8 +84,8 @@ func HandleIsolateLoad(ctx context.Context, client *whiteboard.Client, ws string
 }
 
 func HandleIsolateSave(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
-	sessionTitle, _ := args["session_title"].(string)
-	sessionNotes, _ := args["session_notes"].(string)
+	sessionTitle, _ := args["title"].(string)
+	sessionNotes, _ := args["notes"].(string)
 	slugInfo := whiteboard.ResolveProjectSlug(ws)
 
 	ts := time.Now().UTC().Format("2006-01-02-150405")

@@ -19,8 +19,8 @@ func TestBrainExtractSavesMarkdown(t *testing.T) {
 	}
 	tl := filepath.Join(zen, "brain_timeline.jsonl")
 	lines := []string{
-		`{"schema_version":3,"timestamp":"2024-01-01T00:00:00.000Z","session_title":"One","objective":"gamma alpha","session_notes":"first"}`,
-		`{"schema_version":3,"timestamp":"2024-01-02T00:00:00.000Z","session_title":"Two","objective":"alpha beta","session_notes":"second"}`,
+		`{"schema_version":3,"timestamp":"2024-01-01T00:00:00.000Z","title":"One","objective":"gamma alpha","notes":"first"}`,
+		`{"schema_version":3,"timestamp":"2024-01-02T00:00:00.000Z","title":"Two","objective":"alpha beta","notes":"second"}`,
 	}
 	if err := os.WriteFile(tl, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
 		t.Fatal(err)
@@ -48,7 +48,7 @@ func TestBrainExtractSavesMarkdown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("brain extract not written: %v", err)
 	}
-	if !strings.Contains(string(got), "**session_title**: Two") {
+	if !strings.Contains(string(got), "**title**: Two") {
 		t.Errorf("expected highest-scoring entry selected, got:\n%s", got)
 	}
 	if !strings.Contains(string(got), "**objective**: alpha beta") {
@@ -62,7 +62,7 @@ func TestBrainExtractNoMatch(t *testing.T) {
 	if err := os.MkdirAll(zen, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(zen, "brain_timeline.jsonl"), []byte(`{"schema_version":3,"timestamp":"2024-01-01T00:00:00.000Z","session_title":"One","objective":"gamma","session_notes":"x"}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(zen, "brain_timeline.jsonl"), []byte(`{"schema_version":3,"timestamp":"2024-01-01T00:00:00.000Z","title":"One","objective":"gamma","notes":"x"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

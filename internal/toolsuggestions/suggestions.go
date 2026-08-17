@@ -55,7 +55,7 @@ var suggestions = map[string]ToolSuggestion{
 		ActionRules: []ActionSuggestionRule{
 			{Trigger: "scope", Help: "action: \"scope\" requires a \"scope\" name. Options: \"paths\" (array), \"dependencies\" (array).\n✅ Correct: memory({ action: \"scope\", scope: \"note\", paths: [\"src\"] })", RequiredParams: []string{"scope"}},
 			{Trigger: "search", Help: "action: \"search\" requires \"query\".\n✅ Correct: memory({ action: \"search\", query: \"search terms\" })", RequiredParams: []string{"query"}},
-			{Trigger: "save", Help: "action: \"save\" persists session state.\n✅ Correct: memory({ action: \"save\", session_title: \"My Session\", objective: \"Session goal\" })"},
+			{Trigger: "save", Help: "action: \"save\" persists session state.\n✅ Correct: memory({ action: \"save\", title: \"My Session\", objective: \"Session goal\" })"},
 		},
 	},
 	"context": {

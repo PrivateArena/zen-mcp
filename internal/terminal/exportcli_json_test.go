@@ -10,16 +10,16 @@ import (
 )
 
 // memorySampleSchema mirrors the real memory tool: scalar params that routinely
-// carry large markdown bodies (session_notes, objective) where shell quoting
+// carry large markdown bodies (notes, objective) where shell quoting
 // and escaping cause agent errors.
 var memorySampleSchema = map[string]any{
 	"type":     "object",
 	"required": []any{"action"},
 	"properties": map[string]any{
 		"action":        map[string]any{"type": "string", "description": "Memory action.", "enum": []any{"save", "load"}},
-		"session_title": map[string]any{"type": "string", "description": "One-line label"},
+		"title": map[string]any{"type": "string", "description": "One-line label"},
 		"objective":     map[string]any{"type": "string", "description": "1-2 sentence goal"},
-		"session_notes": map[string]any{"type": "string", "description": "Markdown notes"},
+		"notes": map[string]any{"type": "string", "description": "Markdown notes"},
 	},
 }
 
@@ -80,7 +80,7 @@ func runJsonHarnessErr(t *testing.T, harness, stdin string, args ...string) (str
 // flow through STDIN without a bash syntax error or jq parse failure.
 func TestJsonStdinDashHandlesParensAndQuotes(t *testing.T) {
 	harness := arrayHarness(t, memorySampleTool(), false)
-	base := `{"session_notes": "UpsertFile'd (with parens) and \"quotes\" work", "objective": "fix C/C++ plugins"}`
+	base := `{"notes": "UpsertFile'd (with parens) and \"quotes\" work", "objective": "fix C/C++ plugins"}`
 	got := runJsonHarness(t, harness, base, "--json", "-", "--action", "save")
 	if got["action"] != "save" {
 		t.Fatalf("merged action flag lost: %v", got)
@@ -88,9 +88,9 @@ func TestJsonStdinDashHandlesParensAndQuotes(t *testing.T) {
 	if got["objective"] != "fix C/C++ plugins" {
 		t.Fatalf("objective from stdin base missing: %v", got)
 	}
-	notes, _ := got["session_notes"].(string)
+	notes, _ := got["notes"].(string)
 	if !strings.Contains(notes, "(with parens)") || !strings.Contains(notes, `"quotes"`) {
-		t.Fatalf("session_notes from stdin base mangled: %q", notes)
+		t.Fatalf("notes from stdin base mangled: %q", notes)
 	}
 }
 
@@ -107,8 +107,8 @@ func TestJsonStdinDashMergesScalarFlags(t *testing.T) {
 // TestJsonStdinDashEqualStyle: --json=- is accepted as the STDIN sentinel.
 func TestJsonStdinDashEqualStyle(t *testing.T) {
 	harness := arrayHarness(t, memorySampleTool(), false)
-	got := runJsonHarness(t, harness, `{"session_title": "t"}`, "--json=-", "--action", "load")
-	if got["action"] != "load" || got["session_title"] != "t" {
+	got := runJsonHarness(t, harness, `{"title": "t"}`, "--json=-", "--action", "load")
+	if got["action"] != "load" || got["title"] != "t" {
 		t.Fatalf("equal-style --json=- merge broken: %v", got)
 	}
 }
@@ -136,8 +136,8 @@ func TestJsonRawStringFlagsWin(t *testing.T) {
 // through untouched (pre-change behavior preserved).
 func TestJsonRawStringAlone(t *testing.T) {
 	harness := arrayHarness(t, memorySampleTool(), false)
-	got := runJsonHarness(t, harness, "", "--json", `{"action": "load", "session_notes": "only base"}`)
-	if len(got) != 2 || got["action"] != "load" || got["session_notes"] != "only base" {
+	got := runJsonHarness(t, harness, "", "--json", `{"action": "load", "notes": "only base"}`)
+	if len(got) != 2 || got["action"] != "load" || got["notes"] != "only base" {
 		t.Fatalf("bare --json body must pass through unchanged: %v", got)
 	}
 }
@@ -180,22 +180,22 @@ func TestJsonInvalidBaseDiagnostic(t *testing.T) {
 	}
 }
 
-// TestAtFileScalarReadsDisk: --session_notes @file streams markdown from disk
+// TestAtFileScalarReadsDisk: --notes @file streams markdown from disk
 // instead of passing multiline text through shell quotes.
 func TestAtFileScalarReadsDisk(t *testing.T) {
 	harness := arrayHarness(t, memorySampleTool(), false)
 	notes := "## Core Concepts\n\nUpsertFile'd (with parens) works cleanly now!\n"
-	file := filepath.Join(t.TempDir(), "session_notes.md")
+	file := filepath.Join(t.TempDir(), "notes.md")
 	if err := os.WriteFile(file, []byte(notes), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got := runJsonHarness(t, harness, "", "--action", "save", "--session_notes", "@"+file)
+	got := runJsonHarness(t, harness, "", "--action", "save", "--notes", "@"+file)
 	if got["action"] != "save" {
 		t.Fatalf("action lost: %v", got)
 	}
-	n, _ := got["session_notes"].(string)
+	n, _ := got["notes"].(string)
 	if n != "## Core Concepts\n\nUpsertFile'd (with parens) works cleanly now!\n" {
-		t.Fatalf("session_notes from @file mangled: %q", n)
+		t.Fatalf("notes from @file mangled: %q", n)
 	}
 }
 
@@ -203,24 +203,24 @@ func TestAtFileScalarReadsDisk(t *testing.T) {
 // agents immediately catch typos instead of sending junk payloads.
 func TestAtFileMissing(t *testing.T) {
 	harness := arrayHarness(t, memorySampleTool(), false)
-	out, err := runJsonHarnessErr(t, harness, "", "--action", "save", "--session_notes", "@/nonexistent/notes.md")
+	out, err := runJsonHarnessErr(t, harness, "", "--action", "save", "--notes", "@/nonexistent/notes.md")
 	if err == nil {
 		t.Fatalf("missing @file must fail, got: %s", out)
 	}
-	if !strings.Contains(out, "file not found for parameter session_notes: /nonexistent/notes.md") {
+	if !strings.Contains(out, "file not found for parameter notes: /nonexistent/notes.md") {
 		t.Fatalf("expected param-aware diagnostic, got: %s", out)
 	}
 }
 
-// TestAtFileEqualStyle: --session_notes=@file equal-style form resolves too.
+// TestAtFileEqualStyle: --notes=@file equal-style form resolves too.
 func TestAtFileEqualStyle(t *testing.T) {
 	harness := arrayHarness(t, memorySampleTool(), false)
 	file := filepath.Join(t.TempDir(), "notes.md")
 	if err := os.WriteFile(file, []byte("equal style content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got := runJsonHarness(t, harness, "", "--action", "save", "--session_notes=@"+file)
-	if got["session_notes"] != "equal style content" {
+	got := runJsonHarness(t, harness, "", "--action", "save", "--notes=@"+file)
+	if got["notes"] != "equal style content" {
 		t.Fatalf("equal-style @file broken: %v", got)
 	}
 }
@@ -270,7 +270,7 @@ func TestMemoryWrapperJsonStdinDryRun(t *testing.T) {
 	}
 	path := writeWrapper(t, tool, true)
 	cmd := exec.Command(path, "--json", "-", "-a", "save", "--dry-run")
-	cmd.Stdin = strings.NewReader(`{"session_notes": "UpsertFile'd (with parens)"}`)
+	cmd.Stdin = strings.NewReader(`{"notes": "UpsertFile'd (with parens)"}`)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("memory wrapper --json - dry-run failed: %v\n%s", err, out)

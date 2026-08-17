@@ -28,7 +28,7 @@
     2. Make the delegation plan explicit and visible before executing it.
 
     **MANDATORY FINAL STEP — Save Session Memory**:
-    Before closing this task, call `memory({ action: 'save', session_notes: <the markdown above>, session_title: <session title>, objective: <what we have achieved> })`.
+    Before closing this task, call `memory({ action: 'save', notes: <the markdown above>, title: <session title>, objective: <what we have achieved> })`.
     This save is **non-negotiable** — it ensures any future agent or compacted session can resume without losing context. Do NOT summarize the context field; write it thoroughly.
   enabledSkills:
     - codebase-research

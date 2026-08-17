@@ -23,9 +23,9 @@ func defMemory(workspace string, deps Deps) ToolDef {
 		Schema: jsonSchema(map[string]any{
 			"action":        strEnumProp("Action", []string{"load", "save", "scope"}),
 			"workspace":     strProp("Project path (default: current session workspace)"),
-			"session_title": strProp("[save] One-line label, only if changed"),
+			"title": strProp("[save] One-line label, only if changed"),
 			"objective":     strProp("[save] 1-2 sentence goal, only if changed"),
-			"session_notes": strProp("[save] This session's notes as markdown. See the project-compact prompt for the required section headers."),
+			"notes": strProp("[save] This session's notes as markdown. See the project-compact prompt for the required section headers."),
 			"scope":         strProp("[scope] Scope ID to view/update"),
 		}, []string{"action"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -39,9 +39,9 @@ func HandleMemoryAction(ctx context.Context, workspace string, deps Deps, req mc
 	args := req.GetArguments()
 	action, _ := args["action"].(string)
 	inputWorkspace, _ := args["workspace"].(string)
-	sessionTitle, _ := args["session_title"].(string)
+	sessionTitle, _ := args["title"].(string)
 	objective, _ := args["objective"].(string)
-	sessionNotes, _ := args["session_notes"].(string)
+	sessionNotes, _ := args["notes"].(string)
 	scope, _ := args["scope"].(string)
 
 	actualWorkspace := resolveWorkspaceFromDeps(inputWorkspace, workspace)
@@ -149,7 +149,7 @@ func loadDependencyContext(workspace string) []map[string]any {
 		depState := projectmemory.ReconstructState(filepath.Join(depPath, ".zenmcp"), "brain")
 		deps = append(deps, map[string]any{
 			"workspace":     depPath,
-			"session_title": depState.SessionTitle,
+			"title": depState.SessionTitle,
 			"objective":     depState.Objective,
 		})
 	}

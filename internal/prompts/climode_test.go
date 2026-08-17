@@ -103,8 +103,8 @@ func TestTransformFunctionalNotation(t *testing.T) {
 		},
 		{
 			name: "placeholder values preserved",
-			in:   "Then call `memory({ action: 'save', session_notes: <the markdown above>, session_title: <session title>, objective: <what we have achieved> })` using only the fields containing verified data.",
-			want: "Then call `zen-memory --action save --objective '<what we have achieved>' --session_notes '<the markdown above>' --session_title '<session title>'` using only the fields containing verified data.",
+			in:   "Then call `memory({ action: 'save', notes: <the markdown above>, title: <session title>, objective: <what we have achieved> })` using only the fields containing verified data.",
+			want: "Then call `zen-memory --action save --objective '<what we have achieved>' --notes '<the markdown above>' --title '<session title>'` using only the fields containing verified data.",
 		},
 	}
 	for _, tc := range cases {

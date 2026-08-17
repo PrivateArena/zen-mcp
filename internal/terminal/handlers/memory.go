@@ -192,7 +192,7 @@ func init() {
 		title := args[0]
 		notes := strings.Join(args[1:], " ")
 		wRoot := terminal.Ws()
-		res := terminal.ExecuteTool("memory_isolate", map[string]any{"action": "save", "workspace": wRoot, "session_title": title, "session_notes": notes})
+		res := terminal.ExecuteTool("memory_isolate", map[string]any{"action": "save", "workspace": wRoot, "title": title, "notes": notes})
 		terminal.Logf("RESULT:\n%s", res)
 		return nil
 	})
@@ -205,7 +205,7 @@ func init() {
 		title := args[0]
 		notes := strings.Join(args[1:], " ")
 		wRoot := terminal.Ws()
-		res := terminal.ExecuteTool("memory_shared", map[string]any{"action": "save", "workspace": wRoot, "session_title": title, "session_notes": notes})
+		res := terminal.ExecuteTool("memory_shared", map[string]any{"action": "save", "workspace": wRoot, "title": title, "notes": notes})
 		terminal.Logf("RESULT:\n%s", res)
 		return nil
 	})

@@ -15,7 +15,7 @@
 
     **Step 3 — Report what you loaded.**
 
-    > **Session:** `session_title` (Source: `<resolved filename>`)
+    > **Session:** `title` (Source: `<resolved filename>`)
     > **Objective:** `objective`
     > **What is done:** `what_is_done`
     > **Facts & decisions:** list each `semantic.facts` entry — key decisions, environment notes, test commands; rationale for each.

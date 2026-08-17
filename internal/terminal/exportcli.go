@@ -332,7 +332,7 @@ func buildHelpStatementsOpt(t cliTool, url string, aliases map[string]string) []
 		`echo "  $0 --<param>=<value>   # equal-style, e.g. --upload_files=f1,f2 or -up=f1"`,
 		`echo "  $0 --json '{\"key\":\"val\"}'   # raw JSON escape hatch; '-' reads JSON from STDIN (heredoc/paste)"`,
 		`echo "  $0 --json-file <path>  # read raw JSON from a file (massive payloads)"`,
-		`echo "  $0 --<param> @<file>   # any param value may read from a file, e.g. --session_notes @notes.md"`,
+		`echo "  $0 --<param> @<file>   # any param value may read from a file, e.g. --notes @notes.md"`,
 		`echo "  $0 --dry-run           # print the JSON-RPC body + metrics, do NOT send"`,
 		`echo "  $0 --sleep <sec>       # sleep before sending (test long-running survival)"`,
 	}

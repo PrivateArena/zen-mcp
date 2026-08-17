@@ -15,9 +15,9 @@ import (
 type BrainEvent struct {
 	SchemaVersion int    `json:"schema_version"`
 	Timestamp     string `json:"timestamp"`
-	SessionTitle  string `json:"session_title,omitempty"`
+	SessionTitle  string `json:"title,omitempty"`
 	Objective     string `json:"objective,omitempty"`
-	SessionNotes  string `json:"session_notes,omitempty"`
+	SessionNotes  string `json:"notes,omitempty"`
 }
 
 // ReconstructedState mirrors timeline.ts ReconstructedState.
@@ -25,9 +25,9 @@ type ReconstructedState struct {
 	Workspace     string `json:"workspace"`
 	Timestamp     string `json:"timestamp"`
 	SchemaVersion int    `json:"schema_version"`
-	SessionTitle  string `json:"session_title"`
+	SessionTitle  string `json:"title"`
 	Objective     string `json:"objective"`
-	SessionNotes  string `json:"session_notes"`
+	SessionNotes  string `json:"notes"`
 }
 
 // v1FieldsToMarkdown renders legacy v1 fields into v3 markdown headers.
@@ -161,12 +161,12 @@ func MigrateToV3(raw map[string]any) BrainEvent {
 	switch schemaVersionOf(raw) {
 	case 3:
 		ev.Timestamp, _ = raw["timestamp"].(string)
-		ev.SessionTitle, _ = raw["session_title"].(string)
+		ev.SessionTitle, _ = raw["title"].(string)
 		ev.Objective, _ = raw["objective"].(string)
-		ev.SessionNotes, _ = raw["session_notes"].(string)
+		ev.SessionNotes, _ = raw["notes"].(string)
 	case 2:
 		ev.Timestamp, _ = raw["timestamp"].(string)
-		ev.SessionTitle, _ = raw["session_title"].(string)
+		ev.SessionTitle, _ = raw["title"].(string)
 		ev.Objective, _ = raw["objective"].(string)
 		notes := v2FieldsToMarkdown(raw)
 		if notes != "" {
@@ -174,7 +174,7 @@ func MigrateToV3(raw map[string]any) BrainEvent {
 		}
 	default:
 		ev.Timestamp, _ = raw["timestamp"].(string)
-		ev.SessionTitle, _ = raw["session_title"].(string)
+		ev.SessionTitle, _ = raw["title"].(string)
 		ev.Objective, _ = raw["objective"].(string)
 		notes := v1FieldsToMarkdown(raw)
 		if notes != "" {
@@ -293,7 +293,7 @@ func AppendEvent(dataDir, memoryName string, event BrainEvent) error {
 }
 
 // ReconstructState ports reconstructState: chronologically merges the
-// timeline log. session_title/objective are last-write-wins; session_notes
+// timeline log. title/objective are last-write-wins; notes
 // blocks accumulate.
 func ReconstructState(dataDir, memoryName string) ReconstructedState {
 	timelinePath := filepath.Join(dataDir, memoryName+"_timeline.jsonl")

@@ -27,7 +27,7 @@ func TestNormalizeKey(t *testing.T) {
 }
 
 func TestMigrateToV3(t *testing.T) {
-	raw := map[string]any{"schema_version": 2, "timestamp": "2024-01-01T00:00:00.000Z", "session_title": "T", "objective": "O", "session_notes": "N"}
+	raw := map[string]any{"schema_version": 2, "timestamp": "2024-01-01T00:00:00.000Z", "title": "T", "objective": "O", "notes": "N"}
 	ev := MigrateToV3(raw)
 	if ev.SessionTitle != "T" || ev.Objective != "O" {
 		t.Errorf("MigrateToV3() = %+v, want T/O", ev)
@@ -100,7 +100,7 @@ func TestLatestEvent(t *testing.T) {
 func TestLatestEventSkipsBlankAndCorruptTrailingLines(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "brain_timeline.jsonl")
-	content := "{\"schema_version\":3,\"timestamp\":\"2024-01-01T00:00:00.000Z\",\"session_title\":\"Valid\",\"objective\":\"ok\",\"session_notes\":\"n\"}\n\nnot-json\n\n"
+	content := "{\"schema_version\":3,\"timestamp\":\"2024-01-01T00:00:00.000Z\",\"title\":\"Valid\",\"objective\":\"ok\",\"notes\":\"n\"}\n\nnot-json\n\n"
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write timeline error = %v", err)
 	}
@@ -128,7 +128,7 @@ func TestLatestEventOnlyBlankLines(t *testing.T) {
 func TestLatestEventNoTrailingNewline(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "brain_timeline.jsonl")
-	content := "{\"schema_version\":3,\"timestamp\":\"2024-01-01T00:00:00.000Z\",\"session_title\":\"T\",\"objective\":\"O\",\"session_notes\":\"N\"}"
+	content := "{\"schema_version\":3,\"timestamp\":\"2024-01-01T00:00:00.000Z\",\"title\":\"T\",\"objective\":\"O\",\"notes\":\"N\"}"
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write timeline error = %v", err)
 	}
@@ -158,9 +158,9 @@ func TestEventToMarkdownEmpty(t *testing.T) {
 }
 
 func TestJSONToMarkdown(t *testing.T) {
-	raw := `{"schema_version":3,"timestamp":"2024-01-01T00:00:00.000Z","session_title":"Port memory","objective":"be handler","session_notes":"## Progress\n- Done\n- Pending"}`
+	raw := `{"schema_version":3,"timestamp":"2024-01-01T00:00:00.000Z","title":"Port memory","objective":"be handler","notes":"## Progress\n- Done\n- Pending"}`
 	got := markdown.JSONToMarkdown(raw)
-	want := "**schema_version**: 3\n**timestamp**: 2024-01-01T00:00:00.000Z\n**session_title**: Port memory\n**objective**: be handler\n**session_notes**: ## Progress\n- Done\n- Pending"
+	want := "**schema_version**: 3\n**timestamp**: 2024-01-01T00:00:00.000Z\n**title**: Port memory\n**objective**: be handler\n**notes**: ## Progress\n- Done\n- Pending"
 	if got != want {
 		t.Errorf("JSONToMarkdown()\n got: %q\nwant: %q", got, want)
 	}

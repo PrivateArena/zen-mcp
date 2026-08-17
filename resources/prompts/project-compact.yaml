@@ -5,9 +5,9 @@
       description: Memory filename (e.g. 'router', 'dsp'). Defaults to 'brain'.
       required: false
   template: |-
-    Save this session's changes to project memory. You only need THIS session's delta — `session_title`/`objective` only if they changed, and full project history is handled by the timeline log, not by you re-deriving it.
+    Save this session's changes to project memory. You only need THIS session's delta — `title`/`objective` only if they changed, and full project history is handled by the timeline log, not by you re-deriving it.
 
-    Write `session_notes` as ONE markdown block covering only this session. Use exactly these headers, and omit a section entirely if this session added nothing to it (don't write "N/A" or leave a header empty):
+    Write `notes` as ONE markdown block covering only this session. Use exactly these headers, and omit a section entirely if this session added nothing to it (don't write "N/A" or leave a header empty):
 
     ```
     ## Goal
@@ -41,4 +41,4 @@
 
     Write it as if you'll read it cold at the start of a brand-new session with zero other context — specific enough that nothing gets silently re-tried or re-derived.
 
-    Then call `memory({ action: 'save', session_notes: <the markdown above>, session_title: <session title>, objective: <what we have achieved> })` — one call, sending only the fields that have real content this session.
+    Then call `memory({ action: 'save', notes: <the markdown above>, title: <session title>, objective: <what we have achieved> })` — one call, sending only the fields that have real content this session.
