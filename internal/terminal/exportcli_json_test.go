@@ -16,10 +16,10 @@ var memorySampleSchema = map[string]any{
 	"type":     "object",
 	"required": []any{"action"},
 	"properties": map[string]any{
-		"action":        map[string]any{"type": "string", "description": "Memory action.", "enum": []any{"save", "load"}},
-		"title": map[string]any{"type": "string", "description": "One-line label"},
-		"objective":     map[string]any{"type": "string", "description": "1-2 sentence goal"},
-		"notes": map[string]any{"type": "string", "description": "Markdown notes"},
+		"action":    map[string]any{"type": "string", "description": "Memory action.", "enum": []any{"save", "load"}},
+		"title":     map[string]any{"type": "string", "description": "One-line label"},
+		"objective": map[string]any{"type": "string", "description": "1-2 sentence goal"},
+		"notes":     map[string]any{"type": "string", "description": "Markdown notes"},
 	},
 }
 

@@ -19,14 +19,12 @@ func defMemory(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "memory",
 		Title:       "Project Memory",
-		Description: "Persistent project state (.zenmcp/). Actions: load, save, scope.",
+		Description: "Persistent project state (.zenmcp/). Actions: load, save.",
 		Schema: jsonSchema(map[string]any{
-			"action":        strEnumProp("Action", []string{"load", "save", "scope"}),
-			"workspace":     strProp("Project path (default: current session workspace)"),
-			"title": strProp("[save] One-line label, only if changed"),
-			"objective":     strProp("[save] 1-2 sentence goal, only if changed"),
-			"notes": strProp("[save] This session's notes as markdown. See the project-compact prompt for the required section headers."),
-			"scope":         strProp("[scope] Scope ID to view/update"),
+			"action":    strEnumProp("Action", []string{"load", "save"}),
+			"title":     strProp("[save] One-line label, only if changed"),
+			"objective": strProp("[save] 1-2 sentence goal, only if changed"),
+			"notes":     strProp("[save] This session's notes as markdown. See the project-compact prompt for the required section headers."),
 		}, []string{"action"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return HandleMemoryAction(ctx, workspace, deps, req), nil
@@ -42,7 +40,6 @@ func HandleMemoryAction(ctx context.Context, workspace string, deps Deps, req mc
 	sessionTitle, _ := args["title"].(string)
 	objective, _ := args["objective"].(string)
 	sessionNotes, _ := args["notes"].(string)
-	scope, _ := args["scope"].(string)
 
 	actualWorkspace := resolveWorkspaceFromDeps(inputWorkspace, workspace)
 	if actualWorkspace == "" {
@@ -70,8 +67,6 @@ func HandleMemoryAction(ctx context.Context, workspace string, deps Deps, req mc
 		result = state
 	case "save":
 		result = actionSave(dataDir, memoryName, dbPath, actualWorkspace, sessionTitle, objective, sessionNotes)
-	case "scope":
-		result = actionScope(actualWorkspace, scope)
 	}
 	return toolresponse.WrapSuccess(ctx, "memory", result, start)
 }
@@ -148,9 +143,9 @@ func loadDependencyContext(workspace string) []map[string]any {
 		}
 		depState := projectmemory.ReconstructState(filepath.Join(depPath, ".zenmcp"), "brain")
 		deps = append(deps, map[string]any{
-			"workspace":     depPath,
-			"title": depState.SessionTitle,
-			"objective":     depState.Objective,
+			"workspace": depPath,
+			"title":     depState.SessionTitle,
+			"objective": depState.Objective,
 		})
 	}
 	return deps
@@ -190,61 +185,6 @@ func actionSave(dataDir, memoryName, dbPath, workspace, sessionTitle, objective,
 	}
 }
 
-// actionScope ports actionScope.
-func actionScope(workspace, scope string) map[string]any {
-	mapFile := mcpcfg.MapFilePath()
-	if _, err := os.Stat(mapFile); err != nil {
-		return map[string]any{"error": true, "message": "No projects registered in map.json yet."}
-	}
-	raw, err := os.ReadFile(mapFile)
-	if err != nil {
-		return map[string]any{"error": true, "message": "No projects registered in map.json yet."}
-	}
-	var mapData map[string]any
-	if json.Unmarshal(raw, &mapData) != nil {
-		return map[string]any{"error": true, "message": "No projects registered in map.json yet."}
-	}
-	entry, _ := mapData[workspace].(map[string]any)
-	if entry == nil {
-		return map[string]any{
-			"error":   true,
-			"message": "Project path " + workspace + " is not registered in map.json. Please run registerProjectInMap or visit the project first.",
-		}
-	}
-
-	if scopes, ok := entry["scopes"].(map[string]any); !ok || scopes == nil {
-		entry["scopes"] = map[string]any{}
-	}
-
-	if scope != "" {
-		scopes, _ := entry["scopes"].(map[string]any)
-		paths, _ := scopes[scope].([]any)
-		if paths == nil {
-			return map[string]any{
-				"error":   true,
-				"message": `Scope "` + scope + `" not found in project ` + workspace + `.`,
-			}
-		}
-		return map[string]any{
-			"scope":        scope,
-			"paths":        paths,
-			"dependencies": dependenciesOrEmpty(entry),
-		}
-	}
-
-	return map[string]any{
-		"project":      workspace,
-		"scopes":       entry["scopes"],
-		"dependencies": dependenciesOrEmpty(entry),
-	}
-}
-
-func dependenciesOrEmpty(entry map[string]any) any {
-	if deps, ok := entry["dependencies"]; ok && deps != nil {
-		return deps
-	}
-	return []any{}
-}
 func firstNonEmpty(vals ...string) string {
 	for _, v := range vals {
 		if v != "" {

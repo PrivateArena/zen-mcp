@@ -35,10 +35,10 @@ func TestLuaPluginNodes(t *testing.T) {
 		got[n.Type+":"+n.Name]++
 	}
 	want := map[string]int{
-		"function:helper":   1,
-		"function:M.export": 1,
+		"function:helper":     1,
+		"function:M.export":   1,
 		"function:obj:method": 1,
-		"class:M":           1,
+		"class:M":             1,
 	}
 	for k, v := range want {
 		if got[k] != v {

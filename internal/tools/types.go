@@ -35,6 +35,7 @@ type ToolDef struct {
 func AllDefs(workspace string, deps Deps) []ToolDef {
 	return []ToolDef{
 		defWorkspace(workspace, deps),
+		defScope(workspace, deps),
 		defMemory(workspace, deps),
 		defContext(workspace, deps),
 		defShell(workspace, deps),

@@ -20,15 +20,13 @@ func defMemoryShared(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "memory_shared",
 		Title:       "Memory Shared",
-		Description: "Persistent project state via shared whiteboard (port 3035). All projects share one DB with named whiteboards and inter-project link_cards. Actions: load (full board map or single-card drill-down), save, scope.",
+		Description: "Persistent project state via shared whiteboard (port 3035). All projects share one DB with named whiteboards and inter-project link_cards. Actions: load (full board map or single-card drill-down), save.",
 		Schema: jsonSchema(map[string]any{
-			"action":        strEnumProp("Action", []string{"load", "save", "scope"}),
-			"workspace":     strProp("Project path (default: current session workspace)"),
-			"title": strProp("[save] One-line label, only if changed"),
-			"objective":     strProp("[save] 1-2 sentence goal, only if changed"),
-			"notes": strProp("[save] This session's notes as markdown"),
-			"scope":         strProp("[scope] Scope ID to view/update"),
-			"card_slug":     strProp("[load] Card slug for single-card drill-down (omit for full board map)"),
+			"action":    strEnumProp("Action", []string{"load", "save"}),
+			"title":     strProp("[save] One-line label, only if changed"),
+			"objective": strProp("[save] 1-2 sentence goal, only if changed"),
+			"notes":     strProp("[save] This session's notes as markdown"),
+			"card_slug": strProp("[load] Card slug for single-card drill-down (omit for full board map)"),
 		}, []string{"action"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return HandleMemorySharedAction(ctx, workspace, deps, req), nil
@@ -56,8 +54,6 @@ func HandleMemorySharedAction(ctx context.Context, workspace string, deps Deps, 
 		return HandleSharedLoad(ctx, client, actualWorkspace, args, start)
 	case "save":
 		return HandleSharedSave(ctx, client, actualWorkspace, args, start)
-	case "scope":
-		return HandleSharedScope(ctx, client, actualWorkspace, args, start)
 	default:
 		return toolresponse.WrapErrorWithContext(ctx, "memory_shared", fmt.Errorf("Unknown action: %s", action), start)
 	}
@@ -116,9 +112,9 @@ func HandleSharedLoad(ctx context.Context, client *whiteboard.Client, ws string,
 	dependencyContext := make([]any, 0, len(depResults))
 	for _, r := range depResults {
 		entry := map[string]any{
-			"workspace":     r.Workspace,
-			"title": r.SessionTitle,
-			"objective":     r.Objective,
+			"workspace": r.Workspace,
+			"title":     r.SessionTitle,
+			"objective": r.Objective,
 		}
 		if r.Warn != "" {
 			entry["warn"] = r.Warn
@@ -197,40 +193,6 @@ func HandleSharedSave(ctx context.Context, client *whiteboard.Client, ws string,
 		result["warn"] = warnMsg
 	}
 	return toolresponse.WrapSuccess(ctx, "memory_shared", result, start)
-}
-
-func HandleSharedScope(ctx context.Context, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult {
-	state, err := client.LoadBoardState(ctx)
-	if err != nil {
-		return toolresponse.WrapErrorWithContext(ctx, "memory_shared", err, start)
-	}
-	cards := state.Cards
-	groups := uniqueGroups(cards)
-
-	if scope, ok := args["scope"].(string); ok && scope != "" {
-		groupCards := filterByGroup(cards, scope)
-		return toolresponse.WrapSuccess(ctx, "memory_shared", map[string]any{
-			"scope":     scope,
-			"cardCount": len(groupCards),
-			"cards":     groupCards,
-			"groups":    groups,
-		}, start)
-	}
-
-	related := loadRelatedProjects()
-	slugInfo := whiteboard.ResolveProjectSlug(ws)
-	return toolresponse.WrapSuccess(ctx, "memory_shared", map[string]any{
-		"project":    ws,
-		"whiteboard": slugInfo.Slug,
-		"groups":     groups,
-		"totalCards": len(cards),
-		"relatedProjects": func() []string {
-			if r, ok := related[slugInfo.Slug]; ok {
-				return r
-			}
-			return []string{}
-		}(),
-	}, start)
 }
 
 func loadRelatedProjects() map[string][]string {

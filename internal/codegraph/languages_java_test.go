@@ -46,15 +46,15 @@ func TestJavaPluginNodes(t *testing.T) {
 		got[n.Type+":"+n.Name]++
 	}
 	want := map[string]int{
-		"class:Account":     1,
+		"class:Account":        1,
 		"interface:Repository": 1,
-		"enum:Color":        1,
-		"method:Account":    1, // constructor
-		"method:getBalance": 1,
-		"method:transfer":   1,
-		"method:withdraw":   1,
-		"method:find":       1, // interface method
-		"method:apply":      1, // enum body method
+		"enum:Color":           1,
+		"method:Account":       1, // constructor
+		"method:getBalance":    1,
+		"method:transfer":      1,
+		"method:withdraw":      1,
+		"method:find":          1, // interface method
+		"method:apply":         1, // enum body method
 	}
 	for k, v := range want {
 		if got[k] != v {

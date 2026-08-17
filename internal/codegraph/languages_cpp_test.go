@@ -38,19 +38,19 @@ func TestCppPluginNodes(t *testing.T) {
 		got[n.Type+":"+n.Name]++
 	}
 	want := map[string]int{
-		"class:Inner":                 1,
-		"class:BasicSndfileReader":    1,
-		"method:go":                   1,
-		"method:format":               1,
-		"method:frames":               1,
-		"method:getSampleRate":        1, // out-of-line
-		"method:BasicSndfileReader":   1, // ctor
-		"method:~BasicSndfileReader":  1, // dtor
-		"struct:Point":                1,
-		"enum:Color":                  1,
-		"function:createAudioReader":  1,
-		"namespace:sfz":               1,
-		"namespace:detail":            1,
+		"class:Inner":                1,
+		"class:BasicSndfileReader":   1,
+		"method:go":                  1,
+		"method:format":              1,
+		"method:frames":              1,
+		"method:getSampleRate":       1, // out-of-line
+		"method:BasicSndfileReader":  1, // ctor
+		"method:~BasicSndfileReader": 1, // dtor
+		"struct:Point":               1,
+		"enum:Color":                 1,
+		"function:createAudioReader": 1,
+		"namespace:sfz":              1,
+		"namespace:detail":           1,
 	}
 	for k, v := range want {
 		if got[k] != v {
