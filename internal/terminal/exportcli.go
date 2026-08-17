@@ -394,15 +394,15 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	// Header comment block.
 	ln("#!/usr/bin/env bash")
 	ln("# " + t.name + " — generated wrapper for MCP tool: " + t.name)
-	ln("# " + desc)
-	ln("# Parameters (from JSON Schema):")
-	for _, p := range params {
-		req, vals := paramSuffix(p)
-		if p.desc != "" || req != "" || vals != "" {
-			ln("#   " + flagLabel(p, aliases) + req + "  " + oneLine(p.desc) + vals)
-		}
-	}
-	ln("# Server: " + url)
+	//ln("# " + desc)
+	//ln("# Parameters (from JSON Schema):")
+	//for _, p := range params {
+	//	req, vals := paramSuffix(p)
+	//	if p.desc != "" || req != "" || vals != "" {
+	//		ln("#   " + flagLabel(p, aliases) + req + "  " + oneLine(p.desc) + vals)
+	//	}
+	//}
+	//ln("# Server: " + url)
 	ln("# Generated: " + time.Now().Format(time.RFC3339))
 	ln("")
 
