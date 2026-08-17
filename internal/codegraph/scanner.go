@@ -165,7 +165,7 @@ func isSupported(relPath string) bool {
 	switch ext {
 	case ".ts", ".tsx", ".js", ".jsx", ".mjs",
 		".go", ".py", ".rs", ".java",
-		".c", ".cpp", ".h", ".hpp",
+		".c", ".cpp", ".cc", ".cxx", ".h", ".hpp", ".hh", ".hxx",
 		".rb", ".lua":
 		return true
 	}
@@ -185,9 +185,9 @@ func detectLanguage(relPath string) string {
 		return "rust"
 	case ".java":
 		return "java"
-	case ".c", ".h":
+	case ".c":
 		return "c"
-	case ".cpp", ".hpp":
+	case ".cpp", ".cc", ".cxx", ".h", ".hpp", ".hh", ".hxx":
 		return "cpp"
 	case ".rb":
 		return "ruby"
