@@ -84,9 +84,6 @@ func TestBuildWrapperScriptContent(t *testing.T) {
 	for _, want := range []string{
 		"#!/usr/bin/env bash",
 		"# browser — generated wrapper for MCP tool: browser",
-		"# Parameters (from JSON Schema):",
-		"#   --action (required)  Browser action. [navigate|chat|screenshot]",
-		"# Server: http://127.0.0.1:2999",
 		"# Generated: ",
 		"set -euo pipefail",
 		`SESSION_ID="${ZENMCP_SESSION_ID:-zen-cli-$$}"`,
@@ -264,7 +261,6 @@ func TestBuildWrapperScriptShort(t *testing.T) {
 		`echo "  $0 -<short> <value>...   # short aliases"`,
 		`echo "  -a, --action (required)  Browser action. [navigate|chat|screenshot]"`,
 		`echo "  -c, --count  How many"`,
-		"#   -a, --action (required)  Browser action. [navigate|chat|screenshot]",
 	} {
 		if !strings.Contains(shortScript, want) {
 			t.Errorf("short script missing %q", want)
@@ -536,25 +532,31 @@ func TestExportCLIRespectsConfigShort(t *testing.T) {
 	}
 }
 
-func TestRemoveStaleZenMixedPrefixes(t *testing.T) {
-	withCliConfig(t, "zn-", false)
+func TestRemoveExactStale(t *testing.T) {
 	dir := t.TempDir()
-	for _, n := range []string{"zen-old", "zn-new", "unrelated"} {
+	for _, n := range []string{"zen-browser", "zn-browser", "zn-shell", "zen-myscript", "unrelated"} {
 		if err := os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	removeStaleZen(dir, map[string]bool{"zn-new": true}, "zn-", mcpcfg.DefaultCliModePrefix)
+	candidates := wrapperNameSet([]cliTool{{name: "browser"}, {name: "shell"}}, "zn-", mcpcfg.DefaultCliModePrefix)
+	removeExactStale(dir, candidates, map[string]bool{"zn-browser": true})
 	leftover, _ := os.ReadDir(dir)
 	names := map[string]bool{}
 	for _, e := range leftover {
 		names[e.Name()] = true
 	}
-	if names["zen-old"] {
-		t.Error("legacy prefixed artifact should be removed as stale")
+	if names["zen-browser"] {
+		t.Error("legacy prefixed exact wrapper should be removed as stale")
 	}
-	if !names["zn-new"] {
+	if names["zn-shell"] {
+		t.Error("current-prefix wrapper of a known tool not in keep should be removed")
+	}
+	if !names["zn-browser"] {
 		t.Error("kept wrapper should survive")
+	}
+	if !names["zen-myscript"] {
+		t.Error("user file sharing the wrapper prefix must not be removed")
 	}
 	if !names["unrelated"] {
 		t.Error("non-wrapper file must not be touched")
@@ -568,7 +570,7 @@ func TestExportCliCleanMixedPrefixes(t *testing.T) {
 	if err := os.MkdirAll(cliDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, n := range []string{"zen-old", "zn-new", "keep.txt"} {
+	for _, n := range []string{"zen-browser", "zn-browser", "zen-myscript", "keep.txt"} {
 		if err := os.WriteFile(filepath.Join(cliDir, n), []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -581,10 +583,149 @@ func TestExportCliCleanMixedPrefixes(t *testing.T) {
 	for _, e := range leftover {
 		names[e.Name()] = true
 	}
-	if names["zen-old"] || names["zn-new"] {
+	if names["zen-browser"] || names["zn-browser"] {
 		t.Errorf("wrapper artifacts not cleaned: %v", names)
+	}
+	if !names["zen-myscript"] {
+		t.Error("user file sharing the wrapper prefix should be left untouched")
 	}
 	if !names["keep.txt"] {
 		t.Error("non-wrapper file should be left untouched")
+	}
+}
+
+func TestSymlinkTargetsInto(t *testing.T) {
+	cliDir := filepath.Join(t.TempDir(), "cli")
+	cases := []struct {
+		name   string
+		target string
+		want   bool
+	}{
+		{"absolute inside", filepath.Join(cliDir, "zen-browser"), true},
+		{"nested inside", filepath.Join(cliDir, "sub", "zen-browser"), true},
+		{"exact dir", cliDir, false},
+		{"sibling prefix dir", cliDir + "-other", false},
+		{"relative target", "cli/zen-browser", false},
+		{"unrelated absolute", "/usr/bin/env", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := symlinkTargetsInto(tc.target, cliDir); got != tc.want {
+				t.Errorf("symlinkTargetsInto(%q, %q) = %v, want %v", tc.target, cliDir, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRemoveStaleBinLinksLeavesUserArtifacts(t *testing.T) {
+	cliDir := t.TempDir()
+	binDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(cliDir, "zen-browser"), []byte("#!/usr/bin/env bash\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cliTarget := filepath.Join(cliDir, "zen-browser")
+
+	// User's own regular file sharing the wrapper prefix.
+	if err := os.WriteFile(filepath.Join(binDir, "zen-myscript"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// User's own symlink pointing somewhere unrelated.
+	if err := os.Symlink("/usr/bin/env", filepath.Join(binDir, "zen-helper")); err != nil {
+		t.Fatal(err)
+	}
+	// Stale wrapper link this generator created for a now-removed tool.
+	if err := os.Symlink(cliTarget, filepath.Join(binDir, "zen-removed")); err != nil {
+		t.Fatal(err)
+	}
+	// Current wrapper link, present in keep.
+	if err := os.Symlink(cliTarget, filepath.Join(binDir, "zen-current")); err != nil {
+		t.Fatal(err)
+	}
+
+	removed := removeStaleBinLinks(binDir, cliDir, map[string]bool{"zen-current": true})
+	if removed != 1 {
+		t.Errorf("removed = %d, want 1", removed)
+	}
+	for _, keep := range []string{"zen-myscript", "zen-helper", "zen-current"} {
+		if _, err := os.Lstat(filepath.Join(binDir, keep)); err != nil {
+			t.Errorf("user artifact %s should survive, err=%v", keep, err)
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(binDir, "zen-removed")); !os.IsNotExist(err) {
+		t.Errorf("stale wrapper link should be removed, err=%v", err)
+	}
+}
+
+func TestExportCLIKeepsUserBinArtifacts(t *testing.T) {
+	withCliConfig(t, "zen-", false)
+	chdirTemp(t)
+	binDir := filepath.Join(os.Getenv("HOME"), ".local", "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(binDir, "zen-myscript"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/usr/bin/env", filepath.Join(binDir, "zen-helper")); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	ExportCLI(&out, 2999, 3001)
+	for _, keep := range []string{"zen-myscript", "zen-helper"} {
+		if _, err := os.Lstat(filepath.Join(binDir, keep)); err != nil {
+			t.Errorf("user artifact %s deleted by export: %v", keep, err)
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(binDir, "zen-browser")); err != nil {
+		t.Errorf("generated symlink missing: %v", err)
+	}
+
+	ExportCliClean(&out)
+	for _, keep := range []string{"zen-myscript", "zen-helper"} {
+		if _, err := os.Lstat(filepath.Join(binDir, keep)); err != nil {
+			t.Errorf("user artifact %s deleted by clean: %v", keep, err)
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(binDir, "zen-browser")); !os.IsNotExist(err) {
+		t.Errorf("generated symlink should be cleaned, err=%v", err)
+	}
+}
+
+func TestExportCLIWithCustomPrefixRemovesStaleLinks(t *testing.T) {
+	withCliConfig(t, "zn-", false)
+	work := chdirTemp(t)
+	cliDir := filepath.Join(work, "cli")
+	binDir := filepath.Join(os.Getenv("HOME"), ".local", "bin")
+	if err := os.MkdirAll(cliDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	absCli, err := filepath.Abs(cliDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a previous export under the legacy zen- prefix: wrapper in cli/
+	// plus the symlink this generator created for it in ~/.local/bin.
+	if err := os.WriteFile(filepath.Join(cliDir, "zen-shell"), []byte("#!/usr/bin/env bash\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(absCli, "zen-shell"), filepath.Join(binDir, "zen-shell")); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	ExportCLI(&out, 2999, 3001)
+
+	if _, err := os.Lstat(filepath.Join(cliDir, "zen-shell")); !os.IsNotExist(err) {
+		t.Errorf("legacy cli/ wrapper should be cleaned on prefix change, err=%v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(binDir, "zen-shell")); !os.IsNotExist(err) {
+		t.Errorf("stale legacy symlink should be cleaned on prefix change, err=%v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(binDir, "zn-browser")); err != nil {
+		t.Errorf("new-prefix symlink missing: %v", err)
 	}
 }

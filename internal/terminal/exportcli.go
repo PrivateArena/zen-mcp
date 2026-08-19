@@ -76,9 +76,11 @@ func ExportCLIWithShort(w io.Writer, cliPort, mcpPort int, short bool) {
 		generated[prefix+t.name] = true
 	}
 
-	// Remove stale wrappers no longer generated, honoring the active and
-	// legacy ("zen-") prefixes so a prefix change is self-cleaning.
-	removeStaleZen(cliDir, generated, prefix, mcpcfg.DefaultCliModePrefix)
+	// Remove stale wrappers from cli/ whose exact name matches a wrapper this
+	// generator produces under the active or legacy ("zen-") prefix, so a
+	// prefix change is self-cleaning. Only exact wrapper names are ever removed
+	// — user files that merely share the prefix are never touched.
+	removeExactStale(cliDir, wrapperNameSet(toolList, prefix, mcpcfg.DefaultCliModePrefix), generated)
 
 	// Symlink into ~/.local/bin so the tools are reachable on PATH. The link
 	// target must be absolute, otherwise links break when binDir is remote.
@@ -93,7 +95,9 @@ func ExportCLIWithShort(w io.Writer, cliPort, mcpPort int, short bool) {
 					symlinked = binDir
 				}
 			}
-			removeStaleZen(binDir, generated, prefix, mcpcfg.DefaultCliModePrefix)
+			// Only ever remove symlinks we created (targets inside cli/); never
+			// prefix-match against arbitrary user files in the bin dir.
+			removeStaleBinLinks(binDir, absCliDir, generated)
 		}
 	}
 
@@ -106,45 +110,46 @@ func ExportCLIWithShort(w io.Writer, cliPort, mcpPort int, short bool) {
 	}
 }
 
-// ExportCliClean removes generated CLI wrappers and their ~/.local/bin links,
-// matching both the configured climode_prefix and the legacy "zen-" prefix so
-// artifacts from a prefix change are also removed.
+// ExportCliClean removes generated CLI wrappers and their ~/.local/bin links.
+// Only exact wrapper names (active or legacy prefix + registered tool) are
+// removed from cli/, and only symlinks this generator created are removed from
+// ~/.local/bin — user files sharing the wrapper prefix are never touched.
 func ExportCliClean(w io.Writer) {
 	prefix := mcpcfg.CliModePrefixOrDefault()
 	legacy := mcpcfg.DefaultCliModePrefix
 	removed := 0
 	cliDir := filepath.Join(".", "cli")
-	entries, _ := os.ReadDir(cliDir)
-	for _, entry := range entries {
-		if hasWrapperPrefix(entry.Name(), prefix, legacy) {
-			if os.Remove(filepath.Join(cliDir, entry.Name())) == nil {
-				removed++
-			}
-		}
+	absCliDir, err := filepath.Abs(cliDir)
+	if err != nil {
+		absCliDir = cliDir
 	}
+	candidates := wrapperNameSet(collectTools(), prefix, legacy)
+	removed += removeExactStale(cliDir, candidates, nil)
 	if binDir := localBinDir(); binDir != "" {
-		if entries, err := os.ReadDir(binDir); err == nil {
-			for _, entry := range entries {
-				if hasWrapperPrefix(entry.Name(), prefix, legacy) {
-					if os.Remove(filepath.Join(binDir, entry.Name())) == nil {
-						removed++
-					}
-				}
-			}
-		}
+		// Only symlinks we created in ~/.local/bin (targets inside cli/) are
+		// removed; a user's own zen-* files there are never touched.
+		removed += removeStaleBinLinks(binDir, absCliDir, nil)
 	}
 	fmt.Fprintf(w, "Cleaned %d wrapper artifacts from cli/ and %s\n", removed, localBinDirLabel())
 }
 
-// hasWrapperPrefix reports whether name starts with any of the given wrapper
-// prefixes.
-func hasWrapperPrefix(name string, prefixes ...string) bool {
-	for _, p := range prefixes {
-		if p != "" && strings.HasPrefix(name, p) {
-			return true
+// wrapperNameSet returns the exact wrapper file names (prefix + tool name) this
+// generator would produce for every known tool under each of the given
+// prefixes. Empty prefixes and empty tool names are skipped.
+func wrapperNameSet(tools []cliTool, prefixes ...string) map[string]bool {
+	set := map[string]bool{}
+	for _, t := range tools {
+		if t.name == "" {
+			continue
+		}
+		for _, p := range prefixes {
+			if p == "" {
+				continue
+			}
+			set[p+t.name] = true
 		}
 	}
-	return false
+	return set
 }
 
 // collectTools resolves the tool set from the registry, falling back to the
@@ -394,15 +399,6 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	// Header comment block.
 	ln("#!/usr/bin/env bash")
 	ln("# " + t.name + " — generated wrapper for MCP tool: " + t.name)
-	//ln("# " + desc)
-	//ln("# Parameters (from JSON Schema):")
-	//for _, p := range params {
-	//	req, vals := paramSuffix(p)
-	//	if p.desc != "" || req != "" || vals != "" {
-	//		ln("#   " + flagLabel(p, aliases) + req + "  " + oneLine(p.desc) + vals)
-	//	}
-	//}
-	//ln("# Server: " + url)
 	ln("# Generated: " + time.Now().Format(time.RFC3339))
 	ln("")
 
@@ -624,22 +620,79 @@ func writeAtomic(dest, content string) error {
 	return os.Rename(tmp, dest)
 }
 
-// removeStaleZen deletes wrapper artifacts in dir whose name starts with one
-// of prefixes and that is not in keep.
-func removeStaleZen(dir string, keep map[string]bool, prefixes ...string) {
+// removeExactStale deletes files in dir whose exact name is a candidate
+// wrapper name and that is not in keep. No prefix matching is performed, so
+// unrelated files are never removed. It returns the number of files removed.
+func removeExactStale(dir string, candidates, keep map[string]bool) int {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return
+		return 0
 	}
+	removed := 0
+	for _, entry := range entries {
+		name := entry.Name()
+		if keep[name] || !candidates[name] {
+			continue
+		}
+		if os.Remove(filepath.Join(dir, name)) == nil {
+			removed++
+		}
+	}
+	return removed
+}
+
+// removeStaleBinLinks deletes wrapper symlinks in binDir whose target resolves
+// inside cliDir (i.e. links this generator created) and whose name is not in
+// keep. Only symlinks pointing into the generator's own cli/ folder are touched
+// — unrelated user files and symlinks in the bin dir are never removed, even
+// when their name happens to start with the wrapper prefix. It returns the
+// number of links removed.
+func removeStaleBinLinks(binDir, cliDir string, keep map[string]bool) int {
+	entries, err := os.ReadDir(binDir)
+	if err != nil {
+		return 0
+	}
+	removed := 0
 	for _, entry := range entries {
 		name := entry.Name()
 		if keep[name] {
 			continue
 		}
-		if hasWrapperPrefix(name, prefixes...) {
-			_ = os.Remove(filepath.Join(dir, name))
+		path := filepath.Join(binDir, name)
+		info, err := os.Lstat(path)
+		if err != nil {
+			continue
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			continue
+		}
+		target, err := os.Readlink(path)
+		if err != nil {
+			continue
+		}
+		if !symlinkTargetsInto(target, cliDir) {
+			continue
+		}
+		if os.Remove(path) == nil {
+			removed++
 		}
 	}
+	return removed
+}
+
+// symlinkTargetsInto reports whether an absolute symlink target resolves to a
+// path strictly inside dir. Relative targets and targets in sibling directories
+// (e.g. dir-other) are never considered "ours", so user-managed links are left
+// alone.
+func symlinkTargetsInto(target, dir string) bool {
+	if !filepath.IsAbs(target) {
+		return false
+	}
+	rel, err := filepath.Rel(dir, target)
+	if err != nil {
+		return false
+	}
+	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // localBinDir returns ~/.local/bin, or "" when the home dir is unavailable.
