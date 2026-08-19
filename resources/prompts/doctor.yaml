@@ -84,5 +84,4 @@
     This save is **non-negotiable** — it ensures any future agent or compacted session can resume without losing context. Do NOT summarize the context field; write it thoroughly.
   enabledSkills:
     - codebase-research
-    - chat-research
   suggestSkills: true
