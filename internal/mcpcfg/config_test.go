@@ -381,6 +381,36 @@ func TestPoolingConfigFullOverride(t *testing.T) {
 	}
 }
 
+func TestCodegraphWatcherConfigMerge(t *testing.T) {
+	withConfig(t, `{"codegraph_watcher":true,"codegraph_watcher_auto_lint":true,"codegraph_watcher_debounce_ms":5000}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	c := Get()
+	if !c.CodegraphWatcher {
+		t.Error("codegraph_watcher should be true")
+	}
+	if !c.CodegraphWatcherAutoLint {
+		t.Error("codegraph_watcher_auto_lint should be true")
+	}
+	if c.CodegraphWatcherDebounceMs != 5000 {
+		t.Errorf("codegraph_watcher_debounce_ms = %d, want 5000", c.CodegraphWatcherDebounceMs)
+	}
+}
+
+func TestCodegraphWatcherAutoLintDefaultsFalse(t *testing.T) {
+	withConfig(t, `{}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c := Get(); c.CodegraphWatcher {
+		t.Error("codegraph_watcher should default to false")
+	}
+	if c := Get(); c.CodegraphWatcherAutoLint {
+		t.Error("codegraph_watcher_auto_lint should default to false")
+	}
+}
+
 func TestCliModeConfigMerge(t *testing.T) {
 	withConfig(t, `{"climode_prefix":"zn-","climode_short":true}`)
 	if err := Load(); err != nil {

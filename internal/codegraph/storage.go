@@ -19,7 +19,10 @@ type Storage struct {
 
 // NewStorage opens or creates the codegraph database.
 func NewStorage(dbPath string) (*Storage, error) {
-	db, err := sql.Open("sqlite", dbPath)
+	// busy_timeout makes a write under concurrent access (e.g. a watcher
+	// re-index racing a manual index action on the same graph) wait for the
+	// lock instead of failing with SQLITE_BUSY. Mirrors telemetry/ftsindex.
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
 	}

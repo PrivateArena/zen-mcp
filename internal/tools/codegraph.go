@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -103,17 +102,7 @@ func getSessionByWorkspace(workspace string) (*layeredGraphSession, error) {
 		ClearSessionGraph(session)
 	}
 
-	watcherEnabled := false
-
-	configPath := filepath.Join(mcpcfg.ProjectRoot, "config.json")
-	if data, err := os.ReadFile(configPath); err == nil {
-		var cfg map[string]any
-		if json.Unmarshal(data, &cfg) == nil {
-			if v, ok := cfg["codegraph_watcher"].(bool); ok {
-				watcherEnabled = v
-			}
-		}
-	}
+	watcherCfg := readWatcherConfig()
 
 	rootEntries := discoverGraphRoots(root)
 	entries := make([]layeredGraphEntry, 0, len(rootEntries))
@@ -147,14 +136,13 @@ func getSessionByWorkspace(workspace string) (*layeredGraphSession, error) {
 	}
 	graphRegistry.Store(workspace, session)
 
-	if watcherEnabled && len(entries) > 0 {
+	if watcherCfg.enabled && len(entries) > 0 {
 		rootEntry := entries[0]
-		dbPath := filepath.Join(rootEntry.root, ".zenmcp", "codegraph.db")
-		if _, err := os.Stat(filepath.Join(rootEntry.root, ".git")); err == nil {
-			if _, err := os.Stat(dbPath); err == nil {
-				// Watcher start deferred until Go engine exposes it
-			}
-		}
+		// Starts a debounced fsnotify watcher that incrementally re-indexes on
+		// file changes. It only activates when the folder is codegraph
+		// compatible (codegraph.db present AND registered in map.json), so
+		// root/system trees with thousands of files are never watched.
+		startCodegraphWatcher(workspace, rootEntry.root, watcherCfg)
 	}
 
 	return session, nil

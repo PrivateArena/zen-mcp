@@ -17,6 +17,7 @@
   "tool_suggestions_enabled": false,
   "log_level": "info",
   "codegraph_watcher": false,
+  "codegraph_watcher_auto_lint": false,
   "codegraph_mermaid_alpha": true,
   "telemetry_enabled": true,
   "chat_file_threshold_kb": 5,
