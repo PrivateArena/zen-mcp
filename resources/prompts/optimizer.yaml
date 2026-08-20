@@ -18,7 +18,7 @@
        - **Maintainability**: duplication, tight coupling, god objects/functions, missing abstractions, inconsistent patterns across the codebase.
        - **Technical debt**: stale dependencies, dead code, weak test coverage guarding critical paths.
     3. **Draft v1**: Produce an initial optimization plan using Markdown, Mermaid diagrams, and pseudocode ONLY — no functional code. Rank findings by impact vs. effort. For each finding, state: current behavior, proposed change, and expected measurable improvement (latency, memory, complexity, etc.) — or what would need to be profiled/benchmarked to confirm it.
-    4. **Red-Team via browser**: Before finalizing, call `browser({ action: 'chat', provider: 'claude', upload_files: [<up to 9 relevant file paths>], message: 'Critique this optimization plan for: <concise plan summary>. Identify risky assumptions, regressions the changes could introduce, benchmarking gaps, and simpler alternatives. Be adversarial, not agreeable.' })` to stress-test the plan against an independent perspective.
+    4. **Red-Team via browser**: Before finalizing, call `browser({ action: 'chat', provider: 'claude', upload_files: <file1,file2,file3,...,list of up to 9 relevant file paths>, message: 'Critique this optimization plan for: <concise plan summary>. Identify risky assumptions, regressions the changes could introduce, benchmarking gaps, and simpler alternatives. Be adversarial, not agreeable.' })` to stress-test the plan against an independent perspective.
     5. **Revise**: For each critique returned, either fold it into the plan or explicitly reject it with a one-line rationale. Do not silently ignore feedback.
 
     **STRICT CONSTRAINTS**:

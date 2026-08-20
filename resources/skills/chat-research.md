@@ -45,10 +45,10 @@ Gather the minimal set:
 - **Avoid**: bulk uploads — needing more than ~9 files is a sign the question isn't scoped yet, not a sign the task is big.
 
 ### 3. Delegate to Sub-Agent
-Use `browser({ action: 'chat', provider: 'claude', upload_files: [<up to 9 relevant file paths>], message: <constrained question, per the quality gate> })`.
+Use `browser({ action: 'chat', provider: 'claude', upload_files: <file1,file2,file3,...,up to 9 relevant file paths>, message: <constrained question, per the quality gate> })`.
 
 Multiple messages can be sent to the sub-agent in a single call if needed:
-`browser({action: 'chat',provider: ['claude'],message: ["<constrained question 1, per the quality gate>", "<constrained question 2>"],upload_files: ["src/index.ts", "src/daemon/server.ts", "PROJECT_OVERVIEW.md"]})`
+`browser({action: 'chat',provider: ['claude'],message: ["<constrained question 1, per the quality gate>", "<constrained question 2>"],upload_files: <file1,file2,file3,...,up to 9 relevant file paths>})`
 
 
 ### 4. Synthesize Result

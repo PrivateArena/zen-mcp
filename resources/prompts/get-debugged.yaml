@@ -14,7 +14,7 @@
        - Search the codebase (via codegraph or grep) for related imports, components, or dependent files that are relevant to this issue.
        - Gather all relevant file paths into a single list. **Do not exceed 10 files** to manage token limits effectively.
     2. **Upload & Consult Web Agent**:
-       - Call `browser({ action: 'chat', provider: 'claude', upload_files: [<list of up to 10 absolute file paths>], message: 'Identify the bug, explain the root cause, and propose a minimal, concrete code change to resolve this issue: <describe issue summary>' })`.
+       - Call `browser({ action: 'chat', provider: 'claude', upload_files: <file1,file2,file3,...,list of up to 10 absolute file paths>, message: 'Identify the bug, explain the root cause, and propose a minimal, concrete code change to resolve this issue: <describe issue summary>' })`.
     3. **Propose Solutions**: Present the web agent's findings and format the exact code fixes for the user.
   enabledSkills:
     - codebase-research

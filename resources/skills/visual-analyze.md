@@ -13,11 +13,11 @@ This skill provides a standardized workflow for performing vision-based analysis
 
 ### A. Viewport Screenshot Analysis
 When you need to analyze what the user is currently looking at in the browser:
-Use `browser({ action: 'chat', provider: 'gemini', upload_files: [<up to 9 relevant file paths>], message: 'Describe the layout and key elements of this page.', take_screenshot: true })`.
+Use `browser({ action: 'chat', provider: 'gemini', upload_files: <file1,file2,file3,...,up to 9 relevant file paths>, message: 'Describe the layout and key elements of this page.', take_screenshot: true })`.
 
 ### B. Local Image Analysis
 When the user provides a path to a local image or a specific screenshot file:
-Use `browser({ action: 'chat', provider: 'gemini', upload_files: [<up to 9 relevant file paths>], message: 'Analyze the contents of this image: <your specific question>', upload_files: ['/path/to/image.png'] })`.
+Use `browser({ action: 'chat', provider: 'gemini', upload_files: <file1,file2,file3,...,up to 9 relevant file paths>, message: 'Analyze the contents of this image: <your specific question>', upload_files: </path/to/image.png> })`.
 
 ### C. Application UI screenshots
 Use this when you need to analyze the UI of an application running on the desktop, for example zen-midi.

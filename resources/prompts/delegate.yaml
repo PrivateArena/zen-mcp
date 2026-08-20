@@ -17,6 +17,6 @@
 
     Delegate in ONE call:
 
-    `browser({ action: 'chat', provider: 'claude', upload_files: [<up to 9 relevant file paths>], message: <the constrained ask produced by the quality gate> })`.
+    `browser({ action: 'chat', provider: 'claude', upload_files: [<file1,file2,file3...,up to 9 relevant file paths>], message: <the constrained ask produced by the quality gate> })`.
 
     Use the returned summary to answer. Only read a file yourself if no browser tool exists, or the gap is trivial (e.g. confirming a single import line) — not as a substitute for scoping the ask properly.

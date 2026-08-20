@@ -1,7 +1,21 @@
 {
+  "/media/jang/home/Deve/opencode-configs": {
+    "lastVisited": "2026-08-20T05:54:26.647Z"
+  },
+  "/media/jang/home/Deve/zen-contact": {
+    "description": "ZenContact is Kontakt, Heptewerk... sample libraries extractor and reconstructor.",
+    "lastVisited": "2026-08-19T15:30:42.334Z",
+    "scopes": {
+      "reconstruct": [
+        "pkg/reconstruct",
+        "KONTAKT_RECONSTRUCT_SKILL.md",
+        "reconstruct_profiles"
+      ]
+    }
+  },
   "/media/jang/home/Deve/zen-mcp": {
     "description": "ZenMCP is multi-purpose MCP server designed for ZenECO system.",
-    "lastVisited": "2026-08-17T11:56:08.715Z",
+    "lastVisited": "2026-08-19T15:12:13.822Z",
     "scopes": {
       "browser": [
         "cli/zen-browser",
@@ -46,15 +60,61 @@
       ]
     }
   },
+  "/media/jang/home/Deve/zen-dragon": {
+    "lastVisited": "2026-08-19T11:35:18.581Z"
+  },
+  "/media/jang/home/Deve/zen-board": {
+    "description": "ZenBoard is whiteboard video generator.",
+    "lastVisited": "2026-08-18T11:29:50.013Z"
+  },
+  "/media/jang/home/Deve/zenmidi": {
+    "description": "ZenDAW is Digital Audio Workstation using sfizz-CGO as core with MIDIText as music programming language.",
+    "lastVisited": "2026-08-17T21:20:47.301Z",
+    "scopes": {
+      "clipeditor": [
+        "cmd/daw/web/src/features/ClipEditor",
+        "cmd/daw/web/src/features/PianoRoll",
+        "cmd/daw/web/src/store/daw/clipActions.ts"
+      ],
+      "daw": [
+        "pkg/daw",
+        "pkg/dsp",
+        "pkg/sfizz",
+        "cmd/daw/web/src"
+      ],
+      "miditexteditor": [
+        "cmd/daw/web/src/shared/components/MIDITextEditor",
+        "cmd/daw/web/src/shared/components/ContextMenu"
+      ],
+      "musictheory": [
+        "cmd/musictheory",
+        "zenmidi/pkg/abcconv",
+        "zenmidi/pkg/abcgen",
+        "zenmidi/pkg/analysis",
+        "zenmidi/pkg/miditext",
+        "zenmidi/pkg/remix",
+        "zenmidi/pkg/remix/rhythm",
+        "zenmidi/pkg/sfzscan",
+        "zenmidi/pkg/transcribe",
+        "zenmidi/pkg/transcript"
+      ],
+      "sfizz": [
+        "pkg/sfizz"
+      ],
+      "visualizer": [
+        "main.go",
+        "pkg/api",
+        "pkg/render",
+        "pkg/score",
+        "pkg/tui"
+      ]
+    }
+  },
   "/media/jang/home/Deve/zen-mcp/": {
     "lastVisited": "2026-08-17T11:09:56.117Z"
   },
   "/media/jang/home/Deve/sfizzzmd/": {
     "lastVisited": "2026-08-17T11:08:57.511Z"
-  },
-  "/media/jang/home/Deve/zen-board": {
-    "description": "ZenBoard is whiteboard video generator.",
-    "lastVisited": "2026-08-17T06:35:33.854Z"
   },
   "/media/jang/home/Deve/zen-cap": {
     "description": "ZenCap is ShareX but smaller, faster, better and run on Linux.",
@@ -88,17 +148,6 @@
   "/media/jang/home/Deve/zen-ovpn": {
     "description": "OpenVPN tunnel without polluting system IP.",
     "lastVisited": "2026-08-12T08:11:10.553Z"
-  },
-  "/media/jang/home/Deve/zen-contact": {
-    "description": "ZenContact is Kontakt, Heptewerk... sample libraries extractor and reconstructor.",
-    "lastVisited": "2026-08-10T13:53:25.781Z",
-    "scopes": {
-      "reconstruct": [
-        "pkg/reconstruct",
-        "KONTAKT_RECONSTRUCT_SKILL.md",
-        "reconstruct_profiles"
-      ]
-    }
   },
   "/media/jang/home/Deve/worldproxy/zendes/zen-webserver": {
     "description": "ZenServer is multi-purpose webserver that hosts the ZenECO system (ZenNote whiteboard note taking app, ZenRAG) and can multiply itself.",
@@ -186,9 +235,6 @@
     "description": "ZenCycle is multi-account manager and switcher ultilising symlink.",
     "lastVisited": "2026-07-30T13:59:11.372Z"
   },
-  "/media/jang/home/Deve/zen-dragon": {
-    "lastVisited": "2026-08-01T13:01:15.716Z"
-  },
   "/media/jang/home/Deve/zen-dragon/": {
     "lastVisited": "2026-08-01T11:57:18.187Z"
   },
@@ -264,49 +310,6 @@
   },
   "/media/jang/home/Deve/zen-typo": {
     "lastVisited": "2026-07-05T22:37:31.561Z"
-  },
-  "/media/jang/home/Deve/zenmidi": {
-    "description": "ZenDAW is Digital Audio Workstation using sfizz-CGO as core with MIDIText as music programming language.",
-    "lastVisited": "2026-08-03T10:30:40.874Z",
-    "scopes": {
-      "clipeditor": [
-        "cmd/daw/web/src/features/ClipEditor",
-        "cmd/daw/web/src/features/PianoRoll",
-        "cmd/daw/web/src/store/daw/clipActions.ts"
-      ],
-      "daw": [
-        "pkg/daw",
-        "pkg/dsp",
-        "pkg/sfizz",
-        "cmd/daw/web/src"
-      ],
-      "miditexteditor": [
-        "cmd/daw/web/src/shared/components/MIDITextEditor",
-        "cmd/daw/web/src/shared/components/ContextMenu"
-      ],
-      "musictheory": [
-        "cmd/musictheory",
-        "zenmidi/pkg/abcconv",
-        "zenmidi/pkg/abcgen",
-        "zenmidi/pkg/analysis",
-        "zenmidi/pkg/miditext",
-        "zenmidi/pkg/remix",
-        "zenmidi/pkg/remix/rhythm",
-        "zenmidi/pkg/sfzscan",
-        "zenmidi/pkg/transcribe",
-        "zenmidi/pkg/transcript"
-      ],
-      "sfizz": [
-        "pkg/sfizz"
-      ],
-      "visualizer": [
-        "main.go",
-        "pkg/api",
-        "pkg/render",
-        "pkg/score",
-        "pkg/tui"
-      ]
-    }
   },
   "/media/jang/home/PortableApp/betterbird/addons/thunderbird-mcp-main": {
     "lastVisited": "2026-07-25T12:15:07.163Z"

@@ -13,7 +13,7 @@
 
     **WORKFLOW**:
     1. **Initial Decompose**: Break it into candidate subtasks (planning, implementation, debugging, research, review, etc.).
-    2. **Brainstorm via browser**: Before committing to a delegation strategy, call `browser({ action: 'brainstorm', upload_files: [<up to 9 relevant file paths>], message: 'Given this task. Propose 2-3 distinct ways to approach or decompose this, and the risks/edge cases each surfaces.' })` to surface alternative decompositions and blind spots you might miss alone.
+    2. **Brainstorm via browser**: Before committing to a delegation strategy, call `browser({ action: 'brainstorm', upload_files: <file1,file2,file3,...,up to 9 relevant file paths>, message: 'Given this task. Propose 2-3 distinct ways to approach or decompose this, and the risks/edge cases each surfaces.' })` to surface alternative decompositions and blind spots you might miss alone.
     3. **Select & Sequence**: Choose the strongest decomposition (or synthesize across several) and order subtasks by dependency.
     4. **Delegate**: Route each subtask strictly according to mode capability:
        - Architecture/design → `architect`
