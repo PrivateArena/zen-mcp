@@ -54,7 +54,7 @@
        - **Implementation Blueprint** (core of this deliverable — do not compress): one row per file touched — `Source file:lines | Target file | Action (create/modify) | Scope (full-port/stub) | Target signature (pseudocode) | Depends on | Acceptance criteria ("done when...")`
        - Failure modes / semantic mismatches and how each is mitigated, tied to the specific target file/function that guards against it
        - Key decisions with alternatives considered and rejection rationale
-       - Red-team critique summary from browser.chat, each point marked "folded in", "resolved via follow-up interview", or "rejected: <reason>"
+       - Red-team critique summary from `browser({ action: 'chat' })`, each point marked "folded in", "resolved via follow-up interview", or "rejected: <reason>"
        - Open questions (rare; each states why it couldn't be resolved)
 
     2. `PORT_PLACEHOLDERS.md` in the project root — the canonical, standalone registry of every `stub` component, so a later session can resume by reading this file alone (or by codegraph-searching the `PORT-TODO` tag) without opening `PORT_PLAN_*.md` or this conversation:

@@ -7,7 +7,7 @@ trigger: browser.chat
 
 # 🤖 Chat-Research Skill
 
-Leverages `browser.chat` to offload research, planning, and review reasoning to external sub-agents after identifying the exact files needed via `codebase-research`.
+Leverages `browser({ action: 'chat' })` to offload research, planning, and review reasoning to external sub-agents after identifying the exact files needed via `codebase-research`.
 
 Used by three different callers, each with a different "why":
 - **`delegate`** — open-ended understanding of a file/project (exploratory).
@@ -20,9 +20,9 @@ The Message-Quality Gate below is mandatory for all three. It's the one place th
 
 Run `codebase-research` first to identify the minimal set of target files. Then switch to this skill to delegate the heavy reasoning.
 
-## 🚦 Message-Quality Gate (mandatory before every browser.chat call)
+## 🚦 Message-Quality Gate (mandatory before every `browser({ action: 'chat' })` call)
 
-A vague message wastes the call and comes back with a vague, unusable answer. Before calling `browser.chat`, fill in these four fields concretely. If any field is blank, the task isn't scoped yet — go back to `codebase-research` (or your own draft findings) rather than sending a placeholder.
+A vague message wastes the call and comes back with a vague, unusable answer. Before calling `browser({ action: 'chat' })`, fill in these four fields concretely. If any field is blank, the task isn't scoped yet — go back to `codebase-research` (or your own draft findings) rather than sending a placeholder.
 
 1. **Context** (1–2 sentences) — what this project/module/draft does, in your own words, not the sub-agent's job to infer from scratch.
 2. **Specific question(s)** — numbered, each answerable with a fact, decision, or list.
@@ -60,4 +60,4 @@ The external agent returns analysis, design opinions, or review findings. Reconc
 - **Context Preservation**: The web agent has no local memory. Attach everything — files and any draft — needed to understand the question in a single call.
 - **Provider Selection**: Prefer `provider="claude"` for deep code review and architecture analysis.
 - **Scope Guard**: Never upload secrets, keys, or environment-specific config. If a target file is ambiguous, validate before uploading.
-- **Deterministic Integration**: Always verify browser.chat output against local code before acting on recommendations.
+- **Deterministic Integration**: Always verify `browser({ action: 'chat' })` output against local code before acting on recommendations.

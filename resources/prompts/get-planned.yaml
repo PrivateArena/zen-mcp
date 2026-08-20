@@ -30,7 +30,7 @@
     - Data flow and state management approach (with Mermaid diagram if non-trivial)
     - Failure modes and how each is handled or mitigated
     - Key decisions with alternatives considered and rejection rationale (per constraint 4)
-    - Red-team critique summary from browser.chat, with each point marked "folded in" or "rejected: <reason>"
+    - Red-team critique summary from `browser({ action: 'chat' })`, with each point marked "folded in" or "rejected: <reason>"
     - Open questions / things you weren't confident about (per constraint 3)
   enabledSkills:
     - codebase-research

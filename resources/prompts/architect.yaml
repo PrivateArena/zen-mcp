@@ -48,7 +48,7 @@
     - **Implementation Blueprint** (the core of this deliverable — do not compress this): a table or ordered list, one row per file touched, with columns: `File path | Action (create/modify) | Concrete signature or schema (pseudocode) | Depends on (which other steps) | Acceptance criteria ("done when...")`. This must be exhaustive enough that an agent could execute steps in order without opening this conversation for clarification.
     - Failure modes and how each is handled or mitigated (tie each to the specific file/function from the Implementation Blueprint that guards against it, not just a category)
     - Key decisions with alternatives considered and rejection rationale (per constraint 4)
-    - Red-team critique summary from browser.chat, with each point marked "folded in", "resolved via follow-up interview", or "rejected: <reason>"
+    - Red-team critique summary from `browser({ action: 'chat' })`, with each point marked "folded in", "resolved via follow-up interview", or "rejected: <reason>"
     - Open questions (per constraint 7 — should be rare, and each should state why it couldn't be resolved)
   enabledSkills:
     - codebase-research

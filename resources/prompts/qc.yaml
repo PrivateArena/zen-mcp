@@ -35,7 +35,7 @@
     - One-paragraph summary of what's being quality-checked
     - Findings grouped by category (duplication, boilerplate, spaghetti, dead code, naming/consistency, coupling, testability), each with how it's handled or mitigated
     - A short "debt inventory" table: issue → location(s) → estimated effort to fix → risk if left alone
-    - Red-team critique summary from browser.chat, with each point marked "folded in" or "rejected: <reason>"
+    - Red-team critique summary from `browser({ action: 'chat' })`, with each point marked "folded in" or "rejected: <reason>"
 
     **MANDATORY FINAL STEP — Save Session Memory**:
     Before closing this task, call `memory({ action: 'save', notes: <the markdown above>, title: <session title>, objective: <what we have achieved> })`.

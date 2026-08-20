@@ -37,7 +37,7 @@
     - Component/contract summary: the observable behaviors covered (one line each)
     - Test list grouped by behavior category (happy path / error modes / edge cases)
     - Mocking decisions: what was mocked and why it's a true external boundary
-    - Red-team critique summary from browser.chat, with each point marked "folded in" or "rejected: <reason>"
+    - Red-team critique summary from `browser({ action: 'chat' })`, with each point marked "folded in" or "rejected: <reason>"
     - Coverage gaps knowingly left open (e.g. behavior not testable without infra access), if any
   enabledSkills:
     - codebase-research

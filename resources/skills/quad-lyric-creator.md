@@ -54,7 +54,7 @@ Always include and translate metadata headers:
 - `[00:02.00]曲:Name` (Composer)
 
 ## 5. Tool Usage
-- Use `browser.search` or `browser.solve_challenge` to find high-quality professional translations if a "super good version" is requested.
+- Use `browser({ action: 'search' })` or `browser({ action: 'solve_challenge' })` to find high-quality professional translations if a "super good version" is requested.
 - For Pinyin, use internal knowledge or specialized libraries.
 
 ## 6. Verification

@@ -19,21 +19,21 @@
     1. **Read & Map (read-only)**: Use `codebase-research` (codegraph files > map > skeletons > related) to understand the existing system AND its blast radius — every caller and downstream consumer of what you're reviewing — before proposing anything. Don't read full file bodies unless a skeleton/signature genuinely isn't enough to judge the issue.
     2. **First-Pass Findings**: Draft an initial table: `Severity (Critical/Major/Minor/Nit) | Location (file:line) | Finding | Why it matters | Confidence`. Anything under 85% confidence is marked "uncertain," not asserted as fact.
     3. **Verify Where Possible**: For each Critical/Major finding that a test could confirm or refute (e.g. "this breaks on empty input," "this races under concurrent writes"), check whether an existing test already covers that path, or run one if a test tool is available this session. Mark each finding as **test-confirmed**, **reasoned-but-unverified**, or **untestable-in-session** — do not silently present a reasoned guess as a confirmed bug.
-    4. **Second Opinion via browser.chat**: Run this through `chat-research`'s Message-Quality Gate before sending — the message must reference your actual First-Pass Findings table and files, not a generic "review this for bugs" ask (that fails the gate; it would be equally valid for any review). Attach the findings table itself, not just the raw files, and ask the sub-agent to (a) agree/disagree/refine each listed finding with its own reasoning, and (b) surface anything missed, focused on correctness, security, performance, maintainability.
+    4. **Second Opinion via `browser({ action: 'chat' })`**: Run this through `chat-research`'s Message-Quality Gate before sending — the message must reference your actual First-Pass Findings table and files, not a generic "review this for bugs" ask (that fails the gate; it would be equally valid for any review). Attach the findings table itself, not just the raw files, and ask the sub-agent to (a) agree/disagree/refine each listed finding with its own reasoning, and (b) surface anything missed, focused on correctness, security, performance, maintainability.
     5. **Reconcile**: Merge both passes using a fixed taxonomy per finding — **Kept** (both agree, or you hold >85% confidence), **Refined** (sub-agent changed the severity or root cause — note what changed), **Added** (sub-agent caught something you missed), **Rejected** (either party's point, with a one-line rationale). Every point from either pass must land under one of these four labels — no silent drops.
     6. **Plan Output**: Use create plan tool to structure the reconciled findings as actionable tasks, ordered by severity.
 
     **STRICT CONSTRAINTS**:
     1. **READ ONLY**: DO NOT modify any files.
     2. **85% CONFIDENCE PROTOCOL**: Only mark a finding as certain if confidence exceeds 85%; otherwise flag it explicitly as uncertain rather than guessing intent.
-    3. **NO GENERIC SECOND-OPINION ASKS**: If the browser.chat message in step 4 doesn't name a specific finding, file:line, or claim from your own draft, it hasn't cleared the `chat-research` quality gate — rewrite it before sending.
+    3. **NO GENERIC SECOND-OPINION ASKS**: If the `browser({ action: 'chat' })` message in step 4 doesn't name a specific finding, file:line, or claim from your own draft, it hasn't cleared the `chat-research` quality gate — rewrite it before sending.
     4. **VERIFICATION HONESTY**: Never report a finding as "confirmed" if step 3 only reasoned about it without running or locating a test. State the verification status per constraint above, every time.
 
     **DELIVERABLE**:
     Write the full plan to `REVIEW_<short-slug-of-topic>.md` in the project root, containing:
     - One-paragraph summary of what's being reviewed and its blast radius
     - Reconciled findings table: `Severity | Location | Finding | Kept/Refined/Added/Rejected | Verification (test-confirmed/reasoned/untestable) | Recommendation`
-    - Red-team critique summary from browser.chat, with each point labeled per the step 5 taxonomy
+    - Red-team critique summary from `browser({ action: 'chat' })`, with each point labeled per the step 5 taxonomy
     - Open questions: points neither pass could resolve above 85% confidence, and why
 
     **MANDATORY FINAL STEP — Save Session Memory**:
