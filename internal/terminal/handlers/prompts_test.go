@@ -38,12 +38,13 @@ func writePromptDefs(t *testing.T, dir string, content string) {
 	}
 }
 
-func TestConvertPiPlaceholders(t *testing.T) {
+func TestConvertToPiTemplate(t *testing.T) {
 	cases := []struct {
-		name     string
-		template string
-		args     []prompts.PromptArgument
-		want     string
+		name          string
+		template      string
+		args          []prompts.PromptArgument
+		defaultPersona string
+		want          string
 	}{
 		{
 			name:     "singleArgBecomesPositional",
@@ -60,16 +61,41 @@ func TestConvertPiPlaceholders(t *testing.T) {
 			want: "in=$1 out=$2 patch=$3 in-again=$1",
 		},
 		{
-			name:     "unknownPlaceholderPreserved",
-			template: "You are {{PERSONA}}. Task: {{i}}",
+			name:     "placeholderAndLiteralDollarCoexist",
+			template: "Task: {{i}}; bash: echo $1 $0",
 			args:     []prompts.PromptArgument{{Name: "i"}},
-			want:     "You are {{PERSONA}}. Task: $1",
+			want:     "Task: $1; bash: echo " + piFakeDollar + "1 " + piFakeDollar + "0",
 		},
 		{
-			name:     "noArgsLeavesTemplateUntouched",
+			name:     "literalDollarArgsFaked",
+			template: "set -- $c; f=$1; l=$NF; case \"$f\" in *..* ) x=${f%%.*}; y=${f##*.}; esac",
+			args:     []prompts.PromptArgument{{Name: "i"}},
+			want:     "set -- " + piFakeDollar + "c; f=" + piFakeDollar + "1; l=" + piFakeDollar + "NF; case \"" + piFakeDollar + "f\" in *..* ) x=" + piFakeDollar + "{f%%.*}; y=" + piFakeDollar + "{f##*.}; esac",
+		},
+		{
+			name:     "dollarAtAndArgumentsFaked",
+			template: "all=$@ sum=$ARGUMENTS ${@:2} ${1:-7}",
+			args:     []prompts.PromptArgument{{Name: "i"}},
+			want:     "all=" + piFakeDollar + "@ sum=" + piFakeDollar + "ARGUMENTS " + piFakeDollar + "{@:2} " + piFakeDollar + "{1:-7}",
+		},
+		{
+			name:          "personaInlinedWhenDefaultExists",
+			template:      "You are Zen, {{PERSONA}}. Task: {{i}}",
+			args:          []prompts.PromptArgument{{Name: "i"}},
+			defaultPersona: "a meticulous reviewer",
+			want:          "You are Zen, a meticulous reviewer. Task: $1",
+		},
+		{
+			name:     "personaSkippedWhenNoDefault",
+			template: "{{PERSONA}} Task: {{i}}",
+			args:     []prompts.PromptArgument{{Name: "i"}},
+			want:     "{{PERSONA}} Task: $1",
+		},
+		{
+			name:     "noArgsStillFakesDollars",
 			template: "Raw {{i}} with awk $1 $2",
 			args:     nil,
-			want:     "Raw {{i}} with awk $1 $2",
+			want:     "Raw {{i}} with awk " + piFakeDollar + "1 " + piFakeDollar + "2",
 		},
 		{
 			name:     "unclosedPlaceholderPreserved",
@@ -92,10 +118,20 @@ func TestConvertPiPlaceholders(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := convertPiPlaceholders(tc.template, tc.args); got != tc.want {
-				t.Errorf("convertPiPlaceholders(%q) = %q, want %q", tc.template, got, tc.want)
+			got := convertToPiTemplate(tc.template, tc.args, tc.defaultPersona)
+			if got != tc.want {
+				t.Errorf("convertToPiTemplate(%q) = %q, want %q", tc.template, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestEscapePiDollar(t *testing.T) {
+	if got := escapePiDollar("echo $1 $@"); got != "echo "+piFakeDollar+"1 "+piFakeDollar+"@" {
+		t.Errorf("escapePiDollar = %q", got)
+	}
+	if got := escapePiDollar("no dollars"); got != "no dollars" {
+		t.Errorf("escapePiDollar(no dollars) = %q", got)
 	}
 }
 
@@ -116,6 +152,16 @@ const piTestDefs = `- name: pi-test-multi
   description: No argument prompt
   template: |-
     Just a fixed instruction.
+
+- name: pi-test-persona
+  description: Persona prompt
+  defaultPersona: a meticulous reviewer who never guesses
+  arguments:
+    - name: i
+      description: The subject
+      required: true
+  template: |-
+    You are Zen, {{PERSONA}}. Analyze {{i}}.
 `
 
 func TestGeneratePiPromptsWritesFiles(t *testing.T) {
@@ -127,6 +173,7 @@ func TestGeneratePiPromptsWritesFiles(t *testing.T) {
 	}
 
 	piDir := filepath.Join(dir, "resources", "prompts-pi")
+
 	multiPath := filepath.Join(piDir, "pi-test-multi.md")
 	data, err := os.ReadFile(multiPath)
 	if err != nil {
@@ -146,8 +193,11 @@ func TestGeneratePiPromptsWritesFiles(t *testing.T) {
 	if !strings.Contains(content, "Process $1 into $2.") {
 		t.Errorf("body must use $1/$2 positional args:\n%s", content)
 	}
-	if !strings.Contains(content, "awk '{print $1}' input") {
-		t.Errorf("pre-existing regex-like $1 text must be preserved:\n%s", content)
+	if strings.Contains(content, "awk '{print $1}'") {
+		t.Errorf("literal shell $1 must be faked to fullwidth dollar:\n%s", content)
+	}
+	if !strings.Contains(content, "awk '{print "+piFakeDollar+"1}'") {
+		t.Errorf("literal shell $1 must survive as "+piFakeDollar+"1:\n%s", content)
 	}
 
 	noargsPath := filepath.Join(piDir, "pi-test-noargs.md")
@@ -162,11 +212,23 @@ func TestGeneratePiPromptsWritesFiles(t *testing.T) {
 	if !strings.Contains(noargs, "Just a fixed instruction.") {
 		t.Errorf("no-argument template must be exported verbatim:\n%s", noargs)
 	}
+
+	personaPath := filepath.Join(piDir, "pi-test-persona.md")
+	data, err = os.ReadFile(personaPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", personaPath, err)
+	}
+	persona := string(data)
+	if strings.Contains(persona, "{{PERSONA}}") {
+		t.Errorf("{{PERSONA}} must be inlined with defaultPersona:\n%s", persona)
+	}
+	if !strings.Contains(persona, "You are Zen, a meticulous reviewer who never guesses. Analyze $1.") {
+		t.Errorf("persona must be substituted and {{i}} must become $1:\n%s", persona)
+	}
 }
 
 func TestGeneratePiPromptsMissingDirLogsError(t *testing.T) {
-	dir := setupPromptsTest(t)
-	_ = dir
+	setupPromptsTest(t)
 
 	var buf strings.Builder
 	oldOut := terminal.LogOut

@@ -290,52 +290,52 @@ uBO extends ABP filter syntax.
 
 -   [\_](#_-aka-noop) _(aka "noop")_
 -   [\*](#-aka-all-urls) _(aka "all URLs")_
--   [$1p](#1p) _([$first-party](#first-party))_
--   [$3p](#3p) _($third-party)_
--   [$all](#all) _(all network-based types + $popup + $document + $inline-font + $inline-script)_
--   [$badfilter](#badfilter)
--   [$css](#css) _($stylesheet)_
--   [$cname](#cname)
--   [$denyallow](#denyallow)
--   [$document](#document)
--   [$domain](#domain) _([$from](#from))_
--   [$elemhide](#elemhide-1) _($ehide)_
--   [$font](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
--   [$frame](#frame) _($subdocument)_
--   $genericblock Not supported
--   [$generichide](#generichide) _($ghide)_
--   [$header](#header)
--   [$image](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
--   [$important](#important)
--   [$inline-script](#inline-script)
--   [$inline-font](#inline-font)
--   [$ipaddress](#ipaddress)
--   [$match-case](#match-case)
--   [$media](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
--   [$method](#method)
--   [$object](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
--   [$other](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
--   [$permissions](#permissions)
--   [$ping](#ping)
--   [$popunder](#popunder)
--   [$popup](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
--   [$script](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
--   [$specifichide](#specifichide) _($shide)_
--   [$strict1p](#strict1p)
--   [$strict3p](#strict3p)
--   [$to](#to)
--   $webrtc `example.com##+js(nowebrtc)`
--   [$websocket](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
--   [$xhr](#xhr) _($xmlhttprequest)_
--   [$csp](#csp)
--   [$empty](#empty) _($redirect=empty)_
--   [$mp4](#mp4) _($redirect=noopmp4-1s)_
--   [$redirect](#redirect)
--   [$redirect-rule](#redirect-rule)
--   [$removeparam](#removeparam)
--   [$replace](#replace) (only from a trusted-source origin)
--   [$uritransform](#uritransform) (only from a trusted-source origin)
--   [$urlskip](#urlskip) (only from a trusted-source origin)
+-   [＄1p](#1p) _([＄first-party](#first-party))_
+-   [＄3p](#3p) _(＄third-party)_
+-   [＄all](#all) _(all network-based types + ＄popup + ＄document + ＄inline-font + ＄inline-script)_
+-   [＄badfilter](#badfilter)
+-   [＄css](#css) _(＄stylesheet)_
+-   [＄cname](#cname)
+-   [＄denyallow](#denyallow)
+-   [＄document](#document)
+-   [＄domain](#domain) _([＄from](#from))_
+-   [＄elemhide](#elemhide-1) _(＄ehide)_
+-   [＄font](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
+-   [＄frame](#frame) _(＄subdocument)_
+-   ＄genericblock Not supported
+-   [＄generichide](#generichide) _(＄ghide)_
+-   [＄header](#header)
+-   [＄image](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
+-   [＄important](#important)
+-   [＄inline-script](#inline-script)
+-   [＄inline-font](#inline-font)
+-   [＄ipaddress](#ipaddress)
+-   [＄match-case](#match-case)
+-   [＄media](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
+-   [＄method](#method)
+-   [＄object](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
+-   [＄other](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
+-   [＄permissions](#permissions)
+-   [＄ping](#ping)
+-   [＄popunder](#popunder)
+-   [＄popup](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
+-   [＄script](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
+-   [＄specifichide](#specifichide) _(＄shide)_
+-   [＄strict1p](#strict1p)
+-   [＄strict3p](#strict3p)
+-   [＄to](#to)
+-   ＄webrtc `example.com##+js(nowebrtc)`
+-   [＄websocket](https://help.adblockplus.org/hc/en-us/articles/360062733293#options)
+-   [＄xhr](#xhr) _(＄xmlhttprequest)_
+-   [＄csp](#csp)
+-   [＄empty](#empty) _(＄redirect=empty)_
+-   [＄mp4](#mp4) _(＄redirect=noopmp4-1s)_
+-   [＄redirect](#redirect)
+-   [＄redirect-rule](#redirect-rule)
+-   [＄removeparam](#removeparam)
+-   [＄replace](#replace) (only from a trusted-source origin)
+-   [＄uritransform](#uritransform) (only from a trusted-source origin)
+-   [＄urlskip](#urlskip) (only from a trusted-source origin)
 
 ## Static network filtering
 
@@ -370,17 +370,17 @@ Related:
 
 Just a placeholder.
 
-[Implemented](https://github.com/uBlockOrigin/uBlock-issues/issues/1356#issuecomment-735280463) to resolve ambiguity in `$removeparam` filters with Regular Expression parameters detected as plain Regular Expression filters because of leading and trailing slashes:
+[Implemented](https://github.com/uBlockOrigin/uBlock-issues/issues/1356#issuecomment-735280463) to resolve ambiguity in `＄removeparam` filters with Regular Expression parameters detected as plain Regular Expression filters because of leading and trailing slashes:
 
 ```
-/ad-$removeparam\=/^foo=bar\\d$/,\_
+/ad-＄removeparam\=/^foo=bar\\d＄/,\_
 ```
 
 Starting from [1.50.1b11](https://github.com/gorhill/uBlock/commit/33b409dd5baee1fd48a02bac757dc599373f1aa5), you can use the `_` option to also resolve readability issues by supporting multiple instances of the `_` option in a single filter:
 
 ```
-||example.com$\_,removeparam\=/^ss\\\\$/,\_,image
-||example.com$replace=/bad/good/,\_\_\_,~third-party
+||example.com＄\_,removeparam\=/^ss\\\\＄/,\_,image
+||example.com＄replace=/bad/good/,\_\_\_,~third-party
 ```
 
 * * *
@@ -391,8 +391,8 @@ Starting from [1.50.1b11](https://github.com/gorhill/uBlock/commit/33b409dd5baee
 
 The wildcard character `*` gets used to apply a filter to **all** URLs. Not recommended unless you further narrow the filter using filter options. Examples:
 
--   `*$third-party`: block all 3rd-party network requests.
--   `*$script,domain=example.com`: block all network requests to fetch script resources at `example.com`.
+-   `*＄third-party`: block all 3rd-party network requests.
+-   `*＄script,domain=example.com`: block all network requests to fetch script resources at `example.com`.
 
 Usually, it is far more convenient to use [dynamic filtering rules](https://github.com/gorhill/ublock/wiki/Dynamic-filtering) instead of generic static filters.
 
@@ -438,9 +438,9 @@ Above will block all network requests, block all popups and prevent inline fonts
 
 Used to disable an existing filter. Occasionally disabling a blocking filter is better than creating an exception filter. Just for example's sake, let's say that a mind-absent filter list maintainer added the following filter to their list:
 
-Now all images from everywhere are blocked on your side. An exception filter (`@@*$image`) is not a good solution because it would also cause images that should get blocked legitimately to no longer be blocked. In such case, the `badfilter` option is best:
+Now all images from everywhere are blocked on your side. An exception filter (`@@*＄image`) is not a good solution because it would also cause images that should get blocked legitimately to no longer be blocked. In such case, the `badfilter` option is best:
 
-It will cause the `*$image` filter to get discarded. Appending the `badfilter` option to any instance of static network filter will prevent the loading of that filter.
+It will cause the `*＄image` filter to get discarded. Appending the `badfilter` option to any instance of static network filter will prevent the loading of that filter.
 
 After [1.19.0](https://github.com/gorhill/uBlock/commit/3f3a1543ea7fa51d700157a7f6bf0da08dd7a32b), any filter which fulfills ALL the following conditions:
 
@@ -500,7 +500,7 @@ The purpose of `denyallow` is to bring default-deny/allow-exceptionally ability 
 Example:
 
 ```
-\*$3p,script,denyallow\=x.com|y.com,domain\=a.com|b.com
+\*＄3p,script,denyallow\=x.com|y.com,domain\=a.com|b.com
 ```
 
 The above filter tells the network filtering engine when the context is `a.com` or `b.com`; it needs to block all 3rd-party scripts except those from `x.com` and `y.com`.
@@ -543,21 +543,21 @@ Use the `|` symbol to join multiple domains.
 
 Preceding the domain name by `~` will prevent the filter from being applied on this domain.
 
-Starting with [1.28.0](https://github.com/gorhill/uBlock/commit/3c67d2b89f8ac6d680e74af3e11b916889f7feed) support for [_"entity"_](#entity) matching has been added. You can now use `filter$domain=google.*` to apply a filter to pages on all top-level domains of the specified domain.
+Starting with [1.28.0](https://github.com/gorhill/uBlock/commit/3c67d2b89f8ac6d680e74af3e11b916889f7feed) support for [_"entity"_](#entity) matching has been added. You can now use `filter＄domain=google.*` to apply a filter to pages on all top-level domains of the specified domain.
 
 Example:
 
 ```
-||doubleclick.net^$script,domain\=auto-motor-und-sport.de
-||adnxs.com^$domain\=bz-berlin.de|metal-hammer.de|musikexpress.de|rollingstone.de|stylebook.de
-/adsign.$domain\=~adsign.no
+||doubleclick.net^＄script,domain\=auto-motor-und-sport.de
+||adnxs.com^＄domain\=bz-berlin.de|metal-hammer.de|musikexpress.de|rollingstone.de|stylebook.de
+/adsign.＄domain\=~adsign.no
 ```
 
-Starting with [1.46.1b17](https://github.com/gorhill/uBlock/commit/b1de8d3fe48755da58268ba86dccd5d76940b613) support for regex-based values has been added. Example of usage: `@@*$ghide,domain=/img[a-z]{3,5}\.buzz/`
+Starting with [1.46.1b17](https://github.com/gorhill/uBlock/commit/b1de8d3fe48755da58268ba86dccd5d76940b613) support for regex-based values has been added. Example of usage: `@@*＄ghide,domain=/img[a-z]{3,5}\.buzz/`
 
 Related discussion: [uBlockOrigin/uBlock-issues#2234](https://github.com/uBlockOrigin/uBlock-issues/discussions/2234)
 
-Regex-based domain values can be negated just like plain or entity-based values: `*$domain=~/regex.../`
+Regex-based domain values can be negated just like plain or entity-based values: `*＄domain=~/regex.../`
 
 See also: [`ipaddress`](#ipaddress) and [`to`](#to).
 
@@ -626,7 +626,7 @@ Ability to filter network **responses** according to whether a specific **respon
 For example:
 
 ```
-\*$script,header\=via:1.1 google
+\*＄script,header\=via:1.1 google
 ```
 
 The above filter blocks network requests of type `script`, which has a response HTTP header named `via`, which value matches the string `1.1 google` literally.
@@ -634,25 +634,25 @@ The above filter blocks network requests of type `script`, which has a response 
 The header value can get set to a regex literal by bracing the header value with the usual forward slashes, `/.../`:
 
 ```
-\*$script,header\=via:/1\\.1\\s+google/
+\*＄script,header\=via:/1\\.1\\s+google/
 ```
 
 The header value can be prepended with `~` to reverse the comparison:
 
 ```
-\*$script,header\=via:~1.1 google
+\*＄script,header\=via:~1.1 google
 ```
 
 The header value is optional and may be left out to test only for the presence of a specific header:
 
-Using generic exception filters to disable specific block `header=` filters, i.e. `@@*$script,header` will override the block `header=` filters given in the example above.
+Using generic exception filters to disable specific block `header=` filters, i.e. `@@*＄script,header` will override the block `header=` filters given in the example above.
 
 **Important:** Filter authors must use as many narrowing filter options as possible when using the `header=` option and only use the `header=` option when other filter options are insufficient.
 
 A potential use case is to block [Google Tag Manager scripts proxied as the first party in the subdomain of the websites](https://www.simoahava.com/analytics/server-side-tagging-google-tag-manager/):
 
 ```
-\*$1p,strict3p,script,header\=via:1.1 google
+\*＄1p,strict3p,script,header\=via:1.1 google
 ```
 
 Where connection:
@@ -665,13 +665,13 @@ Where connection:
 Block requests whose responses have the `Set-Cookie` header with any value:
 
 ```
-||example.com^$header\=set-cookie 
+||example.com^＄header\=set-cookie 
 ```
 
-Unblock requests whose responses have the `Set-Cookie` header with value matching the `foo, bar$` regular expression:
+Unblock requests whose responses have the `Set-Cookie` header with value matching the `foo, bar＄` regular expression:
 
 ```
-@@||example.com^$header\=set-cookie:/foo\\, bar\\$/ 
+@@||example.com^＄header\=set-cookie:/foo\\, bar\\＄/ 
 ```
 
 To remove response headers, see: [`Response header filtering`](#response-header-filtering).
@@ -686,7 +686,7 @@ The filter option `important` means to ignore all _exception_ filters (those pre
 
 **It applies only to network _block_ filters**
 
-Example: `||google-analytics.com^$important,third-party` will block all network requests to `google-analytics.com`, disregarding any existing network _exception_ filters.
+Example: `||google-analytics.com^＄important,third-party` will block all network requests to `google-analytics.com`, disregarding any existing network _exception_ filters.
 
 * * *
 
@@ -694,7 +694,7 @@ Example: `||google-analytics.com^$important,third-party` will block all network 
 
 [](#inline-script)
 
-Disable inline script tags in the main page via CSP: `||example.com^$inline-script`.
+Disable inline script tags in the main page via CSP: `||example.com^＄inline-script`.
 
 See also: [`csp`](#csp)
 
@@ -704,7 +704,7 @@ See also: [`csp`](#csp)
 
 [](#inline-font)
 
-Disable inline font tags in the main page via CSP: `||example.com^$inline-font`.
+Disable inline font tags in the main page via CSP: `||example.com^＄inline-font`.
 
 * * *
 
@@ -735,11 +735,11 @@ The value assigned to `ipaddress` can be ...
 Examples:
 
 ```
-\*$script,ipaddress=93.184.215.14
-||xyz/|$xhr,3p,method\=head,ipaddress=/^139\\.45\\.19\[5-7\]\\./
-\*$all,ipaddress=::,domain\=~0.0.0.0|~127.0.0.1|~\[::1\]|~\[::\]|~local|~localhost
-\*$ipaddress=93.184.\*
-\*$method\=post,ipaddress=lan
+\*＄script,ipaddress=93.184.215.14
+||xyz/|＄xhr,3p,method\=head,ipaddress=/^139\\.45\\.19\[5-7\]\\./
+\*＄all,ipaddress=::,domain\=~0.0.0.0|~127.0.0.1|~\[::1\]|~\[::\]|~local|~localhost
+\*＄ipaddress=93.184.\*
+\*＄method\=post,ipaddress=lan
 ```
 
 Cached resources do not have a valid IP address and thus can't be a match to `ipaddress` option.
@@ -749,8 +749,8 @@ The `ipaddress` value is not validated, so you can enter anything. Only one ipv4
 Exclusions `~` and `|` operators are not supported, e.g. `ipaddress=~192.168.1.1` or `ipaddress=192.168.1.1|192.168.8.4`, however as partial solution a regex can be used, examples:
 
 ```
-(...) ipaddress=/^(?!95\\.216\\.7\\.22|9\\.9\\.9\\.9).\*$/
-(...) ipaddress=/^((?!95\\.216\\.7\\.22|9\\.9\\.9\\.9).)\*$/
+(...) ipaddress=/^(?!95\\.216\\.7\\.22|9\\.9\\.9\\.9).\*＄/
+(...) ipaddress=/^((?!95\\.216\\.7\\.22|9\\.9\\.9\\.9).)\*＄/
 ```
 
 but the above regex solution is not perfect:
@@ -768,7 +768,7 @@ Lan/loopback values are supported (since [1.59.1b17](https://github.com/gorhill/
 
 Browser-provided `0.0.0.0` IP address will be ignored when DNS is proxied (since [1.59.1rc1](https://github.com/gorhill/uBlock/commit/6a042f152b513bbf5b3c8623ea3fbe2574ac0e24)), related issue: [Some rules may break websites that use socks proxy in Firefox](https://github.com/uBlockOrigin/uBlock-issues/issues/3379).
 
-Cname uncloaking code has been rewritten to account for the `ipaddress` option (since [1.59.1b19](https://github.com/gorhill/uBlock/commit/6acf97bf51)), related issue: [Add AdGuard's $network support on Firefox](https://github.com/uBlockOrigin/uBlock-issues/issues/2792). This commit makes the DNS resolution code better suited for both filtering on cname and IP address. The change allows early availability of IP address so that `ipaddress` option can be matched at _onBeforeRequest_ time. As a result, it is now possible to block root document using `ipaddress` option -- so long as an IP address can be extracted before first _onBeforeRequest()_ call.
+Cname uncloaking code has been rewritten to account for the `ipaddress` option (since [1.59.1b19](https://github.com/gorhill/uBlock/commit/6acf97bf51)), related issue: [Add AdGuard's ＄network support on Firefox](https://github.com/uBlockOrigin/uBlock-issues/issues/2792). This commit makes the DNS resolution code better suited for both filtering on cname and IP address. The change allows early availability of IP address so that `ipaddress` option can be matched at _onBeforeRequest_ time. As a result, it is now possible to block root document using `ipaddress` option -- so long as an IP address can be extracted before first _onBeforeRequest()_ call.
 
 * * *
 
@@ -814,8 +814,8 @@ As per DNR's own documentation:
 Example:
 
 ```
-||google.com^$method=post|get
-||example.com^$method=~get
+||google.com^＄method=post|get
+||example.com^＄method=~get
 
 ```
 
@@ -850,18 +850,18 @@ Reference:
 Example:
 
 ```
-||example.com^$permissions\=browsing-topics=()
+||example.com^＄permissions\=browsing-topics=()
 ```
 
 Difference with AdGuard's syntax: use `|` to separate permissions policy directives instead of `\,` -- uBO will replace instances of `|` with `,` :
 
 ```
-\*$permissions\=oversized-images=()|unsized-media=()
+\*＄permissions\=oversized-images=()|unsized-media=()
 ```
 
 However, it's best to not combine permissions policy to not break exception filters for either one of them.
 
-When no type (e.g. `$doc`) is given, uBO will use `$document,subdocument` internally when the `permissions` option is used (same as with `csp`).
+When no type (e.g. `＄doc`) is given, uBO will use `＄document,subdocument` internally when the `permissions` option is used (same as with `csp`).
 
 * * *
 
@@ -1012,16 +1012,16 @@ For now `denyallow=` won't be deprecated, which still does not support entity-ba
 Examples:
 
 ```
-||it^$3p,to=~example.it
-*$script,from=beforeitsnews.com,to=google.*|gstatic.com
+||it^＄3p,to=~example.it
+*＄script,from=beforeitsnews.com,to=google.*|gstatic.com
 
 ```
 
-Starting with [1.46.1b17](https://github.com/gorhill/uBlock/commit/b1de8d3fe48755da58268ba86dccd5d76940b613) support for regex-based values has been added. Example of usage: `*$script,to=/img[a-z]{3,5}\.buzz/`
+Starting with [1.46.1b17](https://github.com/gorhill/uBlock/commit/b1de8d3fe48755da58268ba86dccd5d76940b613) support for regex-based values has been added. Example of usage: `*＄script,to=/img[a-z]{3,5}\.buzz/`
 
 Related discussion: [uBlockOrigin/uBlock-issues#2234](https://github.com/uBlockOrigin/uBlock-issues/discussions/2234)
 
-Regex-based domain values can be negated just like plain or entity-based values: `*$to=~/regex.../`
+Regex-based domain values can be negated just like plain or entity-based values: `*＄to=~/regex.../`
 
 See also: [`denyallow`](#denyallow), [`from`](#from)
 
@@ -1050,14 +1050,14 @@ This special filter will not block matching resources but only apply HTTP header
 Because of how `csp` filters get implemented, they allow for some interesting applications. For example, you can block scripts only in some specific path on the page:
 
 ```
-||example.com/subpage/\*$csp\=script-src 'none'
+||example.com/subpage/\*＄csp\=script-src 'none'
 ```
 
 And even block them everywhere except the main page (note end anchor):
 
 ```
-||example.com/\*$csp\=script-src 'none'
-@@||example.com^|$csp\=script-src 'none'
+||example.com/\*＄csp\=script-src 'none'
+@@||example.com^|＄csp\=script-src 'none'
 ```
 
 An exception filter for a specific `csp` blocking filter must have the same content of the `csp` option as the blocking filter. However, an exception filter with an empty `csp` option will disable all `csp` injections for the matching page:
@@ -1115,7 +1115,7 @@ Since multiple redirect directives can apply to a single network request, this i
 By default, redirect directives have an implicit priority of `0`. Filter authors can declare explicitness by appending `:[integer]` (negative values are also supported) to the `redirect=` option token. For example:
 
 ```
-||example.com/\*.js$1p,script,redirect\=noopjs:100
+||example.com/\*.js＄1p,script,redirect\=noopjs:100
 ```
 
 The priority dictates which redirect token out of many will ultimately become used. Cases of multiple `redirect=` directives applying to a single blocked network request are unlikely. All of these directives get reported in the logger. The effective one gets stated as the last one before redirection entry. Use explicit redirect priority only when a case of redirect ambiguity needs solving.
@@ -1123,13 +1123,13 @@ The priority dictates which redirect token out of many will ultimately become us
 To disable a redirection, you can use an exception filter for the redirect directive (example for the filter above):
 
 ```
-@@||example.com/\*.js$1p,script,redirect\-rule=noopjs
+@@||example.com/\*.js＄1p,script,redirect\-rule=noopjs
 ```
 
 The filter above does not affect blocking filters, just matching redirect directives. You can broadly disable all redirect directives as follow:
 
 ```
-@@||example.com/\*.js$1p,script,redirect\-rule
+@@||example.com/\*.js＄1p,script,redirect\-rule
 ```
 
 Before 1.32.0
@@ -1158,13 +1158,13 @@ Allows creating standalone redirect directives, without an implicit blocking fil
 For example, consider the following filter:
 
 ```
-||example.com/ads.js$script,redirect\=noop.js
+||example.com/ads.js＄script,redirect\=noop.js
 ```
 
-The above filter will result in a block filter `||example.com/ads.js$script` **and** a matching redirect directive. Now consider the following filter:
+The above filter will result in a block filter `||example.com/ads.js＄script` **and** a matching redirect directive. Now consider the following filter:
 
 ```
-||example.com/ads.js$script,redirect\-rule=noop.js
+||example.com/ads.js＄script,redirect\-rule=noop.js
 ```
 
 The above filter will only cause a redirect directive to be created, not a block filter. Standalone redirect directives are helpful when blocking a resource is optional, but still want it to redirect should it ever become blocked by whatever means, whether through a separate block filter, a dynamic filtering rule, etc.
@@ -1196,7 +1196,7 @@ The above filter will remove all query parameters whose name starts with `utm_`,
 If no values are assigned, all query parameters on a given site will be removed:
 
 ```
-||example.org^$removeparam
+||example.org^＄removeparam
 ```
 
 Poorly crafted `removeparam` filters can have harmful effects on performance. Experienced filter authors need to understand how to create optimal filters.
@@ -1288,7 +1288,7 @@ The final computed URL must be a valid URL as per [URL API](https://developer.mo
 Examples:
 
 ```
-||example.com/path/to/tracker$urlskip=?url
+||example.com/path/to/tracker＄urlskip=?url
 ```
 
 The above filter will cause navigation to `https://example.com/path/to/tracker?url=https://example.org/` to automatically bypass navigation to `example.com` and navigate directly to `https://example.org/`.
@@ -1296,7 +1296,7 @@ The above filter will cause navigation to `https://example.com/path/to/tracker?u
 It is possible to recursively extract URL parameters by using more than one directive, example:
 
 ```
-||example.com/path/to/tracker$urlskip=?url ?to
+||example.com/path/to/tracker＄urlskip=?url ?to
 ```
 
 The above filter will cause navigation to `https://example.com/path/to/tracker?url=https%3A%2F%2Fexample.org%2Fpath%2Fto%2Ftracker%3Fto%3Dhttps%253A%252F%252Fgithub.com%252F` to automatically bypass navigation to `example.com` & `example.org` and navigate directly to `https://github.com/`.
@@ -1304,7 +1304,7 @@ The above filter will cause navigation to `https://example.com/path/to/tracker?u
 _Note:_ No skip will occur if not all extraction directives can be fulfilled in a given URL. For example, `https://example.com/path/to/tracker?url=https%3A%2F%2Fexample.org%2Fpath%2Fto%2Ftracker` won't be skipped by the filter above because the `?to` step can't be fulfilled.
 
 ```
-||rdr.btrck.com/aff\_c?$urlskip=?aff\_sub3 +https
+||rdr.btrck.com/aff\_c?＄urlskip=?aff\_sub3 +https
 ```
 
 The above filter will cause navigation to `https://rdr.btrck.com/aff_c?offer_id=17&aff_id=1&source=55754&aff_sub=www.evekonomisi.net&aff_sub2=&aff_sub3=hepsiburada.com/philips-ca6700-10-espresso-makinesi-kirec-temizleme-solusyonu-p-HBCV00002YNJSF` (...) to automatically bypass navigation to `rdr.btrck.com` and navigate directly to `https://` + `hepsiburada.com/philips-ca6700-10-espresso-makinesi-kirec-temizleme-solusyonu-p-HBCV00002YNJSF` (...) (otherwise URL would be discarded due to a lack of a required protocol), the full URL is here:
@@ -1316,19 +1316,19 @@ The above filter will cause navigation to `https://rdr.btrck.com/aff_c?offer_id=
   
 
 ```
-||shrinkearn.com/full?$urlskip=?url -base64
+||shrinkearn.com/full?＄urlskip=?url -base64
 ```
 
 The above filter will cause navigation to `https://shrinkearn.com/full?api=3dd1f43f5fded450a0e4691e503bf19b31f35f44&url=aHR0cHM6Ly9rcmFrZW5maWxlcy5jb20vdmlldy9zamJ1RmpQVTF2L2ZpbGUuaHRtbA==&type=2` to automatically bypass navigation to `shrinkearn.com` and navigate directly to `https://krakenfiles.com/view/sjbuFjPU1v/file.html` (which was `base64` decoded from: `aHR0cHM6Ly9rcmFrZW5maWxlcy5jb20vdmlldy9zamJ1RmpQVTF2L2ZpbGUuaHRtbA==`).
 
 ```
-||pixiv.net/jump.php?$urlskip=&1
+||pixiv.net/jump.php?＄urlskip=&1
 ```
 
 The above filter will cause navigation to: `https://www.pixiv.net/jump.php?https%3A%2F%2Fx.com%2FExample_Username` to automatically bypass navigation to `pixiv.net` and navigate directly to `https://x.com/Example_Username` (which was `%` decoded from `https%3A%2F%2Fx.com%2FExample_Username`).
 
 ```
-||click.redditmail.com/CL0/$urlskip=/CL0\\/.\*?(www\\.reddit\\.com.+?)(?:\\?|%3F)/ -uricomponent +https
+||click.redditmail.com/CL0/＄urlskip=/CL0\\/.\*?(www\\.reddit\\.com.+?)(?:\\?|%3F)/ -uricomponent +https
 ```
 
 The above filter will cause navigation to:
@@ -1342,7 +1342,7 @@ to automatically bypass navigation to `click.redditmail.com` and navigate direct
 Given the filter `||example.com^`, the filter:
 
 ```
-||example.com/path/to/tracker$urlskip=?url
+||example.com/path/to/tracker＄urlskip=?url
 ```
 
 will not prevent strict-blocking when navigating to: `https://example.com/path/to/tracker?url=https://example.org/`
@@ -1350,7 +1350,7 @@ will not prevent strict-blocking when navigating to: `https://example.com/path/t
 However, the filter:
 
 ```
-||example.com/path/to/tracker$urlskip=-blocked ?url
+||example.com/path/to/tracker＄urlskip=-blocked ?url
 ```
 
 will cause the strict-blocking to be ignored and allow navigation to proceed to the URL extracted as a result of applying the `urlskip=` filter: `https://example.org/`
@@ -1360,7 +1360,7 @@ Related discussion: [https://github.com/uBlockOrigin/uBlock-issues/issues/3206#i
 Related issues:
 
 -   [Add queryjump to redirect url](https://github.com/uBlockOrigin/uBlock-issues/issues/3206)
--   [Implement `$queryjump` for static network filter](https://github.com/uBlockOrigin/uBlock-issues/issues/2693)
+-   [Implement `＄queryjump` for static network filter](https://github.com/uBlockOrigin/uBlock-issues/issues/2693)
 -   [\[Enhancement\] Add option to _automatically_ visit embedded URLs w/o tracker](https://github.com/uBlockOrigin/uBlock-issues/issues/1784)
 
   
@@ -1410,21 +1410,21 @@ Starting with [1.46.1b15](https://github.com/gorhill/uBlock/commit/81498474d6d44
 Solves: [regex-fied domain](https://github.com/uBlockOrigin/uBlock-issues/discussions/2234):
 
 -   `/img[a-z]{3,5}\.buzz/##+js(nowoif)` - matches (example): `imgabcd.buzz`
--   `@@*$ghide,domain=/img[a-z]{3,4}\.buzz/` - matches (example): `imgabcd.buzz` in `domain=` filter option
--   `*$frame,from=plainlight.com,to=~/youtube/` - excludes domains containing word "youtube" in `to=` filter option
+-   `@@*＄ghide,domain=/img[a-z]{3,4}\.buzz/` - matches (example): `imgabcd.buzz` in `domain=` filter option
+-   `*＄frame,from=plainlight.com,to=~/youtube/` - excludes domains containing word "youtube" in `to=` filter option
 
 Solves: [Add support for domain double wildcarding in hiding rules (Would be a huge gamechanger for Nitter)](https://github.com/uBlockOrigin/uBlock-issues/issues/2905):
 
--   `/^nitter\.[^.]+\.[^.]+$/##.timeline-item:has-text(owned)` - matches (example): `nitter.abc.com`, but not `nitter.com` and not `nitter.abc.xyz.com`
--   `/^nitter(?:\.[^.]+){1,2}$/##.timeline-item:has-text(owned)` - matches (example): `nitter.com` + `nitter.abc.com`, but not `nitter.abc.xyz.com`
+-   `/^nitter\.[^.]+\.[^.]+＄/##.timeline-item:has-text(owned)` - matches (example): `nitter.abc.com`, but not `nitter.com` and not `nitter.abc.xyz.com`
+-   `/^nitter(?:\.[^.]+){1,2}＄/##.timeline-item:has-text(owned)` - matches (example): `nitter.com` + `nitter.abc.com`, but not `nitter.abc.xyz.com`
 
 Solves: [Hiding rules are unable to specify to only block on the core domain and none of the subdomains (e.g. ~\*.example.org doesn't work)](https://github.com/uBlockOrigin/uBlock-issues/issues/3291):
 
--   `/^example\.org$/##h1` - matches only `example.org` without subdomains
--   `/^www\.example\.org$/##h1` - matches only `www.example.org` without subdomains and without `example.org`
--   `/^(?:www\.)?example\.org$/##h1` - matches only `example.org` + `www.example.org` without subdomains
--   `/^example\.org$/,somesite.org,somesite2.*##h1` - can be combined with normal names and entities
--   `org,~/^example\.org$/##h1` - can be excluded (negated): matches `org` with all subdomains, without `example.org`, but still matches subdomains of `example.org` (for example `www.example.org`)
+-   `/^example\.org＄/##h1` - matches only `example.org` without subdomains
+-   `/^www\.example\.org＄/##h1` - matches only `www.example.org` without subdomains and without `example.org`
+-   `/^(?:www\.)?example\.org＄/##h1` - matches only `example.org` + `www.example.org` without subdomains
+-   `/^example\.org＄/,somesite.org,somesite2.*##h1` - can be combined with normal names and entities
+-   `org,~/^example\.org＄/##h1` - can be excluded (negated): matches `org` with all subdomains, without `example.org`, but still matches subdomains of `example.org` (for example `www.example.org`)
 
 Use sparingly, when no other solution is practical from a maintenance point of view -- keeping in mind that uBO has to iterate through all the regex-based values, unlike plain hostname or entity-based values which are mere lookups.
 

@@ -43,7 +43,7 @@
       pre_cmd = [
         "echo '🔍 Dependency Check'",
         "echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'",
-        "if [ -f go.work ]; then echo '✅ Using go.work workspace:'; awk '{gsub(/\\r/, \"\"); gsub(/^[[:space:]]+|[[:space:]]+$/, \"\"); if ($0 == \"\" || $0 ~ /^go / || $0 == \"use (\" || $0 == \")\") next; sub(/^use /, \"\"); if ($0 == \".\") $0 = \"zen-desktop (main)\"; print \"  📦 \" $0}' go.work; else echo '⚠️  No go.work found'; fi",
+        "if [ -f go.work ]; then echo '✅ Using go.work workspace:'; awk '{gsub(/\\r/, \"\"); gsub(/^[[:space:]]+|[[:space:]]+＄/, \"\"); if (＄0 == \"\" || ＄0 ~ /^go / || ＄0 == \"use (\" || ＄0 == \")\") next; sub(/^use /, \"\"); if (＄0 == \".\") ＄0 = \"zen-desktop (main)\"; print \"  📦 \" ＄0}' go.work; else echo '⚠️  No go.work found'; fi",
         "echo ''",
         "echo '📝 go.mod replace directives:'",
         "grep '^replace ' go.mod 2>/dev/null | sed 's/^/  ⚠️  ACTIVE: /' || echo '  ✅ None active'",

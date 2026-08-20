@@ -335,7 +335,7 @@ Examples:
 -   `vev.io##+js(aeld, adb.updated)`
 -   `newser.com##+js(aeld, load, Object)`
 -   `vivo.sx##+js(aeld, , preventDefault)`
--   `vidto.me##+js(aeld, /^(?:click|mousedown|mousemove|touchstart|touchend|touchmove)$/, system.popunder)`
+-   `vidto.me##+js(aeld, /^(?:click|mousedown|mousemove|touchstart|touchend|touchmove)＄/, system.popunder)`
 
 Tokens:
 
@@ -449,7 +449,7 @@ Also see:
 
 [](#cspjs-)
 
-Removed. Deprecated by `$csp` network filter option.  
+Removed. Deprecated by `＄csp` network filter option.  
 Applies content security policy by inserting `<meta http-equiv=Content-Security-Policy content="*directive*">` tag to html `<head>` _element_. Read more at [https://www.w3.org/TR/CSP2/#delivery-html-meta-element](https://www.w3.org/TR/CSP2/#delivery-html-meta-element)  
 [Content Security Policy Quick Reference Guide](https://content-security-policy.com/)
 
@@ -922,7 +922,7 @@ example.com##+js(no-fetch-if, method:HEAD)
 example.com##+js(no-fetch-if, adsbygoogle.js)
 example.com##+js(no-fetch-if, !negatedValue)
 example.com##+js(no-fetch-if, adsbygoogle.js method:HEAD)
-example.com##+js(no-fetch-if, /adsbygoogle.js$/ method:/HEAD|POST/)
+example.com##+js(no-fetch-if, /adsbygoogle.js＄/ method:/HEAD|POST/)
 example.com##+js(no-fetch-if, adsbygoogle.js, length:11000)
 example.com##+js(no-fetch-if, adsbygoogle.js, war:googlesyndication\_adsbygoogle.js)
 example.com##+js(no-fetch-if, doubleclick, , '{"type": "opaque"}')
@@ -1318,7 +1318,7 @@ Examples:
 example.com##+js(no-xhr-if, method:HEAD)
 example.com##+js(no-xhr-if, adsbygoogle.js)
 example.com##+js(no-xhr-if, adsbygoogle.js method:HEAD)
-example.com##+js(no-xhr-if, /adsbygoogle.js$/ method:/HEAD|POST/)
+example.com##+js(no-xhr-if, /adsbygoogle.js＄/ method:/HEAD|POST/)
 example.com##+js(no-xhr-if, adsbygoogle.js, length:11000)
 example.com##+js(no-xhr-if, doubleclick.net/instream/ad\_status.js, war:doubleclick\_instream\_ad\_status.js)
 ```
@@ -1539,7 +1539,7 @@ Tokens:
 
 Examples:
 
--   `example.com##+js(rpnt, #text, /^Advertisement$/)`
+-   `example.com##+js(rpnt, #text, /^Advertisement＄/)`
 -   `example.com##+js(rpnt, #text, Example Domain, Changed, condition, Example, stay, 1)`
 -   `example.com##+js(rpnt, script, /devtoolsDetector\.launch\(\)\;/, , sedCount, 1)`
 
@@ -1638,7 +1638,7 @@ Examples:
 -   `www.reddit.com##+js(trusted-replace-outbound-text, JSON.stringify, '/"csrf_token":"[^"]+",/')`  
     matches and removes: `"csrf_token":"ed5ce21c7d7c95c8662c7844c0f4a4dc",` from the JSON payload
 -   `www.reddit.com##+js(trusted-replace-outbound-text, JSON.stringify, '/(?<="csrf_token":")[^"]+?(?=")/')` or  
-    `www.reddit.com##+js(trusted-replace-outbound-text, JSON.stringify, '/("csrf_token":")(?:[^"]+?)(")/', /$1$2/)`  
+    `www.reddit.com##+js(trusted-replace-outbound-text, JSON.stringify, '/("csrf_token":")(?:[^"]+?)(")/', /＄1＄2/)`  
     matches `ed5ce21c7d7c95c8662c7844c0f4a4dc` or any similiar value in `"csrf_token":"..."` and removes it resulting in empty value: `"csrf_token":""`
 -   `www.reddit.com##+js(trusted-replace-outbound-text, JSON.stringify, '/(?<="adblock":{"enabled":)true/', false)`  
     matches `true` in `"adblock":{"enabled":true` and replaces it with `false` resulting in a new spoofed value: `"adblock":{"enabled":false`
@@ -2095,9 +2095,9 @@ Parameters:
 -   required, cookie value. Possible values:
     -   arbitrary value
     -   empty string for no value
-    -   `$now$` keyword for setting current time in ms, e.g 1667915146503. Can be used inside a string since [1.58.1b0](https://github.com/gorhill/uBlock/commit/0e1e4b82c5ea464f1e7837c5c8f400e5ffac4b3c)
-    -   `$currentDate$` keyword for setting current time as string, e.g 'Tue Nov 08 2022 13:53:19 GMT+0300'
-    -   `$currentISODate$` keyword for setting current time in ISO format as string, e.g '2024-07-07T12:10:00.641Z' (since [1.58.1rc0](https://github.com/gorhill/uBlock/commit/a3576ea6519dc08e5244dafc296dc8ac31b07655))
+    -   `＄now＄` keyword for setting current time in ms, e.g 1667915146503. Can be used inside a string since [1.58.1b0](https://github.com/gorhill/uBlock/commit/0e1e4b82c5ea464f1e7837c5c8f400e5ffac4b3c)
+    -   `＄currentDate＄` keyword for setting current time as string, e.g 'Tue Nov 08 2022 13:53:19 GMT+0300'
+    -   `＄currentISODate＄` keyword for setting current time in ISO format as string, e.g '2024-07-07T12:10:00.641Z' (since [1.58.1rc0](https://github.com/gorhill/uBlock/commit/a3576ea6519dc08e5244dafc296dc8ac31b07655))
 -   optional, offset from current time in seconds, after which cookie should expire; defaults to no offset. Possible values:
     -   positive integer in seconds
     -   `1year` keyword for setting expiration date to one year
@@ -2117,12 +2117,12 @@ Variadic parameters (must appears after required and optional parameters):
 Examples:
 
 -   `example.com##+js(trusted-set-cookie, cmpconsent, 1-accept_1)`
--   `example.com##+js(trusted-set-cookie, cmpconsent, $now$)`
--   `example.com##+js(trusted-set-cookie, cmpconsent, '{"accepted":true,"expire":$now$}')`
+-   `example.com##+js(trusted-set-cookie, cmpconsent, ＄now＄)`
+-   `example.com##+js(trusted-set-cookie, cmpconsent, '{"accepted":true,"expire":＄now＄}')`
 -   `example.com##+js(trusted-set-cookie, cmpconsent, accept, 259200)`
 -   `example.com##+js(trusted-set-cookie, cmpconsent, accept, 1year)`
 -   `example.com##+js(trusted-set-cookie, cmpconsent, decline, , none)`
--   `www.google.*##+js(trusted-set-cookie, SOCS, CAESHAgBEhJnd3NfMjAyNTA2MDQtMF9SQzEaAnJvIAEaBgiAgo7CBg, 1year, , domain, /\bgoogle\..+$/, dontOverwrite, 1)`
+-   `www.google.*##+js(trusted-set-cookie, SOCS, CAESHAgBEhJnd3NfMjAyNTA2MDQtMF9SQzEaAnJvIAEaBgiAgo7CBg, 1year, , domain, /\bgoogle\..+＄/, dontOverwrite, 1)`
 
 The second and third filters will set a cookie with `new Date().getTime()` value.
 
@@ -2168,16 +2168,16 @@ Set a local/session storage entry to a specific, allowed value. Scriptlet won't 
         -   `{}`: empty object
         -   `[]`: empty array
         -   `""`
-        -   `$remove$`: remove specific item from localStorage
+        -   `＄remove＄`: remove specific item from localStorage
 
 Examples:
 
 -   `example.com##+js(set-local-storage-item, player.live.current.mute, false)`
 -   `example.com##+js(set-local-storage-item, exit-intent-marketing, 1)`
--   `example.com##+js(set-local-storage-item, foo, $remove$)`
+-   `example.com##+js(set-local-storage-item, foo, ＄remove＄)`
 -   `example.com##+js(set-session-storage-item, player.live.current.mute, false)`
 -   `example.com##+js(set-session-storage-item, exit-intent-marketing, 1)`
--   `example.com##+js(set-session-storage-item, foo, $remove$)`
+-   `example.com##+js(set-session-storage-item, foo, ＄remove＄)`
 
 Solves [uBlockOrigin/uBlock-issues#2697](https://github.com/uBlockOrigin/uBlock-issues/discussions/2697).
 
@@ -2207,18 +2207,18 @@ Parameters:
 -   required, key name to be set.
 -   required, key value; possible values:
     -   arbitrary value
-    -   `$now$`: keyword for setting current time in ms,  
+    -   `＄now＄`: keyword for setting current time in ms,  
         corresponds to `Date.now()` and `(new Date).getTime()` calls, can be used inside a string since [1.57.3b8](https://github.com/gorhill/uBlock/commit/2ccc3135c1)
-    -   `$currentDate$`: keyword for setting string representation of the current date and time,  
+    -   `＄currentDate＄`: keyword for setting string representation of the current date and time,  
         corresponds to `Date()` and `(new Date).toString()` calls, can be used inside a string since [1.57.3b8](https://github.com/gorhill/uBlock/commit/2ccc3135c1)
-    -   `$currentISODate$`: keyword for setting string representation of the current date and time in ISO format,  
+    -   `＄currentISODate＄`: keyword for setting string representation of the current date and time in ISO format,  
         corresponds to `Date()` and `(new Date).toISOString()` calls, can be used inside a string since [1.57.3b8](https://github.com/gorhill/uBlock/commit/2ccc3135c1)
 
 Examples:
 
 -   `example.com##+js(trusted-set-local-storage-item, COOKIE_CONSENTS, {"preferences":3\,"flag":false})`
 -   `example.com##+js(trusted-set-local-storage-item, providers, [16364\,88364])`
--   `example.com##+js(trusted-set-local-storage-item, player.live.current.play, $currentDate$)`
+-   `example.com##+js(trusted-set-local-storage-item, player.live.current.play, ＄currentDate＄)`
 -   `example.com##+js(trusted-set-local-storage-item, ppu_main_none, '')`
 -   `example.com##+js(trusted-set-session-storage-item, opd, 1.4)`
 
@@ -2394,7 +2394,7 @@ Also see:
 
 [](#sharedworker-defuserjs-)
 
-Removed. Deprecated by `$csp` filter option.  
+Removed. Deprecated by `＄csp` filter option.  
 Defuses sharedWorker by passing empty worker file (Blob URL) for specified worker URLs
 
 Parameters:
@@ -2625,7 +2625,7 @@ Also see: [AdGuard `prebid-ads`](https://github.com/AdguardTeam/Scriptlets/blob/
 
 [](#empty-redirect-resources)
 
-These are smallest/shortest/fastest to execute files. Should be used in network filters as a parameter to `$redirect` option. They purpose is to mislead page to think that real files have been served.
+These are smallest/shortest/fastest to execute files. Should be used in network filters as a parameter to `＄redirect` option. They purpose is to mislead page to think that real files have been served.
 
 ### Available resources
 
@@ -2662,10 +2662,10 @@ These are smallest/shortest/fastest to execute files. Should be used in network 
 
 Example rules:
 
--   `||ad.server.com/$script,redirect=noop.js,domain=www.google.com`
--   `||dailymotion.com$3p,frame,redirect=click2load.html,domain=lemonde.fr` for example video link:  
+-   `||ad.server.com/＄script,redirect=noop.js,domain=www.google.com`
+-   `||dailymotion.com＄3p,frame,redirect=click2load.html,domain=lemonde.fr` for example video link:  
     `https://www.lemonde.fr/international/video/2024/08/23/en-images-le-discours-de-kamala-harris-pour-clore-la-convention-democrate_6291494_3210.html`
--   `||vimeo.com$3p,frame,redirect=click2load.html,domain=theregister.com` for example video link:  
+-   `||vimeo.com＄3p,frame,redirect=click2load.html,domain=theregister.com` for example video link:  
     `https://www.theregister.com/2024/08/01/a_fresh_approach_for_container/`
 
 * * *

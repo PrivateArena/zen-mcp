@@ -14,13 +14,13 @@ Comprehensive guide for uBlock Origin (uBO) filter development. uBO extends stan
 
 1.  **Specificity**: Prefer `example.com##...` over `##...`.
 2.  **Efficiency**: Minimize DOM traversal. Use the Logger to profile filters.
-3.  **Action over Hiding**: Use `:remove()` to prune DOM or `$redirect` to neuter requests.
+3.  **Action over Hiding**: Use `:remove()` to prune DOM or `＄redirect` to neuter requests.
 
 ---
 
 ## 🛰️ Static Network Filtering
 
-### Syntax: `[pattern]$[modifiers]`
+### Syntax: `[pattern]＄[modifiers]`
 Network filters act on the request URL. `pattern` can be literal, regex, or a HOSTS-like hostname.
 
 #### 🏁 Targeting Modifiers
@@ -63,8 +63,8 @@ Network filters act on the request URL. `pattern` can be literal, regex, or a HO
 
 #### 🏷️ Entities & Hostname Regex (Extended)
 - **Entity**: `google.*` matches `google.com`, `google.co.jp`, but NOT `google.evil.biz`.
-- **Hostname Regex**: `/^nitter\.[^.]+\.[^.]+$/##...` targets complex multi-level subdomains.
-- **Strict Hostname**: `/^example\.org$/##...` prevents matching subdomains like `www`.
+- **Hostname Regex**: `/^nitter\.[^.]+\.[^.]+＄/##...` targets complex multi-level subdomains.
+- **Strict Hostname**: `/^example\.org＄/##...` prevents matching subdomains like `www`.
 
 
 ---
@@ -179,8 +179,8 @@ Neuter network requests or modify browser storage.
 | `set-cookie` | - | Sets a restricted set of cookie values. | `name`, `value`, `path` |
 | `trusted-set-cookie` | - | [Trusted] Set arbitrary cookies/expiry. | `name`, `value`, `expiry`, `path` |
 | `remove-cookie` | `cookie-remover`| Removes cookies by name/pattern on events. | `namePattern`, `when` (event: `scroll`, `keydown`) |
-| `set-local-storage-item` | - | Sets LocalStorage entries. | `key`, `value` (e.g., `$remove$`) |
-| `trusted-set-local-storage-item` | - | [Trusted] Sets arbitrary Local/Session storage. | `key`, `value` (JSON or keywords like `$now$`) |
+| `set-local-storage-item` | - | Sets LocalStorage entries. | `key`, `value` (e.g., `＄remove＄`) |
+| `trusted-set-local-storage-item` | - | [Trusted] Sets arbitrary Local/Session storage. | `key`, `value` (JSON or keywords like `＄now＄`) |
 | `remove-cache-storage-item` | - | Removes Cache API items. | `namePattern`, `urlPattern` |
 | `nowebrtc` | - | Disables WebRTC `RTCPeerConnection`. | - |
 | `webrtc-if` | - | Restrict WebRTC to specific servers. | `matchPattern` |
@@ -237,7 +237,7 @@ Pre-defined surrogates for common tracking libraries.
 - `prebid-ads`: Shim for Prebid.js.
 
 ### 🖼️ Empty Redirect Resources
-Use as `$redirect=resource-name`.
+Use as `＄redirect=resource-name`.
 - **Images**: `1x1.gif`, `2x2.png`, `3x2.png`, `32x32.png`.
 - **Code**: `noop.js`, `noop.css`, `noop.html`, `noop.json`, `noop.txt`.
 - **XML**: `noop-vast2.xml`, `noop-vast3.xml`, `noop-vast4.xml`, `noop-vmap1.xml`.
@@ -255,9 +255,9 @@ Aliases for blocking specific common tracking scripts:
 - `!#include [file]`: Modularize lists.
 - `!#if env_firefox`: Environment-specific logic.
 - `!#if cap_html_filtering`: Capability checks.
-- `hostname regex`: `/^nitter\..*$/##.ad-unit`.
+- `hostname regex`: `/^nitter\..*＄/##.ad-unit`.
 
 ## 🛠️ Best Practices
 - **Escaping**: Commas in args must be `\,`. Backslashes must be `\\`.
-- **Regex**: Use `/.../` for regex literals. Anchor (`^` / `$`) for performance.
+- **Regex**: Use `/.../` for regex literals. Anchor (`^` / `＄`) for performance.
 - **Trust**: User filters are only "trusted" in Dev mode or if configured via `trustedListPrefixes`.

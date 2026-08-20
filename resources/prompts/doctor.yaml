@@ -25,7 +25,7 @@
          --exclude-dir=vendor --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=testdata \
          . \
        | awk -F: '{
-           loc=$1":"$2; val=$3; for(i=4;i<=NF;i++) val=val":"$i
+           loc=＄1":"＄2; val=＄3; for(i=4;i<=NF;i++) val=val":"＄i
            count[val]++; locs[val]=locs[val] loc ", "
          }
          END { for (v in count) if (count[v] > 1)

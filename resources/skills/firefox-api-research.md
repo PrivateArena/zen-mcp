@@ -56,7 +56,7 @@ If a `userChrome.js` MCP bridge is running (e.g., `/media/jang/home/PortableApp/
                let entries = zr.findEntries("*browser.js*"); // Put search keyword here
                while (entries.hasMore()) {
                    // Returns fetchable jar URIs
-                   results.push(`jar:file://${file.path}!/${entries.getNext()}`);
+                   results.push(`jar:file://＄{file.path}!/＄{entries.getNext()}`);
                }
                zr.close();
            } catch(e) {}

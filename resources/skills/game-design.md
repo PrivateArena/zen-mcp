@@ -36,9 +36,9 @@ To maximize execution predictability and minimize state-syncing bugs, the game w
 
 ### A. Map & Grid System
 
-The map is strictly driven by a 2D grid matrix ($16 \times 12$ tiles). This prevents spatial hallucinations during pathfinding.
+The map is strictly driven by a 2D grid matrix (＄16 \times 12＄ tiles). This prevents spatial hallucinations during pathfinding.
 
-* **Tile Size:** $40 \times 40$ pixels.
+* **Tile Size:** ＄40 \times 40＄ pixels.
 * **Grid Values:** `0` = Build Zone, `1` = Enemy Path, `2` = Obstacle (Unbuildable).
 
 ```javascript
@@ -94,8 +94,8 @@ export const ENEMY_TYPES = {
 
 ### C. Upgrade and Economy Progression Math
 
-* **Player Initial State:** $HP = 20$, $Gold = 350$.
-* **Income Loop:** Gold is given exclusively upon enemy destruction (`ENEMY_TYPES.reward`) or as a flat $+50$ bonus at the end of a successfully defended wave.
+* **Player Initial State:** ＄HP = 20＄, ＄Gold = 350＄.
+* **Income Loop:** Gold is given exclusively upon enemy destruction (`ENEMY_TYPES.reward`) or as a flat ＄+50＄ bonus at the end of a successfully defended wave.
 * **Linear Scale Upgrades:** Upgrading a tower mutates its core instance parameters dynamically based on its preset `upgrades` sub-object. No new entity type is instantiated.
 
 ---
@@ -112,9 +112,9 @@ I will never let KAPLAY entities hold the canonical balance of player gold or en
 
 Instead of using physical bounding colliders for tower detection ranges, I will compute standard distance formulas on every game tick. A tower acquires a target using basic Euclidean distance:
 
-$$d = \sqrt{(x_2 - x_1)^2 + (y_2 - y_1)^2}$$
+＄＄d = \sqrt{(x_2 - x_1)^2 + (y_2 - y_1)^2}＄＄
 
-If $d \le \text{range}$, the tower locks onto the enemy's index ID.
+If ＄d \le \text{range}＄, the tower locks onto the enemy's index ID.
 
 ### Skill 3: Waypoint Interpolation Navigation
 
@@ -122,7 +122,7 @@ Enemies move using simple Vector direction vectors matching the `WAYPOINTS` inde
 
 1. Calculate direction vector from current position to target waypoint.
 2. Normalize vector and multiply by `speed * dt` (delta time).
-3. Switch target index to `index + 1` once distance to waypoint is $< 2$ pixels.
+3. Switch target index to `index + 1` once distance to waypoint is ＄< 2＄ pixels.
 
 ### Skill 4: Robust Asset Loading Safeguards
 
@@ -130,9 +130,9 @@ Every single asset loader step must use a safe fallback wrapper. If a texture is
 
 ```javascript
 function loadSafeSprite(name, fallbackColor) {
-    loadSprite(name, `assets/${name}.png`)
+    loadSprite(name, `assets/＄{name}.png`)
         .catch(() => {
-            console.warn(`Asset ${name} missing. Initializing color block.`);
+            console.warn(`Asset ＄{name} missing. Initializing color block.`);
             // Game logic fallback flag set here
         });
 }

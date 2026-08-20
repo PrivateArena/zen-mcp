@@ -169,7 +169,7 @@ Introduced in uBO [1.43.1b8](https://github.com/gorhill/uBlock/commit/40c315a107
 -   _subject_: Can be a plain CSS selector, or a procedural cosmetic filter.
 -   _arg_: Plain text to be found at any position in the path + query, or a literal regex against which the path + query is tested.
 -   Examples:
-    -   `example.com##:matches-path(/shop) p`: Will hide all `p` elements when visiting `https://example.com/shop/stuff`, but not when visiting `https://example.com/` or any other page on `example.com` which has no instance of `/shop` in the path part of the URL. To only match the main page but not any of the subpages, use: `example.com##:matches-path(/^/$/) p`
+    -   `example.com##:matches-path(/shop) p`: Will hide all `p` elements when visiting `https://example.com/shop/stuff`, but not when visiting `https://example.com/` or any other page on `example.com` which has no instance of `/shop` in the path part of the URL. To only match the main page but not any of the subpages, use: `example.com##:matches-path(/^/＄/) p`
 
 Introduced in uBO [1.37.3b13](https://github.com/gorhill/uBlock/commit/9dece3bd30bfa6ef35a6e58c37740adbd8482ab9), [feature request #1690](https://github.com/uBlockOrigin/uBlock-issues/issues/1690).
 

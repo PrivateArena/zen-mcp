@@ -145,18 +145,28 @@ func generateCommands() error {
 	return nil
 }
 
-// convertPiPlaceholders rewrites prompt placeholders from {{name}} to the Pi
-// positional-argument syntax $N, where N is the 1-based index of the argument
-// in the prompt definition. Placeholders not declared as arguments (e.g.
-// {{PERSONA}}) are preserved verbatim, matching the behavior of the shared
-// plain-text parser in internal/prompts/parser.go.
-func convertPiPlaceholders(template string, args []prompts.PromptArgument) string {
+// piFakeDollar is the fullwidth dollar sign (U+FF04). Pi's prompt-template
+// argument expansion only matches the ASCII '$' (substituteArgs in
+// prompt-templates.ts), so a fullwidth dollar survives expansion untouched
+// while still reading as '$' to the model.
+const piFakeDollar = "＄"
+
+// escapePiDollar rewrites every literal ASCII dollar sign to piFakeDollar.
+func escapePiDollar(s string) string {
+	return strings.ReplaceAll(s, "$", piFakeDollar)
+}
+
+// convertToPiTemplate rewrites a prompt template into Pi prompt-template
+// syntax. {{name}} placeholders for declared arguments become Pi positional
+// args ($1, $2, ...) that Pi WILL substitute. {{PERSONA}} falls back to the
+// prompt's default persona when one is set and is otherwise preserved verbatim
+// (matching the shared plain-text parser's unknown-placeholder behavior). Any
+// other literal dollar sign in the template is rewritten to piFakeDollar so Pi
+// never mistakes shell code for its own argument syntax.
+func convertToPiTemplate(template string, args []prompts.PromptArgument, defaultPersona string) string {
 	idx := make(map[string]int, len(args))
 	for i, a := range args {
 		idx[a.Name] = i + 1
-	}
-	if len(idx) == 0 {
-		return template
 	}
 	var b strings.Builder
 	b.Grow(len(template))
@@ -164,20 +174,23 @@ func convertPiPlaceholders(template string, args []prompts.PromptArgument) strin
 	for {
 		start := strings.Index(rest, "{{")
 		if start < 0 {
-			b.WriteString(rest)
+			b.WriteString(escapePiDollar(rest))
 			break
 		}
-		b.WriteString(rest[:start])
+		b.WriteString(escapePiDollar(rest[:start]))
 		after := rest[start+2:]
 		end := strings.Index(after, "}}")
 		if end < 0 {
-			b.WriteString(rest[start:])
+			b.WriteString(escapePiDollar(rest[start:]))
 			break
 		}
 		name := strings.TrimSpace(after[:end])
-		if n, ok := idx[name]; ok {
-			b.WriteString(fmt.Sprintf("$%d", n))
-		} else {
+		switch {
+		case idx[name] > 0:
+			b.WriteString(fmt.Sprintf("$%d", idx[name]))
+		case strings.EqualFold(name, "PERSONA") && defaultPersona != "":
+			b.WriteString(escapePiDollar(defaultPersona))
+		default:
 			b.WriteString(rest[start : start+2+end+2])
 		}
 		rest = after[end+2:]
@@ -189,7 +202,9 @@ func convertPiPlaceholders(template string, args []prompts.PromptArgument) strin
 // template (https://pi.dev/docs/latest/prompt-templates) under
 // resources/prompts-pi/. The design mirrors generateCommands: one .md file per
 // prompt with YAML frontmatter. Named arguments become Pi positional args
-// ($1, $2, ...) and the argument-hint uses <required> and [optional] markers.
+// ($1, $2, ...), the argument-hint uses <required> and [optional] markers, and
+// shell-code dollar signs are faked to a fullwidth dollar so Pi never
+// substitutes them.
 func generatePiPrompts() error {
 	promptsDir := filepath.Join(mcpcfg.ProjectRoot, "resources", "prompts")
 	piDir := filepath.Join(mcpcfg.ProjectRoot, "resources", "prompts-pi")
@@ -233,13 +248,13 @@ func generatePiPrompts() error {
 		}
 		frontmatter += "---\n"
 
-		body := convertPiPlaceholders(p.Template, p.Arguments)
+		body := convertToPiTemplate(p.Template, p.Arguments, p.DefaultPersona)
 		if len(p.EnabledSkills) > 0 {
 			var parts []string
 			for _, skillID := range p.EnabledSkills {
 				content, err := prompts.LoadSkillContent(skillID)
 				if err == nil && content != "" {
-					parts = append(parts, content)
+					parts = append(parts, escapePiDollar(content))
 				}
 			}
 			if len(parts) > 0 {

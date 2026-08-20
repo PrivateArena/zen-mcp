@@ -83,7 +83,7 @@ Every product research task must culminate in a structured breakdown with a comp
 ### Product Comparison Table
 | Product / Part | Store Name | Platform | Price (VND) | Approx. USD | Rating | Pros / Cons / Quality Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| *e.g., Hi75c Barebone Kit* | *Space Keyboard* | *Shopee* | *1,250,000* | *~$50* | *4.9/5* | *Tri-mode connection, aluminum, cross-border shipping* |
+| *e.g., Hi75c Barebone Kit* | *Space Keyboard* | *Shopee* | *1,250,000* | *~＄50* | *4.9/5* | *Tri-mode connection, aluminum, cross-border shipping* |
 
 ### Final Recommendations
 * **Lowest Cost Route:** [Direct link to cheapest listing with acceptable rating]
