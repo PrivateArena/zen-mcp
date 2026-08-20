@@ -290,7 +290,7 @@ func TestLinterSelection(t *testing.T) {
 		{"e.jsx", "prettier"},
 		{"f.c", "clang-format"},
 		{"g.cpp", "clang-format"},
-		{"h.rb", ""}, // standardrb intentionally not faked
+		{"h.rb", ""},  // standardrb intentionally not faked
 		{"i.lua", ""}, // stylua intentionally not faked
 		{"README.md", ""},
 		{"noext", ""},

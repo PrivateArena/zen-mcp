@@ -202,9 +202,10 @@ func convertToPiTemplate(template string, args []prompts.PromptArgument, default
 // template (https://pi.dev/docs/latest/prompt-templates) under
 // resources/prompts-pi/. The design mirrors generateCommands: one .md file per
 // prompt with YAML frontmatter. Named arguments become Pi positional args
-// ($1, $2, ...), the argument-hint uses <required> and [optional] markers, and
+// ($1, $2, ...), the argument-hint uses <required> and [optional] markers,
 // shell-code dollar signs are faked to a fullwidth dollar so Pi never
-// substitutes them.
+// substitutes them, and enabled skills are referenced via the zskill CLI
+// instead of embedding their content, keeping the exported template lean.
 func generatePiPrompts() error {
 	promptsDir := filepath.Join(mcpcfg.ProjectRoot, "resources", "prompts")
 	piDir := filepath.Join(mcpcfg.ProjectRoot, "resources", "prompts-pi")
@@ -250,16 +251,7 @@ func generatePiPrompts() error {
 
 		body := convertToPiTemplate(p.Template, p.Arguments, p.DefaultPersona)
 		if len(p.EnabledSkills) > 0 {
-			var parts []string
-			for _, skillID := range p.EnabledSkills {
-				content, err := prompts.LoadSkillContent(skillID)
-				if err == nil && content != "" {
-					parts = append(parts, escapePiDollar(content))
-				}
-			}
-			if len(parts) > 0 {
-				body = strings.Join(parts, "\n\n---\n")
-			}
+			body += prompts.SkillActivationBlock("zskill -a get -i %s", "Load the required skill(s) with the CLI when needed instead of working from memory:", p.EnabledSkills)
 		}
 
 		outPath := filepath.Join(piDir, p.Name+".md")

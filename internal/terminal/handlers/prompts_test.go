@@ -40,11 +40,11 @@ func writePromptDefs(t *testing.T, dir string, content string) {
 
 func TestConvertToPiTemplate(t *testing.T) {
 	cases := []struct {
-		name          string
-		template      string
-		args          []prompts.PromptArgument
+		name           string
+		template       string
+		args           []prompts.PromptArgument
 		defaultPersona string
-		want          string
+		want           string
 	}{
 		{
 			name:     "singleArgBecomesPositional",
@@ -79,11 +79,11 @@ func TestConvertToPiTemplate(t *testing.T) {
 			want:     "all=" + piFakeDollar + "@ sum=" + piFakeDollar + "ARGUMENTS " + piFakeDollar + "{@:2} " + piFakeDollar + "{1:-7}",
 		},
 		{
-			name:          "personaInlinedWhenDefaultExists",
-			template:      "You are Zen, {{PERSONA}}. Task: {{i}}",
-			args:          []prompts.PromptArgument{{Name: "i"}},
+			name:           "personaInlinedWhenDefaultExists",
+			template:       "You are Zen, {{PERSONA}}. Task: {{i}}",
+			args:           []prompts.PromptArgument{{Name: "i"}},
 			defaultPersona: "a meticulous reviewer",
-			want:          "You are Zen, a meticulous reviewer. Task: $1",
+			want:           "You are Zen, a meticulous reviewer. Task: $1",
 		},
 		{
 			name:     "personaSkippedWhenNoDefault",
@@ -162,6 +162,18 @@ const piTestDefs = `- name: pi-test-multi
       required: true
   template: |-
     You are Zen, {{PERSONA}}. Analyze {{i}}.
+
+- name: pi-test-skills
+  description: Skill prompt
+  arguments:
+    - name: i
+      description: The task
+      required: true
+  template: |-
+    Activate the skill for {{i}}.
+  enabledSkills:
+    - pi-skill-a
+  suggestSkills: true
 `
 
 func TestGeneratePiPromptsWritesFiles(t *testing.T) {
@@ -225,6 +237,22 @@ func TestGeneratePiPromptsWritesFiles(t *testing.T) {
 	if !strings.Contains(persona, "You are Zen, a meticulous reviewer who never guesses. Analyze $1.") {
 		t.Errorf("persona must be substituted and {{i}} must become $1:\n%s", persona)
 	}
+
+	skillsPath := filepath.Join(piDir, "pi-test-skills.md")
+	data, err = os.ReadFile(skillsPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", skillsPath, err)
+	}
+	skills := string(data)
+	if !strings.Contains(skills, "Activate the skill for $1.") {
+		t.Errorf("enabledSkills prompt must keep its own template with positional args:\n%s", skills)
+	}
+	if !strings.Contains(skills, "zskill -a get -i pi-skill-a") {
+		t.Errorf("enabledSkills prompt must reference the skill via zskill CLI:\n%s", skills)
+	}
+	if strings.Contains(skills, "SKILL ACTIVATION") == false {
+		t.Errorf("enabledSkills prompt must emit the SKILL ACTIVATION block:\n%s", skills)
+	}
 }
 
 func TestGeneratePiPromptsMissingDirLogsError(t *testing.T) {
@@ -243,7 +271,7 @@ func TestGeneratePiPromptsMissingDirLogsError(t *testing.T) {
 	}
 }
 
-func TestGeneratePiPromptsSkillBodyReplacesTemplate(t *testing.T) {
+func TestGeneratePiPromptsSkillsReferencedViaCLI(t *testing.T) {
 	dir := setupPromptsTest(t)
 	if err := os.MkdirAll(filepath.Join(dir, "resources", "prompts"), 0o755); err != nil {
 		t.Fatal(err)
@@ -268,10 +296,16 @@ func TestGeneratePiPromptsSkillBodyReplacesTemplate(t *testing.T) {
 	}
 	content := string(data)
 
-	if !strings.Contains(content, "Do the foo thing carefully.") {
-		t.Errorf("skill-enabled prompt body must be the skill content:\n%s", content)
+	if !strings.Contains(content, "Activate skill: foo") {
+		t.Errorf("skill prompt template must be preserved, not replaced:\n%s", content)
 	}
-	if strings.Contains(content, "{{i}}") || strings.Contains(content, "Task: $1") {
-		t.Errorf("skill body must replace the {{i}} template:\n%s", content)
+	if !strings.Contains(content, "Task: $1") {
+		t.Errorf("{{i}} must convert to active $1 placeholder:\n%s", content)
+	}
+	if !strings.Contains(content, "zskill -a get -i foo") {
+		t.Errorf("skill must be referenced via zskill CLI instead of embedded:\n%s", content)
+	}
+	if strings.Contains(content, "Do the foo thing carefully.") {
+		t.Errorf("skill body must NOT be embedded (token savings), got:\n%s", content)
 	}
 }

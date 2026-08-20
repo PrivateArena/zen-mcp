@@ -25,11 +25,7 @@ func ResolvePrompt(p PromptDefinition, args map[string]string, workspace string)
 	// Handle enabled skills
 	if len(p.EnabledSkills) > 0 {
 		if isTrue(p.SuggestSkills) {
-			var reminders []string
-			for _, skillID := range p.EnabledSkills {
-				reminders = append(reminders, fmt.Sprintf("- `skill id=%s`", skillID))
-			}
-			text += "\n\n---\n**SKILL ACTIVATION**\n[IMPORTANT] Use MCP skill id=skill_id to activate following knowledge:\n" + strings.Join(reminders, "\n")
+			text += SkillActivationBlock("skill id=%s", "Use MCP skill id=skill_id to activate following knowledge:", p.EnabledSkills)
 		} else {
 			var parts []string
 			for _, skillID := range p.EnabledSkills {
@@ -94,6 +90,21 @@ func argsValues(args map[string]string) []string {
 
 func isTrue(b *bool) bool {
 	return b != nil && *b
+}
+
+// SkillActivationBlock formats the SKILL ACTIVATION reminder block for the
+// given skills. Each reminder line is rendered from commandFmt with the skill
+// ID substituted, e.g. "skill id=%s" (MCP) or "zskill -a get -i %s" (CLI).
+// It returns "" when no skills are listed, so callers can append unconditionally.
+func SkillActivationBlock(commandFmt, intro string, skillIDs []string) string {
+	if len(skillIDs) == 0 {
+		return ""
+	}
+	var reminders []string
+	for _, id := range skillIDs {
+		reminders = append(reminders, fmt.Sprintf("- `%s`", fmt.Sprintf(commandFmt, id)))
+	}
+	return "\n\n---\n**SKILL ACTIVATION**\n[IMPORTANT] " + intro + "\n" + strings.Join(reminders, "\n")
 }
 
 // DebugLog writes a debug message to debug-mcp.log.

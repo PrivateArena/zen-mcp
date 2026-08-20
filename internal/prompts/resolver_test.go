@@ -79,9 +79,23 @@ func TestResolvePromptStaticInjectionIsDefault(t *testing.T) {
 	}
 }
 
+func TestSkillActivationBlock(t *testing.T) {
+	if got := SkillActivationBlock("skill id=%s", "Use MCP skill id=skill_id to activate following knowledge:", []string{"a", "b"}); got != "\n\n---\n**SKILL ACTIVATION**\n[IMPORTANT] Use MCP skill id=skill_id to activate following knowledge:\n- `skill id=a`\n- `skill id=b`" {
+		t.Errorf("MCP form mismatch:\n%q", got)
+	}
+	if got := SkillActivationBlock("zskill -a get -i %s", "Load required skills:", []string{"foo"}); got != "\n\n---\n**SKILL ACTIVATION**\n[IMPORTANT] Load required skills:\n- `zskill -a get -i foo`" {
+		t.Errorf("CLI form mismatch:\n%q", got)
+	}
+	if got := SkillActivationBlock("zskill -a get -i %s", "Load required skills:", nil); got != "" {
+		t.Errorf("empty skill list must return empty, got: %q", got)
+	}
+	if got := SkillActivationBlock("zskill -a get -i %s", "Load required skills:", []string{}); got != "" {
+		t.Errorf("empty skill slice must return empty, got: %q", got)
+	}
+}
+
 func TestResolvePromptSuggestSkillsEmptyList(t *testing.T) {
 	p := PromptDefinition{
-		Name:          "test",
 		Arguments:     []PromptArgument{{Name: "i"}},
 		Template:      "Task: {{i}}",
 		SuggestSkills: boolPtr(true),
