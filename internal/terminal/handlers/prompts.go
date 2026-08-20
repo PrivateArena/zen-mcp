@@ -70,6 +70,10 @@ func init() {
 	terminal.Register("export-commands", func(args []string) error {
 		return generateCommands()
 	})
+
+	terminal.Register("export-prompts_pi", func(args []string) error {
+		return generatePiPrompts()
+	})
 }
 
 func generateCommands() error {
@@ -138,5 +142,119 @@ func generateCommands() error {
 	}
 
 	terminal.Logf("OK: Generated %d command file(s) in %s", generated, commandsDir)
+	return nil
+}
+
+// convertPiPlaceholders rewrites prompt placeholders from {{name}} to the Pi
+// positional-argument syntax $N, where N is the 1-based index of the argument
+// in the prompt definition. Placeholders not declared as arguments (e.g.
+// {{PERSONA}}) are preserved verbatim, matching the behavior of the shared
+// plain-text parser in internal/prompts/parser.go.
+func convertPiPlaceholders(template string, args []prompts.PromptArgument) string {
+	idx := make(map[string]int, len(args))
+	for i, a := range args {
+		idx[a.Name] = i + 1
+	}
+	if len(idx) == 0 {
+		return template
+	}
+	var b strings.Builder
+	b.Grow(len(template))
+	rest := template
+	for {
+		start := strings.Index(rest, "{{")
+		if start < 0 {
+			b.WriteString(rest)
+			break
+		}
+		b.WriteString(rest[:start])
+		after := rest[start+2:]
+		end := strings.Index(after, "}}")
+		if end < 0 {
+			b.WriteString(rest[start:])
+			break
+		}
+		name := strings.TrimSpace(after[:end])
+		if n, ok := idx[name]; ok {
+			b.WriteString(fmt.Sprintf("$%d", n))
+		} else {
+			b.WriteString(rest[start : start+2+end+2])
+		}
+		rest = after[end+2:]
+	}
+	return b.String()
+}
+
+// generatePiPrompts converts every loaded prompt definition into a Pi prompt
+// template (https://pi.dev/docs/latest/prompt-templates) under
+// resources/prompts-pi/. The design mirrors generateCommands: one .md file per
+// prompt with YAML frontmatter. Named arguments become Pi positional args
+// ($1, $2, ...) and the argument-hint uses <required> and [optional] markers.
+func generatePiPrompts() error {
+	promptsDir := filepath.Join(mcpcfg.ProjectRoot, "resources", "prompts")
+	piDir := filepath.Join(mcpcfg.ProjectRoot, "resources", "prompts-pi")
+
+	terminal.Logf("GENERATE-PROMPTS-PI: Converting prompts to Pi prompt templates...")
+
+	if _, err := os.Stat(promptsDir); os.IsNotExist(err) {
+		terminal.Logf("ERROR: Prompts directory not found: %s", promptsDir)
+		return nil
+	}
+
+	if err := os.MkdirAll(piDir, 0o755); err != nil {
+		terminal.Logf("ERROR: Failed to create prompts-pi directory: %v", err)
+		return nil
+	}
+
+	defs, err := prompts.LoadPromptDefinitions()
+	if err != nil {
+		terminal.Logf("ERROR: Failed to load prompts: %v", err)
+		return nil
+	}
+
+	generated := 0
+	for _, p := range defs {
+		if p.Name == "" || p.Template == "" {
+			continue
+		}
+
+		var hintParts []string
+		for _, a := range p.Arguments {
+			if a.Required {
+				hintParts = append(hintParts, fmt.Sprintf("<%s>", a.Name))
+			} else {
+				hintParts = append(hintParts, fmt.Sprintf("[%s]", a.Name))
+			}
+		}
+
+		frontmatter := fmt.Sprintf("---\ndescription: %s\n", p.Description)
+		if len(hintParts) > 0 {
+			frontmatter += fmt.Sprintf("argument-hint: %s\n", strings.Join(hintParts, " "))
+		}
+		frontmatter += "---\n"
+
+		body := convertPiPlaceholders(p.Template, p.Arguments)
+		if len(p.EnabledSkills) > 0 {
+			var parts []string
+			for _, skillID := range p.EnabledSkills {
+				content, err := prompts.LoadSkillContent(skillID)
+				if err == nil && content != "" {
+					parts = append(parts, content)
+				}
+			}
+			if len(parts) > 0 {
+				body = strings.Join(parts, "\n\n---\n")
+			}
+		}
+
+		outPath := filepath.Join(piDir, p.Name+".md")
+		if err := os.WriteFile(outPath, []byte(frontmatter+body), 0o644); err != nil {
+			terminal.Logf("ERROR: Failed to write %s: %v", outPath, err)
+			continue
+		}
+		generated++
+	}
+
+	terminal.Logf("OK: Generated %d Pi prompt template(s) in %s", generated, piDir)
 	return nil
 }
