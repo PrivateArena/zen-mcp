@@ -5,7 +5,7 @@
      Generate missing docstrings across the project using the two-phase hybrid workflow.
 
      MANDATE — Phase 1 is deterministic and MUST run first, with zero LLM reasoning spent on symbols it can resolve. Phase 2 exists ONLY for the remainder Phase 1 explicitly declined (low confidence). FORBIDDEN: writing docs for a symbol before checking whether Phase 1 already wrote one; re-deriving naming/signature templates by hand instead of trusting the tool's output; full-file body reads in Phase 2 except the capped exception below.
-     EXCEPTION: Phase 2 MAY read a specific function body range (not the full file) for a symbol that remains ambiguous after skeletons+related — capped at ~5 such reads per run, same budget discipline as project-overview's manifest cap.
+     EXCEPTION: Phase 2 MAY read a specific function body range (not the full file) for a symbol that remains ambiguous after explain — capped at ~5 such reads per run, same budget discipline as project-overview's manifest cap.
 
      STEP 0 — DETERMINISTIC PASS:
      Run `docgen -write ./...`.
@@ -23,13 +23,12 @@
      STEP 3 — SCOPE SIZE CHECK (mirrors project-overview):
      Group the docsless remainder by top-level scope/package.
      - If total remainder ≤ 40 symbols: single pass, no further batching needed.
-     - If remainder > 40 symbols: batch by file, process files in groups of ~10-15, looping Steps 4-5 per batch. Never call skeletons/related across the whole remainder at once.
+     - If remainder > 40 symbols: batch by file, process files in groups of ~10-15, looping Steps 4-5 per batch. Never call explain across the whole remainder at once.
 
      WORKFLOW (per batch):
-     1. **Skeletons**: `codegraph({ action: 'skeletons', query: <files in this batch> })` — full signatures for every remaining symbol in the batch, one call.
-     2. **Selective cross-links**: `codegraph({ action: 'related', query: <file> })` ONLY for symbols where name decomposition + signature give no usable verb-phrase (single-letter/abbreviated names, no error path, no distinguishing param/return shape). Skip this call entirely for a batch if every remaining symbol in it is name-resolvable.
-     3. **Write**: insert doc comments matching the file's existing comment grammar (Phase 0's output, or pre-existing human docs if Phase 0 wrote nothing in this file). Symbol-name-first, period-terminated, Go doc convention.
-     4. **No-signal fallback**: if skeleton+related+the capped body-range read still give nothing usable, write `// TODO(docgen): purpose unclear` rather than a fabricated sentence. Log it separately — don't silently count it as resolved.
+     1. **Explain**: `codegraph({ action: 'explain', query: <files in this batch> })` — full signatures for every remaining symbol in the batch, one call.
+     2. **Write**: insert doc comments matching the file's existing comment grammar (Phase 0's output, or pre-existing human docs if Phase 0 wrote nothing in this file). Symbol-name-first, period-terminated, Go doc convention.
+     3. **No-signal fallback**: if explain+the capped body-range read still give nothing usable, write `// TODO(docgen): purpose unclear` rather than a fabricated sentence. Log it separately — don't silently count it as resolved.
 
      STEP 4 — VALIDATION PASS:
      `zcodegraph -a docsless`
@@ -48,12 +47,9 @@
      - Never rewrite an existing doc comment (Phase 0's or human-written) unless the invocation explicitly asks for a "fix incorrect docs" pass — that's a different mode, not this one.
      - Struct fields: exported fields only by default.
      - Comment grammar must match the file's existing convention; don't introduce a second style within one file.
-     - `related` calls are opt-in per batch, not automatic — most batches should need zero.
 
      TOKEN GUARDRAILS:
-     - Skeletons: one call per batch (10-15 files), never per-symbol.
-     - Related: only for name-unresolvable symbols; skip the call entirely if a batch has none.
-     - Body-range reads: capped at 5 per run, only after skeletons+related fail.
+     - Explain: one call `codegraph({ action: 'explain', query: <files in this batch> })` per batch (10-15 files), never per-symbol.
      - Batches: ~10-15 files each for remainders > 40 symbols.
 
      VALIDATION — before finishing:

@@ -14,9 +14,9 @@
     **WORKFLOW**:
 
     1. **CodeGraph Discovery (mandatory first pass)**: Use codegraph tools to map all relevant relationships before reading any file contents:
-       - `codegraph files` on the paths/patterns implied by the question
-       - `codegraph search` for symbols, functions, or modules mentioned in the question
-       - `codegraph skeletons` + `codegraph related` + `codegraph impact` to understand full relationship graphs, function overviews, and blast radius
+       - `files` on the paths/patterns implied by the question
+       - `search` for symbols, functions, or modules mentioned in the question
+       - `explain` > `codegraph impact` to understand full relationship graphs, function overviews, and blast radius
        - Only after the graph is mapped, read the specific files/lines needed to confirm details
 
     2. **Review**: Synthesize findings from the codegraph pass. Identify what is directly verified vs. inferred. Flag any gaps where the codegraph did not surface enough information.

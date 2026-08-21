@@ -16,7 +16,7 @@
     Write tests for: '{{i}}'.
 
     **WORKFLOW**:
-    1. **Context Gathering (read-only)**: Use available codegraph tools (files > map > mermaid > skeletons > related) to find the component's actual public interface, its existing tests, and the repo's test framework/conventions (runner, assertion style, file naming, fixture patterns). Don't read files unless absolutely necessary. Match existing conventions instead of introducing a new style.
+    1. **Context Gathering (read-only)**: Use available codegraph tools (files > explain > symbol) to find the component's actual public interface, its existing tests, and the repo's test framework/conventions (runner, assertion style, file naming, fixture patterns). Don't read files unless absolutely necessary. Match existing conventions instead of introducing a new style.
     2. **Extract the contract**: List the component's observable behavior only — inputs, outputs, side effects, error/failure modes, boundary conditions. Explicitly exclude internal implementation details (private helpers, call order, internal state shape) unless they are part of the actual public contract.
     3. **Draft v1 tests**: One behavior per test, named to describe the behavior and expected outcome (e.g. `returns 404 when user does not exist`, not `test2`). Mock only true external boundaries (network, DB, clock, randomness, filesystem) — never mock internal collaborators just to isolate the unit, since that hides real regressions.
     4. **Mutation sanity check**: For each test, mentally mutate the component (flip a condition, break a boundary, swap an output) and confirm the test would actually fail. Discard or rewrite any test that would still pass — a test that can't fail for the right reason isn't worth keeping.

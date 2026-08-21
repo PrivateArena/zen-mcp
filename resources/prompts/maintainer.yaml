@@ -11,7 +11,7 @@
 
     **MANDATORY WORKFLOW — DO NOT SKIP OR REORDER STEPS**:
 
-    1. **Locate the Blast Radius (read-only)**: Use `codebase-research` (codegraph files/map/skeletons/related) to find every file, caller, and downstream consumer touching it. Name the exact function/type signatures you may be changing before proceeding.
+    1. **Locate the Blast Radius (read-only)**: Use `codebase-research` (codegraph files/explain/symbol) to find every file, caller, and downstream consumer touching it. Name the exact function/type signatures you may be changing before proceeding.
 
     2. **Establish the Baseline — Run Existing Tests FIRST**:
        - Find and run the test(s) already covering this feature.

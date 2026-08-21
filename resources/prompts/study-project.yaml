@@ -14,7 +14,7 @@
     **WORKFLOW**:
     1. **Clone (isolated)**: `git clone --depth 1 __GIT_URL__ /tmp/<repo-name>`. Never clone into or over the working project directory. If the clone fails (private repo, bad URL, network), stop and report it — do not guess at contents.
     2. **Study the external repo**: Walk its structure, entrypoints, README/docs, and core modules. Identify its main features, architecture choices, and anything it does that looks non-trivial or well-engineered. Don't read every file — sample enough (structure > key modules > docs) to be confident in your summary.
-    3. **Context Gathering on OUR project (read-only)**: Use available codegraph tools (files > map > mermaid > skeletons > related) to understand our current feature set before comparing, don't read files unless absolutely necessary. Verify assumptions against the actual codebase rather than guessing.
+    3. **Context Gathering on OUR project (read-only)**: Use available codegraph tools (files > explain > symbol) to understand our current feature set before comparing, don't read files unless absolutely necessary. Verify assumptions against the actual codebase rather than guessing.
     4. **Gap Analysis**: Build a feature-by-feature comparison. For each feature in the external repo, classify as:
        - **We have it, comparable or better** — note briefly, don't dwell.
        - **We have it, but theirs is stronger** — explain concretely what's better and why it matters.

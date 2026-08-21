@@ -10,7 +10,7 @@
     Conduct a security review for: '{{i}}'.
 
     **WORKFLOW**:
-    1. **Context & Threat Modeling (read-only)**: Use available codegraph tools (files > map > mermaid > skeletons > related) to understand the system boundaries, data entry points, and trust zones. Do not read files unless absolutely necessary. Map out potential attack surfaces.
+    1. **Context & Threat Modeling (read-only)**: Use available codegraph tools (files > explain > symbol) to understand the system boundaries, data entry points, and trust zones. Do not read files unless absolutely necessary. Map out potential attack surfaces.
     2. **Draft v1 (Threat & Vulnerability Report)**: Produce an initial security assessment using Markdown and Mermaid diagrams (for attack vectors) ONLY — no exploit scripts or code execution.
     3. **Red-Team via browser**: Before finalizing, call `browser({ action: 'chat', provider: 'claude', upload_files: <file1,file2,file3,...,up to 9 relevant file paths>, message: 'Critique this security audit for: <concise audit summary>. Tell me what attack vectors, edge cases, privilege escalations, or data leaks I missed. Be highly adversarial and assume the posture of an advanced persistent threat.' })` to stress-test your threat model against an independent perspective.
     4. **Revise**: For each security risk or critique returned, either add it to the final threat model or explicitly dismiss it with a one-line risk-acceptance rationale. Do not silently ignore feedback.

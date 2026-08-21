@@ -9,7 +9,7 @@
 
     **STRICT WORKFLOW**:
     1. **Map Architecture**: Call `codegraph({ action: 'map' })` to grasp top directories, languages, and core files.
-    2. **Analyze Details**: Run `codegraph({ action: 'skeletons', query: <top_files_or_directories> })` to study the most frequently used or central files.
+    2. **Analyze Details**: Run `codegraph({ action: 'explain', query: <symbol> })` to study the most frequently used or central files.
     3. **Partition Scopes**: Group related files/directories into 3-6 significant, meaningful modules (scopes). Follow any specific guidance: '{{i}}'.
     4. **Update map.json Safely**:
        - Check the absolute path of the current directory.

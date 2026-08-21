@@ -1,5 +1,5 @@
 - name: spec-writer
-  description: Generate or update a comprehensive, build-ready Technical Specification (SPEC.md) for an existing project using CodeGraph skeletons and PROJECT_OVERVIEW.md.
+  description: Generate or update a comprehensive, build-ready Technical Specification (SPEC.md) for an existing project using CodeGraph explain and PROJECT_OVERVIEW.md.
   arguments:
     - name: i
       description: Scope or specific subsystem focus (defaults to full project root)
@@ -14,11 +14,11 @@
     **MANDATE — CONTEXT EXTRACTION**:
     Use `PROJECT_OVERVIEW.md` and `codegraph` as your primary sources of truth.
     - **Forbidden**: Reading full source file bodies (unless reading small structured config/manifest files like `go.mod`, `package.json`, or `Makefile` — capped at ~5 reads).
-    - **Required**: Rely on `PROJECT_OVERVIEW.md` (if present) for system structure and module trees. Use `codegraph({ action: 'skeletons' })` and `codegraph({ action: 'map' })` to extract exact type signatures, struct fields, interface definitions, and exported contracts.
+    - **Required**: Rely on `PROJECT_OVERVIEW.md` (if present) for system structure and module trees. Use `codegraph({ action: 'explain', query: '<rel_path>' })` and `codegraph({ action: 'map' })` to extract exact type signatures, struct fields, interface definitions, and exported contracts.
 
     **WORKFLOW**:
     1. **Overview Scan**: Read `PROJECT_OVERVIEW.md` at project root to grasp core purpose, module layout, dependencies, and architectural layers. If `PROJECT_OVERVIEW.md` does not exist, run `codegraph({ action: 'files' })` first.
-    2. **Contract & Interface Harvesting**: Execute `codegraph({ action: 'skeletons' })` on key entry points, subsystem dispatchers, and state stores to capture exact data shapes and signatures.
+    2. **Contract & Interface Harvesting**: Execute `codegraph({ action: 'explain', query: '<rel_path>' })` on key entry points, subsystem dispatchers, and state stores to capture exact data shapes and signatures.
     3. **Dependency & Flow Tracing**: Use `codegraph({ action: 'related' })` or `codegraph({ action: 'map' })` on structural hubs to map data flow, IPC/HTTP routes, and storage boundaries.
     4. **Generate Deliverable**: Write the result directly to `SPEC.md` (or `SPEC_<scope>.md` if scoped) at project root.
 
@@ -55,7 +55,7 @@
     **STRICT CONSTRAINTS**:
     1. **CONCRETENESS OVER PROSE**: Pair every named module or sub-system with its exact file path, exported function signature, or struct layout.
     2. **NO CODING STYLE GUIDES**: Exclude formatting rules, tab/space preference, or variable naming conventions (those belong in linters or `CONTRIBUTING.md`). Focus purely on architecture, folder layout, state, and interfaces.
-    3. **85% CONFIDENCE PROTOCOL**: Assert facts grounded directly in CodeGraph skeletons or overview documents. Mark unverified assumptions as `(unconfirmed)`.
+    3. **85% CONFIDENCE PROTOCOL**: Assert facts grounded directly in CodeGraph explain or overview documents. Mark unverified assumptions as `(unconfirmed)`.
     4. **DELIVERABLE**: Output directly to `SPEC.md` (or `SPEC_<scope>.md`) at root.
 
   enabledSkills:

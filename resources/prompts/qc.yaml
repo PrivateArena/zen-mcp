@@ -12,7 +12,7 @@
     Quality-check: '{{i}}'.
 
     **WORKFLOW**:
-    1. **Read & Map (read-only)**: Use available codegraph tools (files > map > mermaid > skeletons > related) to understand the existing structure before proposing anything, don't read files unless absolutely necessary.
+    1. **Read & Map (read-only)**: Use available codegraph tools (files > explain > symbol) to understand the existing structure before proposing anything, don't read files unless absolutely necessary.
     2. **First-Pass Findings**: Draft an initial list of tech-debt issues, each tagged by category and severity (Critical / Major / Minor / Nit). Categories to actively hunt for:
        - **Duplication**: copy-pasted blocks, near-identical functions, repeated logic that should be a shared utility
        - **Boilerplate**: repetitive scaffolding that could be templated, generated, or abstracted away

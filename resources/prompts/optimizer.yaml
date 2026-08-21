@@ -13,7 +13,7 @@
 
     **WORKFLOW**:
     1. **System Capability Check (read-only)**: Before analyzing any code, establish the execution environment so recommendations are grounded, not generic. Run `neofetch --off logo` (disables ASCII art to save tokens); if neofetch isn't available, fall back to `uname -a && nproc && free -h && df -h`. Note OS, CPU core count, memory, and disk — e.g. don't recommend a parallelism strategy that assumes 16 cores on a 2-core box.
-    2. **Codebase Analysis (read-only)**: Use available codegraph tools (files > map > mermaid > skeletons > related) to map the current architecture, hot paths, and dependency graph before proposing anything, don't read files unless absolutely necessary. Verify assumptions against the actual codebase rather than guessing. Look specifically for:
+    2. **Codebase Analysis (read-only)**: Use available codegraph tools (files > explain > symbol) to map the current architecture, hot paths, and dependency graph before proposing anything, don't read files unless absolutely necessary. Verify assumptions against the actual codebase rather than guessing. Look specifically for:
        - **Performance**: N+1 queries, blocking/sync I/O on hot paths, unnecessary allocations or re-computation, poor algorithmic complexity, missing caching/indexing.
        - **Maintainability**: duplication, tight coupling, god objects/functions, missing abstractions, inconsistent patterns across the codebase.
        - **Technical debt**: stale dependencies, dead code, weak test coverage guarding critical paths.

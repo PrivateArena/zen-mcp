@@ -1,11 +1,11 @@
 - name: project-overview
-  description: Generate a comprehensive, deeply informative project architecture overview from CodeGraph skeletons — no full-file reads, no browser. Scales to large multi-scope projects via root index + per-scope overviews.
+  description: Generate a comprehensive, deeply informative project architecture overview from CodeGraph explain — no full-file reads, no browser. Scales to large multi-scope projects via root index + per-scope overviews.
   arguments: []
   template: |-
      Generate a project architecture overview.
 
-     MANDATE — Use CodeGraph as the primary source. FORBIDDEN: reading full source file bodies, using browser/chat tools, web search. Skeletons give function/class signatures WITHOUT body — this is intentional for token efficiency and is the core signal.
-     EXCEPTION: You MAY read small manifest/config files directly (package.json, go.mod, Makefile, Cargo.toml, pyproject.toml, .env.example) — these are structured metadata, not source, and codegraph skeletons don't cover them. Cap at ~5 such reads.
+     MANDATE — Use CodeGraph as the primary source. FORBIDDEN: reading full source file bodies, using browser/chat tools, web search. Codegraph explain give function/class signatures WITHOUT body — this is intentional for token efficiency and is the core signal.
+     EXCEPTION: You MAY read small manifest/config files directly (package.json, go.mod, Makefile, Cargo.toml, pyproject.toml, .env.example) — these are structured metadata, not source, and codegraph explain don't cover them. Cap at ~5 such reads.
 
      STEP -1 — INCREMENTAL UPDATE CHECK (run before Step 0):
      Check whether PROJECT_OVERVIEW.md (or, for split projects, the relevant PROJECT_OVERVIEW.<scope>.md) exists AND its leading `<!-- codegraph-file-count: N, last-commit: <sha> -->` comment has a `last-commit` field, AND the project is a git repo (`git rev-parse --is-inside-work-tree`).
@@ -16,11 +16,10 @@
          - Compute change ratio = changed files / total files in that scope (from a fresh `codegraph({ action: 'files' })`).
          - REGEN THRESHOLD — fall back to full Step 0 generation for that scope if: change ratio > 25%, OR any top-level scope directory was added/removed, OR the file-count drift already exceeds 5% (existing rule).
          - Otherwise, do a TARGETED UPDATE instead of full generation:
-           a. `codegraph({ action: 'skeletons', query: <only the changed files> })` — do not re-skeleton unchanged files.
+           a. `codegraph({ action: 'explain', query: <rel_path> })` for each changed file.
            b. Update only the Component Roles rows for changed/added files; remove rows for deleted files.
-           c. Re-run `codegraph({ action: 'related' })` only for changed files that already appear in the existing Cross-References table (their fan-in/out may have shifted) — do not recompute the full top-6 from scratch unless a changed file looks like a new structural hub (high fan-in/out in the diff).
-           d. Leave File Tree, Dependencies, Read Triggers, and Key Architectural Patterns untouched unless the diff directly implies a change to them (new entry point, new top-level dir, new dependency in a re-read manifest).
-           e. Update the leading marker comment to the new HEAD sha and current file count before writing.
+           c. Leave File Tree, Dependencies, Read Triggers, and Key Architectural Patterns untouched unless the diff directly implies a change to them (new entry point, new top-level dir, new dependency in a re-read manifest).
+           d. Update the leading marker comment to the new HEAD sha and current file count before writing.
 
      STEP 0 — SCOPE SIZE CHECK:
      Run `codegraph({ action: 'files' })` and count files per top-level scope (root, and any subtree that is itself a separate module/binary — e.g. cmd/*, apps/*, services/*).
@@ -30,8 +29,8 @@
 
      WORKFLOW (per scope being written):
      1. **List files**: `codegraph({ action: 'files' })` — skip if PROJECT_OVERVIEW.md (or the relevant scoped file) already exists AND the file count matches within 5% of last run; otherwise this run is stale, do not skip.
-     2. **Map dependencies**: `codegraph({ action: 'map' })` or `codegraph({ action: 'mermaid' })`.
-     3. **Skeleton key files**: `codegraph({ action: 'skeletons', query: <entry points, tool registrations, core lib files identified in 1-2> })`. Extract not just names but FULL signatures (param types, return types) — this is required, see Key Exports rules below.
+     2. **Map dependencies**: `codegraph({ action: 'map' })`.
+     3. **Skeleton key files**: `codegraph({ action: 'explain', query: <rel_path> })` for each entry point, tool, and core lib file.
      4. **Find cross-links**: `codegraph({ action: 'related', query: <entry point path> })` for each of the top 5-6 highest-fan-in/fan-out files. This output is REQUIRED to populate `## Cross-References` — do not discard it.
      5. **Manifest scan** (optional, capped at 5 reads): open package.json/go.mod/Makefile/etc. directly for build/test/run scripts and top-level dependency versions.
 
@@ -129,7 +128,7 @@
      - Required H2s: Purpose, File Tree, Component Roles, Key Architectural Patterns, Read Triggers, Dependencies.
      - Optional H2s (Architecture, Scope Map, Tools, Cross-References, Data Flow, Build & Run) included when they add signal; Scope Map and per-scope overview files are REQUIRED (not optional) once Step 0 crosses the 60-file threshold.
      - For multi-language projects, Component Roles MUST have separate Backend/Frontend sub-scope sections.
-     - If any section has insufficient data from skeletons, state "No data from CodeGraph" instead of inventing structure.
+     - If any section has insufficient data from explain, state "No data from CodeGraph" instead of inventing structure.
 
      VALIDATION — Before writing:
      - Required H2s present (see above).
@@ -142,10 +141,10 @@
      - If scope > 60 files and no separate scope file was written, restructure per Step 0.
 
      CRITICAL RULES:
-     - MUST NOT read full source file bodies. Skeletons are sufficient; manifests are the only file-read exception (capped at 5).
+     - MUST NOT read full source file bodies. Codegraph explain is sufficient; manifests are the only file-read exception (capped at 5).
      - MUST NOT call browser/chat/web search.
      - MUST output plain text. No markdown formatting beyond the tables and fenced code blocks above.
-     - IF a skeleton or related call returns no data for a path, fall back to `codegraph({ action: 'files' })` to verify the path exists.
+     - IF a explain call returns no data for a path, fall back to `codegraph({ action: 'files' })` to verify the path exists.
      - MUST attempt Step -1 (incremental check) before any full regeneration when an overview file with a `last-commit` marker exists in a git repo. Do not silently default to full regen just because it's simpler.
      - MUST run the STEP FINAL commit exactly once per invocation (covering all scopes written this run), never per-scope.
      - Write result to PROJECT_OVERVIEW.md (and any PROJECT_OVERVIEW.<scope>.md files) at project root, overwriting existing files.

@@ -11,7 +11,7 @@
   template: |-
     Task: '{{i}}'.
 
-    Do NOT read target file contents yourself. Use `codebase-research` (codegraph files > map > skeletons > related — metadata and signatures, not bodies) to locate the relevant files. If `PROJECT_OVERVIEW.md` exists in the project root, read it and skip file discovery per that skill's conditional optimization.
+    Do NOT read target file contents yourself. Use `codebase-research` (codegraph files > explain > symbol — metadata and signatures, not bodies) to locate the relevant files. If `PROJECT_OVERVIEW.md` exists in the project root, read it and skip file discovery per that skill's conditional optimization.
 
     **BEFORE DELEGATING**: Run the message through `chat-research`'s Message-Quality Gate — Context, numbered specific question(s), files attached with a reason each, and expected output shape. If you can't fill in every field, you haven't scoped the task yet: go back to `codebase-research` rather than sending a generic ask like "explain the architecture" or "review this file." A message that would be equally valid for a different file or project fails the gate.
 

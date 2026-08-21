@@ -16,8 +16,8 @@ Runs immediately after SESSION INIT, before any task work.
 
 Shell `ls PROJECT_OVERVIEW.md`
 
-- **Exists** Read it to understand project architecture — **HALT until complete.** → skip `files`/`map`/`mermaid` and read relevant lines/files.
-- **Missing** → run full Precision Tunnelling: `zcodegraph -a files` → `zcodegraph -a map` → `zcodegraph -a skeletons -q <filename/filepath>` → `zcodegraph -a related -q <filename>` and read relevant lines/files.
+- **Exists** Read it to understand project architecture — **HALT until complete.** → skip `files` and unrelated code exploration, read files related to task only.
+- **Missing** → run full Precision Tunnelling: `zcodegraph -a files` → `zcodegraph -a map` → `zcodegraph -a explain -q <filename/filepath>` → `zcodegraph -a symbol -q <symbol>` read relevant symbols.
 
 ---
 

@@ -16,9 +16,9 @@
 
     3. **Coupling & Spaghetti Detection**: For hotspot files, use `codegraph related`/`codegraph neighbors` to check fan-in/fan-out, and `codegraph mermaid` on major entry points (respecting the skill's >100-node cap) to look for circular imports, god-objects, or unusually dense cross-references relative to peer files. Every finding names the specific fan-in/fan-out numbers or cycle that earned it — not a vibe.
 
-    4. **Boilerplate & Duplication Scan**: Use `codegraph skeletons` across files in the same directory/package to compare signatures. Flag near-identical function shapes, repeated error-handling/setup blocks, and copy-pasted structural patterns a shared helper could collapse — only where skeleton evidence shows actual repetition.
+    4. **Boilerplate & Duplication Scan**: Use `codegraph explain` across files in the same directory/package to compare signatures. Flag near-identical function shapes, repeated error-handling/setup blocks, and copy-pasted structural patterns a shared helper could collapse — only where codegraph explain evidence shows actual repetition.
 
-    5. **Magic String / Literal Duplication Scan (bash, no index required)**: Run a raw-text scan for string literals used in equality/inequality comparisons, since these are the classic silent-typo bug source (`"m1"` vs `"M1"`) and neither `deadcode` nor `skeletons` will ever surface them. Scope `--include` to the languages found in step 1. Example for a Go/Python/TS repo, run from the diagnosis scope:
+    5. **Magic String / Literal Duplication Scan (bash, no index required)**: Run a raw-text scan for string literals used in equality/inequality comparisons, since these are the classic silent-typo bug source (`"m1"` vs `"M1"`) and neither `deadcode` nor `explain` will ever surface them. Scope `--include` to the languages found in step 1. Example for a Go/Python/TS repo, run from the diagnosis scope:
        ```bash
        grep -rnoP '(?:==|!=)\s*"\K[^"]{1,50}(?=")' \
          --include='*.go' --include='*.py' --include='*.ts' --include='*.js' \
