@@ -243,6 +243,77 @@ func Add(a int, b int) int {
 	ClearSessionGraphByWorkspace(ws)
 }
 
+// TestSymbolReturnsRawCodeBlock guards the new `symbol` action: it must return
+// ONLY the raw source lines of the symbol (no headers, line numbers, file
+// annotations, or scope banners) so the output can be piped straight into sed
+// for code replacement. Both the path-qualified form (calc.go:Add) and the bare
+// symbol form (Add) must resolve to the same raw block.
+func TestSymbolReturnsRawCodeBlock(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "calc.go", goFixture)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	expected := "func Add(a int, b int) int {\n\treturn a + b\n}"
+
+	// path-qualified form: calc.go:Add
+	resPath := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "symbol", "query": "calc.go:Add"}))
+	textPath := toolText(resPath)
+	t.Logf("symbol calc.go:Add output:\n%q", textPath)
+	if textPath != expected {
+		t.Fatalf("symbol calc.go:Add should return the raw code block only, got:\n%q\nwant:\n%q", textPath, expected)
+	}
+	// raw contract: no file/package/line noise that would break a sed insert
+	for _, noise := range []string{"package foo", "File:", "lines", "Scope", "scope"} {
+		if strings.Contains(textPath, noise) {
+			t.Fatalf("symbol output must be raw; found %q in:\n%q", noise, textPath)
+		}
+	}
+
+	// bare symbol form: Add (no path)
+	resBare := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "symbol", "query": "Add"}))
+	textBare := toolText(resBare)
+	t.Logf("symbol Add output:\n%q", textBare)
+	if textBare != expected {
+		t.Fatalf("symbol Add (no path) should return the raw code block, got:\n%q\nwant:\n%q", textBare, expected)
+	}
+
+	// unknown symbol -> error text, no panic, no partial block
+	resMiss := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "symbol", "query": "Nope"}))
+	textMiss := toolText(resMiss)
+	t.Logf("symbol Nope output:\n%q", textMiss)
+	if !strings.Contains(textMiss, "not found") {
+		t.Fatalf("unknown symbol should report not found, got:\n%q", textMiss)
+	}
+	ClearSessionGraphByWorkspace(ws)
+}
+
+// TestSymbolQualifiedNameKeepsColon guards path:symbol parsing against
+// qualified symbol names that contain colons (e.g. C++ Class::method): only
+// the FIRST colon separates path from symbol, so the whole Class::method must
+// survive as the symbol name.
+func TestSymbolQualifiedNameKeepsColon(t *testing.T) {
+	path, sym := parseSymbolQuery("src/foo.cpp:Class::method")
+	if path != "src/foo.cpp" {
+		t.Fatalf("expected path 'src/foo.cpp', got %q", path)
+	}
+	if sym != "Class::method" {
+		t.Fatalf("expected symbol 'Class::method', got %q", sym)
+	}
+
+	// a bare qualified name with no path must stay intact
+	p2, s2 := parseSymbolQuery("Class::method")
+	if p2 != "" || s2 != "Class::method" {
+		t.Fatalf("bare qualified name should be the symbol; got path=%q sym=%q", p2, s2)
+	}
+}
+
 func makeFakeRequest(args map[string]any) mcp.CallToolRequest {
 	return mcp.CallToolRequest{
 		Params: mcp.CallToolParams{

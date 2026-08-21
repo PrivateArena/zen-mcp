@@ -961,6 +961,102 @@ func (cg *CodeGraph) GetSkeleton(relPath string) (string, error) {
 	return sb.String(), nil
 }
 
+// GetSymbolBlock returns the raw source lines for a symbol so the caller can
+// pipe the block straight into an editor or `sed` for replacement. When path
+// is non-empty the lookup is scoped to nodes in that file (matched by
+// path-suffix so a workspace-relative or graph-relative path both resolve);
+// when path is empty every indexed file is searched. The output is
+// intentionally raw: no headers, line numbers, or file annotations — just the
+// code block(s), so it can be consumed verbatim (e.g. for sed replacement).
+// Multiple matching blocks are concatenated with a single newline separator.
+func (cg *CodeGraph) GetSymbolBlock(symbol, path string) (string, error) {
+	if symbol == "" {
+		return "", fmt.Errorf("symbol name is required")
+	}
+
+	candidates, err := cg.storage.FindNodesByName(symbol)
+	if err != nil {
+		return "", err
+	}
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("symbol %q not found in index", symbol)
+	}
+
+	matched := candidates
+	if path != "" {
+		matched = nil
+		for _, n := range candidates {
+			if nodePathMatches(n.Path, path) {
+				matched = append(matched, n)
+			}
+		}
+		if len(matched) == 0 {
+			return "", fmt.Errorf("symbol %q not found in file %q", symbol, path)
+		}
+	}
+
+	blocks := make([]string, 0, len(matched))
+	seen := make(map[string]bool, len(matched))
+	for _, n := range matched {
+		key := fmt.Sprintf("%s:%d-%d", n.Path, n.StartLine, n.EndLine)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		body, err := cg.readSymbolLines(n)
+		if err != nil {
+			return "", err
+		}
+		blocks = append(blocks, body)
+	}
+
+	if len(blocks) == 0 {
+		return "", fmt.Errorf("symbol %q has no readable source range", symbol)
+	}
+	return strings.Join(blocks, "\n"), nil
+}
+
+// nodePathMatches reports whether an indexed node path matches a query path.
+// The match is a suffix/equality check so either a workspace-relative path
+// (e.g. "internal/foo.go") or a graph-relative path (e.g. "foo.go") resolves to
+// the same indexed node regardless of which scope (root vs sub-graph) owns it.
+func nodePathMatches(nodePath, queryPath string) bool {
+	if nodePath == queryPath {
+		return true
+	}
+	if strings.HasSuffix(nodePath, "/"+queryPath) {
+		return true
+	}
+	if strings.HasSuffix(queryPath, "/"+nodePath) {
+		return true
+	}
+	return false
+}
+
+// readSymbolLines reads the raw source lines [StartLine, EndLine] (1-indexed,
+// inclusive) for a node directly from disk, so the block is never the
+// index-time truncated Content. It returns the lines joined by newline with no
+// added header or trailing annotation.
+func (cg *CodeGraph) readSymbolLines(n NodeRecord) (string, error) {
+	content, err := os.ReadFile(filepath.Join(cg.rootDir, n.Path))
+	if err != nil {
+		return "", fmt.Errorf("failed to read %s: %w", n.Path, err)
+	}
+	lines := strings.Split(string(content), "\n")
+	start := n.StartLine - 1
+	end := n.EndLine
+	if start < 0 {
+		start = 0
+	}
+	if end > len(lines) {
+		end = len(lines)
+	}
+	if end <= start {
+		return "", fmt.Errorf("symbol %q has an invalid line range %d-%d in %s", n.Name, n.StartLine, n.EndLine, n.Path)
+	}
+	return strings.Join(lines[start:end], "\n"), nil
+}
+
 // Skeletons returns symbol skeletons.
 func (cg *CodeGraph) Skeletons() (string, error) {
 	files, err := cg.storage.ListFiles("", 0)

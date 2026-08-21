@@ -53,6 +53,75 @@ func mul(x, y int) int {
 	}
 }
 
+func TestGetSymbolBlock(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	src := "package foo\n\nfunc Add(a int, b int) int {\n\treturn a + b\n}\n\nfunc mul(x, y int) int {\n\treturn x * y\n}\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "calc.go"), []byte(src), 0644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	cg, err := NewCodeGraph(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCodeGraph: %v", err)
+	}
+	defer cg.Close()
+
+	if _, err := cg.Index(); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	expected := "func Add(a int, b int) int {\n\treturn a + b\n}"
+
+	// path-qualified lookup resolves the exact file and returns the raw block
+	got, err := cg.GetSymbolBlock("Add", "calc.go")
+	if err != nil {
+		t.Fatalf("GetSymbolBlock(Add, calc.go): %v", err)
+	}
+	if got != expected {
+		t.Fatalf("GetSymbolBlock(Add, calc.go) = %q, want %q", got, expected)
+	}
+
+	// bare symbol lookup still returns the raw block (single match here)
+	gotBare, err := cg.GetSymbolBlock("Add", "")
+	if err != nil {
+		t.Fatalf("GetSymbolBlock(Add, \"\"): %v", err)
+	}
+	if gotBare != expected {
+		t.Fatalf("GetSymbolBlock(Add, \"\") = %q, want %q", gotBare, expected)
+	}
+
+	// a path that does not contain the symbol must error cleanly
+	if _, err := cg.GetSymbolBlock("Add", "other.go"); err == nil {
+		t.Fatalf("GetSymbolBlock(Add, other.go) should error")
+	}
+
+	// an unknown symbol must error
+	if _, err := cg.GetSymbolBlock("Nope", ""); err == nil {
+		t.Fatalf("GetSymbolBlock(Nope, \"\") should error")
+	}
+}
+
+func TestNodePathMatches(t *testing.T) {
+	cases := []struct {
+		nodePath  string
+		queryPath string
+		want      bool
+	}{
+		{"calc.go", "calc.go", true},
+		{"calc.go", "sub/calc.go", true},   // query is a longer workspace path
+		{"sub/calc.go", "calc.go", true},   // query is a shorter relative path
+		{"a/b/c.go", "a/b/c.go", true},
+		{"a/b/c.go", "x/y.go", false},
+		{"calc.go", "Calc", false},
+	}
+	for _, c := range cases {
+		if got := nodePathMatches(c.nodePath, c.queryPath); got != c.want {
+			t.Fatalf("nodePathMatches(%q, %q) = %v, want %v", c.nodePath, c.queryPath, got, c.want)
+		}
+	}
+}
+
 func TestGetSkeletonMissingFile(t *testing.T) {
 	tmpDir := t.TempDir()
 

@@ -238,6 +238,21 @@ func init() {
 		return nil
 	})
 
+	terminal.Register("symbol", func(args []string) error {
+		parsed := terminal.ParseCodegraphArgs(args)
+		if parsed.Query == "" {
+			terminal.Logf("ERROR: Missing symbol query. Usage: symbol <symbol> or symbol <file>:<symbol>")
+			return nil
+		}
+		res := terminal.ExecuteTool("codegraph", map[string]any{
+			"action":  "symbol",
+			"query":   parsed.Query,
+			"isolate": parsed.Isolate,
+		})
+		terminal.Logf("RESULT:\n%s", res)
+		return nil
+	})
+
 	terminal.Register("impact", func(args []string) error {
 		parsed := terminal.ParseCodegraphArgs(args)
 		res := terminal.ExecuteTool("codegraph", map[string]any{

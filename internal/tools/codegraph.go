@@ -892,6 +892,65 @@ func actionMarkdown(session *layeredGraphSession, isolate int, query string) (st
 	return outputPath, nil
 }
 
+func actionSymbol(session *layeredGraphSession, isolate int, query string) (string, error) {
+	if query == "" {
+		return "", fmt.Errorf("symbol name (query) is required for symbol action")
+	}
+	path, symbol := parseSymbolQuery(query)
+
+	targets, err := getTargetGraphs(session, isolate)
+	if err != nil {
+		return "", err
+	}
+
+	var blocks []string
+	seen := make(map[string]bool)
+	var errs []string
+	for _, target := range targets {
+		block, err := target.graph.GetSymbolBlock(symbol, path)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", target.label, err))
+			continue
+		}
+		if block == "" {
+			continue
+		}
+		if seen[block] {
+			continue
+		}
+		seen[block] = true
+		blocks = append(blocks, block)
+	}
+
+	if len(blocks) == 0 {
+		if len(errs) > 0 {
+			return "", fmt.Errorf("symbol %q not found: %s", query, strings.Join(errs, "; "))
+		}
+		return "", fmt.Errorf("symbol %q not found in any active scope", query)
+	}
+	// Raw output only: no scope headers, line numbers, or file annotations, so
+	// the result can be piped straight into sed for code replacement.
+	return strings.Join(blocks, "\n"), nil
+}
+
+// parseSymbolQuery splits a symbol action query into an optional file path and
+// a symbol name. A leading "path:symbol" whose path looks like a file (contains
+// a slash or a dot) is treated as path:symbol; otherwise the whole query is the
+// symbol name. This lets "main.go:main" and "main" both resolve, with the path
+// form giving a precise, single-file match (and still supports qualified names
+// like "file.cpp:Class::method" because only the first colon is inspected).
+func parseSymbolQuery(query string) (path, symbol string) {
+	query = strings.TrimSpace(query)
+	if i := strings.Index(query, ":"); i >= 0 {
+		prefix := query[:i]
+		suffix := query[i+1:]
+		if suffix != "" && (strings.Contains(prefix, "/") || strings.Contains(prefix, ".")) {
+			return prefix, suffix
+		}
+	}
+	return "", query
+}
+
 func actionDeadcode(session *layeredGraphSession, isolate int, query string, limit *int) (string, error) {
 	targets, err := getTargetGraphs(session, isolate)
 	if err != nil {
@@ -1428,6 +1487,11 @@ func HandleCodegraphAction(ctx context.Context, workspace string, deps Deps, req
 			return toolresponse.WrapErrorWithContext(ctx, "codegraph", fmt.Errorf("symbol name (query) is required for explain action"), start)
 		}
 		return run(func() (string, error) { return actionExplain(session, isolate, query) })
+	case "symbol":
+		if query == "" {
+			return toolresponse.WrapErrorWithContext(ctx, "codegraph", fmt.Errorf("symbol name (query) is required for symbol action"), start)
+		}
+		return run(func() (string, error) { return actionSymbol(session, isolate, query) })
 	case "deadcode":
 		return run(func() (string, error) { return actionDeadcode(session, isolate, query, limit) })
 	case "shortestPath":
@@ -1453,12 +1517,12 @@ func defCodegraph(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "codegraph",
 		Title:       "Code Graph",
-		Description: "Code graph engine. Actions: index, search, status, map, skeletons, docsless, docsfull, mermaid, usage, neighbors, files, explain, related, deadcode, shortestPath, findCycles, markdown, impact.",
+		Description: "Code graph engine. Actions: index, search, status, map, skeletons, docsless, docsfull, mermaid, usage, neighbors, files, explain, related, deadcode, shortestPath, findCycles, markdown, impact, symbol.",
 		Schema: jsonSchema(map[string]any{
 			"action": strEnumProp("Codegraph action.", []string{
 				"index", "search", "status", "map", "skeletons", "docsless", "docsfull", "mermaid",
 				"usage", "neighbors", "files", "explain", "related",
-				"deadcode", "shortestPath", "findCycles", "markdown", "impact",
+				"deadcode", "shortestPath", "findCycles", "markdown", "impact", "symbol",
 			}),
 			"query": strProp("Search query or symbol name"),
 			//"format":  strEnumProp("Output format: text (default) or json", []string{"text", "json"}),
