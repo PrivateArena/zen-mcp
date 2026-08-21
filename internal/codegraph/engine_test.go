@@ -109,15 +109,19 @@ func TestNodePathMatches(t *testing.T) {
 		want      bool
 	}{
 		{"calc.go", "calc.go", true},
-		{"calc.go", "sub/calc.go", true},   // query is a longer workspace path
-		{"sub/calc.go", "calc.go", true},   // query is a shorter relative path
+		// A path query with a directory component is matched EXACTLY, so a
+		// same-named file in a different directory must NOT match.
+		{"calc.go", "sub/calc.go", false},
+		// A bare filename query matches by basename anywhere in the tree.
+		{"sub/calc.go", "calc.go", true},
+		{"a/b/c.go", "c.go", true},
 		{"a/b/c.go", "a/b/c.go", true},
 		{"a/b/c.go", "x/y.go", false},
 		{"calc.go", "Calc", false},
 	}
 	for _, c := range cases {
-		if got := nodePathMatches(c.nodePath, c.queryPath); got != c.want {
-			t.Fatalf("nodePathMatches(%q, %q) = %v, want %v", c.nodePath, c.queryPath, got, c.want)
+		if got := matchSymbolPath(c.nodePath, c.queryPath); got != c.want {
+			t.Fatalf("matchSymbolPath(%q, %q) = %v, want %v", c.nodePath, c.queryPath, got, c.want)
 		}
 	}
 }

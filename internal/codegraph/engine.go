@@ -30,6 +30,16 @@ type CodeGraph struct {
 	indexMu sync.Mutex
 }
 
+// symbolLoc identifies a unique source block by its absolute file path and
+// inclusive 1-indexed line range. It is used to deduplicate symbol blocks that
+// the index may surface more than once (e.g. the same file through several
+// layered scopes or via multiple directory prefixes).
+type symbolLoc struct {
+	abs string
+	s   int
+	e   int
+}
+
 // NewCodeGraph creates a new code graph engine.
 func NewCodeGraph(rootDir string) (*CodeGraph, error) {
 	dotZenDir := filepath.Join(rootDir, ".zenmcp")
@@ -963,12 +973,13 @@ func (cg *CodeGraph) GetSkeleton(relPath string) (string, error) {
 
 // GetSymbolBlock returns the raw source lines for a symbol so the caller can
 // pipe the block straight into an editor or `sed` for replacement. When path
-// is non-empty the lookup is scoped to nodes in that file (matched by
-// path-suffix so a workspace-relative or graph-relative path both resolve);
-// when path is empty every indexed file is searched. The output is
-// intentionally raw: no headers, line numbers, or file annotations — just the
-// code block(s), so it can be consumed verbatim (e.g. for sed replacement).
-// Multiple matching blocks are concatenated with a single newline separator.
+// is non-empty the lookup is scoped to nodes in that file; when path is empty
+// every indexed file is searched. The output is intentionally raw: no headers,
+// line numbers, or file annotations — just the code block(s), so it can be
+// consumed verbatim (e.g. for sed replacement). Matches are deduplicated by
+// their physical location (absolute file + line range) so the same symbol is
+// emitted exactly once even if the index holds duplicate node rows (for example
+// the same file surfacing through several layered scopes).
 func (cg *CodeGraph) GetSymbolBlock(symbol, path string) (string, error) {
 	if symbol == "" {
 		return "", fmt.Errorf("symbol name is required")
@@ -986,7 +997,7 @@ func (cg *CodeGraph) GetSymbolBlock(symbol, path string) (string, error) {
 	if path != "" {
 		matched = nil
 		for _, n := range candidates {
-			if nodePathMatches(n.Path, path) {
+			if matchSymbolPath(n.Path, path) {
 				matched = append(matched, n)
 			}
 		}
@@ -995,14 +1006,18 @@ func (cg *CodeGraph) GetSymbolBlock(symbol, path string) (string, error) {
 		}
 	}
 
-	blocks := make([]string, 0, len(matched))
-	seen := make(map[string]bool, len(matched))
+	// Dedup by the physical location so a path query that resolves a file via
+	// several directory prefixes (e.g. "ssl/https.lua" matching both
+	// "ssl/https.lua" and "sub/ssl/https.lua") does not emit the same block
+	// more than once.
+	seen := make(map[symbolLoc]bool, len(matched))
+	var blocks []string
 	for _, n := range matched {
-		key := fmt.Sprintf("%s:%d-%d", n.Path, n.StartLine, n.EndLine)
-		if seen[key] {
+		l := symbolLoc{filepath.Join(cg.rootDir, n.Path), n.StartLine, n.EndLine}
+		if seen[l] {
 			continue
 		}
-		seen[key] = true
+		seen[l] = true
 		body, err := cg.readSymbolLines(n)
 		if err != nil {
 			return "", err
@@ -1016,21 +1031,21 @@ func (cg *CodeGraph) GetSymbolBlock(symbol, path string) (string, error) {
 	return strings.Join(blocks, "\n"), nil
 }
 
-// nodePathMatches reports whether an indexed node path matches a query path.
-// The match is a suffix/equality check so either a workspace-relative path
-// (e.g. "internal/foo.go") or a graph-relative path (e.g. "foo.go") resolves to
-// the same indexed node regardless of which scope (root vs sub-graph) owns it.
-func nodePathMatches(nodePath, queryPath string) bool {
+// matchSymbolPath reports whether an indexed node path satisfies a query path.
+// A query that carries a directory component (a slash) is matched exactly:
+// "ssl/https.lua" resolves only to a node whose path is exactly "ssl/https.lua"
+// (relative to its graph root), which keeps the path form precise and avoids
+// pulling in same-named files from unrelated directories. A bare query (no
+// slash), e.g. "main.go", matches by basename so a file anywhere in the tree
+// still resolves. Exact equality always wins.
+func matchSymbolPath(nodePath, queryPath string) bool {
 	if nodePath == queryPath {
 		return true
 	}
-	if strings.HasSuffix(nodePath, "/"+queryPath) {
-		return true
+	if strings.Contains(queryPath, "/") {
+		return false
 	}
-	if strings.HasSuffix(queryPath, "/"+nodePath) {
-		return true
-	}
-	return false
+	return filepath.Base(nodePath) == queryPath
 }
 
 // readSymbolLines reads the raw source lines [StartLine, EndLine] (1-indexed,
