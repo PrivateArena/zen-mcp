@@ -1,12 +1,68 @@
 {
+  "/media/jang/home/Deve/worldproxy/zendes/zen2": {
+    "description": "ZenProxy is uBO-like adblock proxy with higher capabilities like Tagging  (from Privoxy), header filtering, download accelerating, proxying, leeching and bandwidth controlling.",
+    "lastVisited": "2026-08-29T23:03:01.273Z",
+    "scopes": {
+      "cosmetic": [
+        "zen-core/cosmetic"
+      ],
+      "dns": [
+        "zen-core/engine/dns_client"
+      ],
+      "dpi": [
+        "zen-core/engine/dpi"
+      ],
+      "gio": [
+        "internal/gio"
+      ],
+      "htmlfilter": [
+        "zen-core/rewrite/html/htmlfilter"
+      ],
+      "interceptor": [
+        "zen-core/networkrules/intercept_rule.go",
+        "zen-core/webserver/interceptor.go",
+        "zen-core/webserver/interceptor"
+      ],
+      "mimic": [
+        "zen-core/engine/mimic"
+      ],
+      "networkrules": [
+        "zen-core/networkrules"
+      ],
+      "proxy": [
+        "zen-core/proxy"
+      ],
+      "proxypool": [
+        "zen-core/engine/iptree",
+        "zen-core/networkrules/proxypool",
+        "zen-core/webserver/proxypool/dashboard"
+      ],
+      "tester": [
+        "zen-core/networkrules/decision.go",
+        "zen-core/networkrules/pipeline.go",
+        "zen-core/webserver/tester.go",
+        "zen-core/webserver/tester"
+      ],
+      "trie": [
+        "zen-core/engine/pathtree",
+        "zen-core/engine/ruletree"
+      ],
+      "tui": [
+        "internal/tui"
+      ]
+    }
+  },
+  "/media/jang/home/Deve/opencode-configs": {
+    "lastVisited": "2026-08-27T16:37:36.357Z"
+  },
+  "/media/jang/home/Deve/zen-dragon": {
+    "lastVisited": "2026-08-22T15:39:07.356Z"
+  },
   "/media/jang/home/privateserver/sgnet_windows/sgre-master": {
     "lastVisited": "2026-08-21T05:32:14.681Z"
   },
   "/media/jang/home/Deve/zen-vsix": {
     "lastVisited": "2026-08-20T16:04:11.936Z"
-  },
-  "/media/jang/home/Deve/opencode-configs": {
-    "lastVisited": "2026-08-20T05:54:26.647Z"
   },
   "/media/jang/home/Deve/zen-contact": {
     "description": "ZenContact is Kontakt, Heptewerk... sample libraries extractor and reconstructor.",
@@ -65,9 +121,6 @@
         "internal/tools/workspace.go"
       ]
     }
-  },
-  "/media/jang/home/Deve/zen-dragon": {
-    "lastVisited": "2026-08-19T11:35:18.581Z"
   },
   "/media/jang/home/Deve/zen-board": {
     "description": "ZenBoard is whiteboard video generator.",
@@ -169,59 +222,6 @@
         "www/web/pages/note-home.html",
         "www/web/pages/note-whiteboard.html",
         "www/note.yaml"
-      ]
-    }
-  },
-  "/media/jang/home/Deve/worldproxy/zendes/zen2": {
-    "description": "ZenProxy is uBO-like adblock proxy with higher capabilities like Tagging  (from Privoxy), header filtering, download accelerating, proxying, leeching and bandwidth controlling.",
-    "lastVisited": "2026-08-08T00:10:28.637Z",
-    "scopes": {
-      "cosmetic": [
-        "zen-core/cosmetic"
-      ],
-      "dns": [
-        "zen-core/engine/dns_client"
-      ],
-      "dpi": [
-        "zen-core/engine/dpi"
-      ],
-      "gio": [
-        "internal/gio"
-      ],
-      "htmlfilter": [
-        "zen-core/rewrite/html/htmlfilter"
-      ],
-      "interceptor": [
-        "zen-core/networkrules/intercept_rule.go",
-        "zen-core/webserver/interceptor.go",
-        "zen-core/webserver/interceptor"
-      ],
-      "mimic": [
-        "zen-core/engine/mimic"
-      ],
-      "networkrules": [
-        "zen-core/networkrules"
-      ],
-      "proxy": [
-        "zen-core/proxy"
-      ],
-      "proxypool": [
-        "zen-core/engine/iptree",
-        "zen-core/networkrules/proxypool",
-        "zen-core/webserver/proxypool/dashboard"
-      ],
-      "tester": [
-        "zen-core/networkrules/decision.go",
-        "zen-core/networkrules/pipeline.go",
-        "zen-core/webserver/tester.go",
-        "zen-core/webserver/tester"
-      ],
-      "trie": [
-        "zen-core/engine/pathtree",
-        "zen-core/engine/ruletree"
-      ],
-      "tui": [
-        "internal/tui"
       ]
     }
   },
