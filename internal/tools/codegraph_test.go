@@ -602,3 +602,103 @@ func Save() {}
 	}
 	ClearSessionGraphByWorkspace(ws)
 }
+
+// TestSkeletonWithAbsolutePath verifies that skeletons action handles absolute
+// paths by converting them to relative paths using the workspace root.
+func TestSkeletonWithAbsolutePath(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "calc.go", goFixture)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	// Test skeletons with RELATIVE path (baseline - should work)
+	resRel := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "skeletons", "query": "calc.go"}))
+	textRel := toolText(resRel)
+	t.Logf("skeletons with relative path: %s", textRel)
+	if strings.Contains(textRel, "not found") {
+		t.Fatalf("relative path should work, got: %s", textRel)
+	}
+
+	// Test skeletons with ABSOLUTE path (this is the issue being fixed)
+	absPath := filepath.Join(ws, "calc.go")
+	resAbs := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "skeletons", "query": absPath}))
+	textAbs := toolText(resAbs)
+	t.Logf("skeletons with absolute path %s: %s", absPath, textAbs)
+	if strings.Contains(textAbs, "not found") {
+		t.Fatalf("absolute path %q should be converted to relative and work, got: %s", absPath, textAbs)
+	}
+	if !strings.Contains(textAbs, "func Add") {
+		t.Fatalf("expected skeleton content from absolute path, got: %s", textAbs)
+	}
+
+	ClearSessionGraphByWorkspace(ws)
+}
+
+// TestExplainWithAbsolutePath verifies that explain action handles absolute
+// paths (e.g., "path/to/file.go:symbolName").
+func TestExplainWithAbsolutePath(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "calc.go", `package foo
+
+// Adds a and b.
+func Add(a int, b int) int {
+	return a + b
+}
+`)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	// Test explain with absolute path qualified with symbol
+	absPath := filepath.Join(ws, "calc.go")
+	resAbs := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "explain", "query": absPath + ":Add"}))
+	textAbs := toolText(resAbs)
+	t.Logf("explain with absolute path: %s", textAbs)
+	if strings.Contains(textAbs, "not found") {
+		t.Fatalf("absolute path %q in explain should work, got: %s", absPath, textAbs)
+	}
+	if !strings.Contains(textAbs, "function Add") {
+		t.Fatalf("expected function Add from absolute path, got: %s", textAbs)
+	}
+
+	ClearSessionGraphByWorkspace(ws)
+}
+
+// TestExpandQueryPathsRejectsOutsideWorkspace guards against path traversal
+// attacks: paths outside the workspace root (starting with "..") must NOT be
+// converted to absolute paths, as they could leak files outside the workspace.
+func TestExpandQueryPathsRejectsOutsideWorkspace(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "calc.go", goFixture)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	// Path outside workspace should NOT be matched (it produces ".." prefix)
+	absOutside := filepath.Join(ws, "..", "other", "calc.go")
+	resOutside := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "skeletons", "query": absOutside}))
+	textOutside := toolText(resOutside)
+	t.Logf("skeletons with path outside workspace %s: %s", absOutside, textOutside)
+	// Should fail because the path cannot be made relative within workspace
+	if !strings.Contains(textOutside, "No indexed files found") {
+		t.Fatalf("path outside workspace should not match, got: %s", textOutside)
+	}
+
+	ClearSessionGraphByWorkspace(ws)
+}

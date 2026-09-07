@@ -220,9 +220,16 @@ func expandQueryPaths(query string, session *layeredGraphSession) []string {
 	var parts []string
 	for _, p := range rawPaths {
 		p = strings.TrimSpace(p)
-		if p != "" {
-			parts = append(parts, p)
+		if p == "" {
+			continue
 		}
+		// Convert absolute paths to relative paths using workspace root
+		if filepath.IsAbs(p) {
+			if rel, err := filepath.Rel(session.workspaceRoot, p); err == nil && !strings.HasPrefix(rel, "..") {
+				p = rel
+			}
+		}
+		parts = append(parts, p)
 	}
 	if len(parts) == 0 {
 		return nil
@@ -1039,6 +1046,17 @@ func actionExplain(session *layeredGraphSession, isolate int, query string) (str
 		exactFile = qualifiedMatch[1]
 		exactName = qualifiedMatch[2]
 		searchScope = exactName
+		// Convert absolute path to relative path using workspace root
+		if filepath.IsAbs(exactFile) {
+			if rel, err := filepath.Rel(session.workspaceRoot, exactFile); err == nil && !strings.HasPrefix(rel, "..") {
+				exactFile = rel
+			}
+		}
+	} else if filepath.IsAbs(query) {
+		// Single absolute path without symbol - convert to relative
+		if rel, err := filepath.Rel(session.workspaceRoot, query); err == nil && !strings.HasPrefix(rel, "..") {
+			query = rel
+		}
 	}
 
 	type explainResult struct {
