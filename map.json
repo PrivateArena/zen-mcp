@@ -1,7 +1,60 @@
 {
+  "/media/jang/home/Deve/zen-mcp": {
+    "description": "ZenMCP is multi-purpose MCP server designed for ZenECO system.",
+    "lastVisited": "2026-10-16T02:03:53.329Z",
+    "scopes": {
+      "browser": [
+        "cli/zen-browser",
+        "internal/terminal/handlers/browser.go",
+        "internal/tools/browser.go",
+        "internal/bridge",
+        "internal/agentbridge"
+      ],
+      "codegraph": [
+        "cli/zen-codegraph",
+        "internal/codegraph",
+        "internal/terminal/handlers/codegraph.go",
+        "internal/tools/codegraph.go"
+      ],
+      "memory": [
+        "internal/tools/memory.go",
+        "internal/terminal/handlers/memory.go",
+        "internal/projectmemory",
+        "cli/zen-memory",
+        "cli/zen-memory_isolate",
+        "cli/zen-memory_shared"
+      ],
+      "prompt": [
+        "internal/prompts",
+        "internal/terminal/handlers/prompts.go",
+        "resources/prompts"
+      ],
+      "skill": [
+        "cli/zen-skill",
+        "internal/terminal/handlers/skills.go",
+        "internal/tools/skills.go",
+        "resources/prompts/skills.yaml"
+      ],
+      "terminal": [
+        "internal/terminal"
+      ],
+      "workspace": [
+        "internal/terminal/handlers/workspace.go",
+        "cli/zen-workspace",
+        "internal/workspace",
+        "internal/tools/workspace.go"
+      ]
+    }
+  },
+  "/media/jang/home/Deve/pi-adb-remote": {
+    "lastVisited": "2026-10-14T11:00:44.877Z"
+  },
+  "/media/jang/home/Deve/zen-vsix": {
+    "lastVisited": "2026-10-14T08:12:32.427Z"
+  },
   "/media/jang/home/Deve/worldproxy/zendes/zen2": {
     "description": "ZenProxy is uBO-like adblock proxy with higher capabilities like Tagging  (from Privoxy), header filtering, download accelerating, proxying, leeching and bandwidth controlling.",
-    "lastVisited": "2026-08-29T23:03:01.273Z",
+    "lastVisited": "2026-10-14T03:13:46.234Z",
     "scopes": {
       "cosmetic": [
         "zen-core/cosmetic"
@@ -52,6 +105,30 @@
       ]
     }
   },
+  "/media/jang/home/Deve/worldproxy/zendes/zen-webserver": {
+    "description": "ZenServer is multi-purpose webserver that hosts the ZenECO system (ZenNote whiteboard note taking app, ZenRAG) and can multiply itself.",
+    "lastVisited": "2026-09-13T06:58:17.787Z",
+    "scopes": {
+      "news": [
+        "www/news.yaml",
+        "www/web/themes/news"
+      ],
+      "note": [
+        "www/web/themes/note",
+        "www/web/pages/note-article.html",
+        "www/web/pages/note-home.html",
+        "www/web/pages/note-whiteboard.html",
+        "www/note.yaml"
+      ]
+    }
+  },
+  "/media/jang/home/Deve/zen-board": {
+    "description": "ZenBoard is whiteboard video generator.",
+    "lastVisited": "2026-09-09T12:15:10.099Z"
+  },
+  ".": {
+    "lastVisited": "2026-09-05T07:39:02.993Z"
+  },
   "/media/jang/home/Deve/opencode-configs": {
     "lastVisited": "2026-08-27T16:37:36.357Z"
   },
@@ -60,9 +137,6 @@
   },
   "/media/jang/home/privateserver/sgnet_windows/sgre-master": {
     "lastVisited": "2026-08-21T05:32:14.681Z"
-  },
-  "/media/jang/home/Deve/zen-vsix": {
-    "lastVisited": "2026-08-20T16:04:11.936Z"
   },
   "/media/jang/home/Deve/zen-contact": {
     "description": "ZenContact is Kontakt, Heptewerk... sample libraries extractor and reconstructor.",
@@ -74,57 +148,6 @@
         "reconstruct_profiles"
       ]
     }
-  },
-  "/media/jang/home/Deve/zen-mcp": {
-    "description": "ZenMCP is multi-purpose MCP server designed for ZenECO system.",
-    "lastVisited": "2026-08-19T15:12:13.822Z",
-    "scopes": {
-      "browser": [
-        "cli/zen-browser",
-        "internal/terminal/handlers/browser.go",
-        "internal/tools/browser.go",
-        "internal/bridge",
-        "internal/agentbridge"
-      ],
-      "codegraph": [
-        "cli/zen-codegraph",
-        "internal/codegraph",
-        "internal/terminal/handlers/codegraph.go",
-        "internal/tools/codegraph.go"
-      ],
-      "memory": [
-        "internal/tools/memory.go",
-        "internal/terminal/handlers/memory.go",
-        "internal/projectmemory",
-        "cli/zen-memory",
-        "cli/zen-memory_isolate",
-        "cli/zen-memory_shared"
-      ],
-      "prompt": [
-        "internal/prompts",
-        "internal/terminal/handlers/prompts.go",
-        "resources/prompts"
-      ],
-      "skill": [
-        "cli/zen-skill",
-        "internal/terminal/handlers/skills.go",
-        "internal/tools/skills.go",
-        "resources/prompts/skills.yaml"
-      ],
-      "terminal": [
-        "internal/terminal"
-      ],
-      "workspace": [
-        "internal/terminal/handlers/workspace.go",
-        "cli/zen-workspace",
-        "internal/workspace",
-        "internal/tools/workspace.go"
-      ]
-    }
-  },
-  "/media/jang/home/Deve/zen-board": {
-    "description": "ZenBoard is whiteboard video generator.",
-    "lastVisited": "2026-08-18T11:29:50.013Z"
   },
   "/media/jang/home/Deve/zenmidi": {
     "description": "ZenDAW is Digital Audio Workstation using sfizz-CGO as core with MIDIText as music programming language.",
@@ -207,23 +230,6 @@
   "/media/jang/home/Deve/zen-ovpn": {
     "description": "OpenVPN tunnel without polluting system IP.",
     "lastVisited": "2026-08-12T08:11:10.553Z"
-  },
-  "/media/jang/home/Deve/worldproxy/zendes/zen-webserver": {
-    "description": "ZenServer is multi-purpose webserver that hosts the ZenECO system (ZenNote whiteboard note taking app, ZenRAG) and can multiply itself.",
-    "lastVisited": "2026-08-09T15:57:27.515Z",
-    "scopes": {
-      "news": [
-        "www/news.yaml",
-        "www/web/themes/news"
-      ],
-      "note": [
-        "www/web/themes/note",
-        "www/web/pages/note-article.html",
-        "www/web/pages/note-home.html",
-        "www/web/pages/note-whiteboard.html",
-        "www/note.yaml"
-      ]
-    }
   },
   "/media/jang/home/Deve/sfizz-zenmidi": {
     "description": "SfizzCGO for ZenMIDI DAW.",

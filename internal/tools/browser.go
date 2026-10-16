@@ -80,16 +80,9 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 	}
 
 	if urlStr, ok := params["url"].(string); ok && urlStr != "" {
-		u, err := parseURL(urlStr)
-		if err == nil {
-			domain := u.Hostname()
-			for pattern, container := range CONTAINER_MAP {
-				if strings.Contains(domain, pattern) {
-					if _, ok := params["container"]; !ok {
-						params["container"] = container
-					}
-					break
-				}
+		if container, ok := containerForURL(urlStr); ok {
+			if _, has := params["container"]; !has {
+				params["container"] = container
 			}
 		}
 	}
@@ -520,6 +513,22 @@ func sanitizeBrowserParams(args map[string]any) map[string]any {
 		}
 	}
 	return out
+}
+
+// containerForURL maps a URL's hostname onto CONTAINER_MAP so bridge traffic for
+// a known site lands in the same Firefox container the browser tool would use.
+func containerForURL(urlStr string) (string, bool) {
+	u, err := parseURL(urlStr)
+	if err != nil {
+		return "", false
+	}
+	domain := u.Hostname()
+	for pattern, container := range CONTAINER_MAP {
+		if strings.Contains(domain, pattern) {
+			return container, true
+		}
+	}
+	return "", false
 }
 
 func parseURL(s string) (*url.URL, error) {
