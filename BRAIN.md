@@ -25,6 +25,7 @@ Shell `ls PROJECT_OVERVIEW.md`
 
 MCP CLI tools, available globally in PATH.
 - `zcodegraph`: Analyze and visualize code structure and dependencies.
+- `zsearch -q <query>`: Agentic search to find critical information. 
 - `zbrowser`: Web automation. **ALWAYS use absolute paths** for `upload_files`. Can take up to 5-10 minutes to finish, DO NOT ABORT IT.
 - `zskill -a get -i <id>`: Use this instead of harness `skills`.
 

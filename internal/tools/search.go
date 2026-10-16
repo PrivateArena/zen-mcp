@@ -23,11 +23,12 @@ const (
 	// googleSearchEndpoint is the plain Google web search endpoint.
 	googleSearchEndpoint = "https://www.google.com/search"
 	// aiOverviewSelector targets the AI Overview answer column of the SERP.
-	aiOverviewSelector = `div[data-subtree="aimc"][decode-data-ved="1"] div[data-container-id="main-col"]`
+	// aiOverviewSelector = `div[data-subtree="aimc"][decode-data-ved="1"] div[data-container-id="main-col"]`
+	aiOverviewSelector = `div[data-container-id="main-col"]`
 	// searchDefaultNum reproduces the ?num= page-size hint of the SERP request.
-	searchDefaultNum = 10
-	searchMinNum     = 1
-	searchMaxNum     = 100
+	searchDefaultNum = 50
+	searchMinNum     = 50
+	searchMaxNum     = 50
 	// searchNavigateTimeoutMs bounds the SERP load inside the bridge.
 	searchNavigateTimeoutMs = 30000
 	// searchOverviewWaitMs bounds the wait for the async AI Overview container.
@@ -81,6 +82,10 @@ func HandleSearchAction(ctx context.Context, workspace string, deps Deps, req mc
 	}
 	if _, err := bridge.CallBridge(ctx, "navigate", navigateParams); err != nil {
 		return toolresponse.WrapErrorWithContext(ctx, "search", err, start)
+	}
+
+	if _, err := bridge.CallBridge(ctx, "wait_for_network_idle", map[string]any{"idle_ms": 1000}); err != nil {
+		// ignore wait error
 	}
 
 	// Best-effort: the AI Overview streams in after the SERP paints. A failing
@@ -138,7 +143,7 @@ func searchStringArg(v any) string {
 func googleSearchURL(query string, num int) string {
 	values := url.Values{}
 	values.Set("q", query)
-	values.Set("num", strconv.Itoa(num))
+	values.Set("udm", strconv.Itoa(num))
 	return googleSearchEndpoint + "?" + values.Encode()
 }
 
