@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -529,6 +530,35 @@ func containerForURL(urlStr string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// bridgeIntArg coerces a tool argument to an int. JSON numbers arrive as
+// float64 while CLI wrappers may send strings, so every numeric shape the
+// bridge-facing tools can receive is accepted; ok is false for absent or
+// non-numeric values, letting each tool report its own range error.
+func bridgeIntArg(v any) (int, bool) {
+	switch n := v.(type) {
+	case nil:
+		return 0, false
+	case float64:
+		return int(n), true
+	case float32:
+		return int(n), true
+	case int:
+		return n, true
+	case int32:
+		return int(n), true
+	case int64:
+		return int(n), true
+	case string:
+		parsed, err := strconv.Atoi(strings.TrimSpace(n))
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	default:
+		return 0, false
+	}
 }
 
 func parseURL(s string) (*url.URL, error) {

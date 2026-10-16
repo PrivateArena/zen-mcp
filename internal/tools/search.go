@@ -147,31 +147,13 @@ func googleSearchURL(query string, num int) string {
 	return googleSearchEndpoint + "?" + values.Encode()
 }
 
-// searchNumParam normalizes the optional num argument. JSON numbers arrive as
-// float64, CLI wrappers may send strings, so both are accepted.
+// searchNumParam normalizes the optional num argument.
 func searchNumParam(v any) (int, error) {
 	if v == nil {
 		return searchDefaultNum, nil
 	}
-	num := 0
-	switch n := v.(type) {
-	case float64:
-		num = int(n)
-	case float32:
-		num = int(n)
-	case int:
-		num = n
-	case int32:
-		num = int(n)
-	case int64:
-		num = int(n)
-	case string:
-		parsed, err := strconv.Atoi(strings.TrimSpace(n))
-		if err != nil {
-			return 0, fmt.Errorf("num must be a number between %d and %d, got %q", searchMinNum, searchMaxNum, n)
-		}
-		num = parsed
-	default:
+	num, ok := bridgeIntArg(v)
+	if !ok {
 		return 0, fmt.Errorf("num must be a number between %d and %d, got %v", searchMinNum, searchMaxNum, v)
 	}
 	if num < searchMinNum || num > searchMaxNum {
@@ -245,13 +227,7 @@ func bridgeError(res map[string]any) (string, bool) {
 }
 
 // clampSearchContent bounds the extracted overview so a huge AI answer can never
-// flood the model context. Truncation is rune-safe.
+// flood the model context.
 func clampSearchContent(content string) (string, bool) {
-	if len(content) <= searchMaxContentChars {
-		return content, false
-	}
-	cut := content[:searchMaxContentChars]
-	trimmed := len(content) - searchMaxContentChars
-	cut = strings.ToValidUTF8(cut, "")
-	return cut + fmt.Sprintf("\n... [TRUNCATED %d chars]", trimmed), true
+	return clampBridgeContent(content, searchMaxContentChars)
 }

@@ -43,6 +43,7 @@ func AllDefs(workspace string, deps Deps) []ToolDef {
 		defRun(deps),
 		defBrowser(workspace, deps),
 		defSearch(workspace, deps),
+		defFetch(workspace, deps),
 		defMemoryIsolate(workspace, deps),
 		defMemoryShared(workspace, deps),
 		defColab(workspace, deps),

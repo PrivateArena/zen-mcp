@@ -5,106 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"unicode/utf8"
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
-// searchStub is a fake Firefox bridge that answers each action with a canned
-// body while recording every POST, so tests can assert the exact call sequence
-// (navigate -> wait_for_selector -> get_text) the search tool produces.
-type searchStub struct {
-	mu   sync.Mutex
-	reqs []map[string]any
-	// responses maps a bridge action to the JSON body returned for it; a missing
-	// entry falls back to a generic success body.
-	responses map[string]string
-	// statuses forces a non-200 status for an action, e.g. the bridge's HTTP 500
-	// "Not found" answer for an unmatched selector.
-	statuses map[string]int
-	// fail lists actions answered with HTTP 502, i.e. a transport-level bridge
-	// failure (as opposed to a success:false body).
-	fail map[string]bool
-}
-
-func (s *searchStub) serve(w http.ResponseWriter, req *http.Request) {
-	var body map[string]any
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	action, _ := body["action"].(string)
-
-	s.mu.Lock()
-	s.reqs = append(s.reqs, body)
-	raw, ok := s.responses[action]
-	failed := s.fail[action]
-	status := s.statuses[action]
-	s.mu.Unlock()
-
-	if failed {
-		http.Error(w, "bridge down", http.StatusBadGateway)
-		return
-	}
-	if status != 0 {
-		http.Error(w, raw, status)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if !ok {
-		raw = `{"success":true,"data":{"content":"generic"}}`
-	}
-	_, _ = w.Write([]byte(raw))
-}
-
-func (s *searchStub) actions() []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]string, 0, len(s.reqs))
-	for _, r := range s.reqs {
-		out = append(out, fmt.Sprint(r["action"]))
-	}
-	return out
-}
-
-func (s *searchStub) byAction(action string) map[string]any {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, r := range s.reqs {
-		if r["action"] == action {
-			return r
-		}
-	}
-	return nil
-}
-
-// searchStubAt installs a fake bridge for the duration of the test, so no test
-// can accidentally drive the real Firefox bridge.
-func searchStubAt(t *testing.T, responses map[string]string, fail ...string) *searchStub {
-	return installSearchStub(t, responses, nil, fail...)
-}
-
-// searchStubStatusAt additionally answers the listed actions with a non-200
-// status carrying the canned body.
-func searchStubStatusAt(t *testing.T, responses map[string]string, statuses map[string]int) *searchStub {
-	return installSearchStub(t, responses, statuses)
-}
-
-func installSearchStub(t *testing.T, responses map[string]string, statuses map[string]int, fail ...string) *searchStub {
-	t.Helper()
-	failures := map[string]bool{}
-	for _, a := range fail {
-		failures[a] = true
-	}
-	stub := &searchStub{responses: responses, statuses: statuses, fail: failures}
-	ts := httptest.NewServer(http.HandlerFunc(stub.serve))
-	t.Cleanup(ts.Close)
-	pointBridgeAt(t, ts.URL)
-	return stub
+// searchSERP builds the SERP URL the search tool is expected to navigate to:
+// the query plus the fixed udm=50 view-mode hint, url.Values-encoded in key order.
+func searchSERP(encodedQuery string) string {
+	return fmt.Sprintf("https://www.google.com/search?q=%s&udm=%d", encodedQuery, searchDefaultNum)
 }
 
 func searchReq(args map[string]any) mcp.CallToolRequest {
@@ -114,20 +25,6 @@ func searchReq(args map[string]any) mcp.CallToolRequest {
 			Arguments: args,
 		},
 	}
-}
-
-func resultText(t *testing.T, res *mcp.CallToolResult) string {
-	t.Helper()
-	if res == nil {
-		t.Fatal("nil result")
-	}
-	var text strings.Builder
-	for _, c := range res.Content {
-		if tc, ok := c.(mcp.TextContent); ok {
-			text.WriteString(tc.Text)
-		}
-	}
-	return text.String()
 }
 
 func searchPayload(t *testing.T, res *mcp.CallToolResult) map[string]any {
@@ -151,20 +48,20 @@ var searchOKResponses = map[string]string{
 }
 
 func TestSearchNavigatesGoogleSERPAndExtractsAIOverview(t *testing.T) {
-	stub := searchStubAt(t, searchOKResponses)
+	stub := bridgeStubAt(t, searchOKResponses)
 
 	res := HandleSearchAction(context.Background(), t.TempDir(), Deps{}, searchReq(map[string]any{
 		"query": "how to use hyperframes",
 	}))
 
-	if got, want := strings.Join(stub.actions(), ","), "navigate,wait_for_selector,get_text"; got != want {
+	if got, want := strings.Join(stub.actions(), ","), "navigate,wait_for_network_idle,wait_for_selector,get_text"; got != want {
 		t.Fatalf("bridge call sequence = %q, want %q", got, want)
 	}
 
 	nav := stub.byAction("navigate")
-	// The SERP URL must carry the query plus the num= page-size hint, with
-	// spaces encoded as '+' (Google's own search-link format).
-	if nav["url"] != "https://www.google.com/search?num=10&q=how+to+use+hyperframes" {
+	// The SERP URL must carry the query plus the udm= view-mode hint, with spaces
+	// encoded as '+' (Google's own search-link format).
+	if nav["url"] != searchSERP("how+to+use+hyperframes") {
 		t.Errorf("navigate url = %v", nav["url"])
 	}
 	if nav["new_tab"] != true {
@@ -218,7 +115,7 @@ func TestSearchRequiresQuery(t *testing.T) {
 		{"query": ""},
 		{"query": "   \t "},
 	} {
-		stub := searchStubAt(t, searchOKResponses)
+		stub := bridgeStubAt(t, searchOKResponses)
 		res := HandleSearchAction(context.Background(), t.TempDir(), Deps{}, searchReq(args))
 		if text := resultText(t, res); !strings.Contains(text, "query is required") {
 			t.Errorf("args %v: expected missing-query error, got %q", args, text)
@@ -233,20 +130,21 @@ func TestSearchNumParam(t *testing.T) {
 	cases := []struct {
 		name    string
 		num     any
-		wantNum string // expected num= value in the SERP URL, "" => must error
+		wantNum string // expected udm= value in the SERP URL, "" => must error
 	}{
-		{name: "default", num: nil, wantNum: "10"},
-		{name: "json number", num: float64(25), wantNum: "25"},
-		{name: "cli string", num: "5", wantNum: "5"},
+		{name: "default", num: nil, wantNum: "50"},
+		{name: "json number", num: float64(50), wantNum: "50"},
+		{name: "cli string", num: "50", wantNum: "50"},
+		{name: "below the fixed page size rejected", num: float64(10), wantNum: ""},
 		{name: "zero rejected", num: float64(0), wantNum: ""},
 		{name: "negative rejected", num: float64(-1), wantNum: ""},
-		{name: "above google ceiling rejected", num: float64(101), wantNum: ""},
+		{name: "above the fixed page size rejected", num: float64(51), wantNum: ""},
 		{name: "non numeric string rejected", num: "ten", wantNum: ""},
 		{name: "wrong type rejected", num: []any{1}, wantNum: ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			stub := searchStubAt(t, searchOKResponses)
+			stub := bridgeStubAt(t, searchOKResponses)
 			args := map[string]any{"query": "hyperframes"}
 			if tc.num != nil {
 				args["num"] = tc.num
@@ -266,7 +164,7 @@ func TestSearchNumParam(t *testing.T) {
 			if nav == nil {
 				t.Fatalf("navigate never called: %s", resultText(t, res))
 			}
-			if want := "num=" + tc.wantNum; !strings.Contains(fmt.Sprint(nav["url"]), want) {
+			if want := "udm=" + tc.wantNum; !strings.Contains(fmt.Sprint(nav["url"]), want) {
 				t.Errorf("navigate url = %v, want to contain %q", nav["url"], want)
 			}
 			if out := searchPayload(t, res); fmt.Sprint(out["num"]) != tc.wantNum {
@@ -280,7 +178,7 @@ func TestSearchReportsMissingAIOverview(t *testing.T) {
 	// The bridge answers HTTP 200 with success:false when the selector matches
 	// nothing (query with no AI Overview) — that must surface as an error, not an
 	// empty success payload.
-	stub := searchStubAt(t, map[string]string{
+	stub := bridgeStubAt(t, map[string]string{
 		"navigate":          `{"success":true,"index":7046}`,
 		"wait_for_selector": `{"success":true,"data":false}`,
 		"get_text":          `{"success":false,"data":null,"error":"Not found: div[data-subtree=\"aimc\"]"}`,
@@ -306,7 +204,7 @@ func TestSearchReportsMissingAIOverviewOverHTTPError(t *testing.T) {
 	// Real bridge behaviour for a SERP with no AI Overview: get_text answers HTTP
 	// 500 with "Not found: <selector>". That must read as a miss, not a raw
 	// transport failure.
-	stub := searchStubStatusAt(t, map[string]string{
+	stub := bridgeStubStatusAt(t, map[string]string{
 		"navigate":          `{"success":true,"index":7046}`,
 		"wait_for_selector": `{"success":true,"data":false}`,
 		"get_text":          `{"success":false,"data":null,"error":"Not found: div[data-subtree=\"aimc\"]"}`,
@@ -329,7 +227,7 @@ func TestSearchReportsMissingAIOverviewOverHTTPError(t *testing.T) {
 }
 
 func TestSearchEmptyOverviewIsAnError(t *testing.T) {
-	stub := searchStubAt(t, map[string]string{
+	stub := bridgeStubAt(t, map[string]string{
 		"navigate":          `{"success":true,"index":7046}`,
 		"wait_for_selector": `{"success":true,"data":true}`,
 		"get_text":          `{"success":true,"data":{"content":"   ","el":{"tag":"DIV"}}}`,
@@ -339,7 +237,7 @@ func TestSearchEmptyOverviewIsAnError(t *testing.T) {
 	if text := resultText(t, res); !strings.Contains(text, "is empty") {
 		t.Errorf("expected empty-overview error, got %q", text)
 	}
-	if len(stub.actions()) != 3 {
+	if len(stub.actions()) != 4 {
 		t.Errorf("unexpected call sequence %v", stub.actions())
 	}
 }
@@ -347,7 +245,7 @@ func TestSearchEmptyOverviewIsAnError(t *testing.T) {
 func TestSearchWaitFailureIsNonFatal(t *testing.T) {
 	// A bridge-level failure in the wait must not lose the search: extraction
 	// still runs against whatever the SERP already rendered.
-	stub := searchStubAt(t, map[string]string{
+	stub := bridgeStubAt(t, map[string]string{
 		"navigate": `{"success":true,"index":7046}`,
 		"get_text": searchOKResponse,
 	}, "wait_for_selector")
@@ -357,13 +255,13 @@ func TestSearchWaitFailureIsNonFatal(t *testing.T) {
 	if out := searchPayload(t, res); out["content"] != searchOverviewAnswer {
 		t.Errorf("content = %v, want %v", out["content"], searchOverviewAnswer)
 	}
-	if got, want := strings.Join(stub.actions(), ","), "navigate,wait_for_selector,get_text"; got != want {
+	if got, want := strings.Join(stub.actions(), ","), "navigate,wait_for_network_idle,wait_for_selector,get_text"; got != want {
 		t.Errorf("sequence must continue past the failed wait, got %q want %q", got, want)
 	}
 }
 
 func TestSearchNavigateFailureAbortsBeforeExtraction(t *testing.T) {
-	stub := searchStubAt(t, map[string]string{"get_text": searchOKResponse}, "navigate")
+	stub := bridgeStubAt(t, map[string]string{"get_text": searchOKResponse}, "navigate")
 
 	res := HandleSearchAction(context.Background(), t.TempDir(), Deps{}, searchReq(map[string]any{"query": "hyperframes"}))
 
@@ -377,7 +275,7 @@ func TestSearchNavigateFailureAbortsBeforeExtraction(t *testing.T) {
 
 func TestSearchTruncatesOversizedOverview(t *testing.T) {
 	huge := strings.Repeat("a", searchMaxContentChars+5000)
-	searchStubAt(t, map[string]string{
+	bridgeStubAt(t, map[string]string{
 		"navigate":          `{"success":true,"index":7046}`,
 		"wait_for_selector": `{"success":true,"data":true}`,
 		"get_text":          fmt.Sprintf(`{"success":true,"data":{"content":%q}}`, huge),
@@ -422,7 +320,7 @@ func TestClampSearchContentIsRuneSafe(t *testing.T) {
 }
 
 func TestSearchDecodesHTMLEntitiesInQuery(t *testing.T) {
-	stub := searchStubAt(t, searchOKResponses)
+	stub := bridgeStubAt(t, searchOKResponses)
 
 	HandleSearchAction(context.Background(), t.TempDir(), Deps{}, searchReq(map[string]any{
 		"query": "coffee &amp; tea",
@@ -443,7 +341,7 @@ func TestSearchDecodesHTMLEntitiesInQuery(t *testing.T) {
 func TestSearchParsesListShapedBridgePayload(t *testing.T) {
 	// get_text may answer with an array of matched elements; the tool must still
 	// find the answer text instead of returning an empty payload.
-	stub := searchStubAt(t, map[string]string{
+	stub := bridgeStubAt(t, map[string]string{
 		"navigate":          `{"success":true,"index":7046}`,
 		"wait_for_selector": `{"success":true,"data":true}`,
 		"get_text":          `{"success":true,"data":["",{"content":"part one"},"part two"]}`,
@@ -460,7 +358,7 @@ func TestSearchParsesListShapedBridgePayload(t *testing.T) {
 }
 
 func TestSearchToolRegisteredInAllDefs(t *testing.T) {
-	stub := searchStubAt(t, searchOKResponses)
+	stub := bridgeStubAt(t, searchOKResponses)
 
 	var found *ToolDef
 	defs := AllDefs("/ws", Deps{})
@@ -491,7 +389,7 @@ func TestSearchToolRegisteredInAllDefs(t *testing.T) {
 	if out := searchPayload(t, res); out["content"] != searchOverviewAnswer {
 		t.Errorf("registered handler content = %v", out["content"])
 	}
-	if len(stub.actions()) != 3 {
+	if len(stub.actions()) != 4 {
 		t.Errorf("registered handler sequence = %v", stub.actions())
 	}
 }
@@ -502,7 +400,7 @@ func TestContainerForURL(t *testing.T) {
 		want string
 		ok   bool
 	}{
-		{url: "https://www.google.com/search?num=10&q=x", want: "Personal", ok: true},
+		{url: searchSERP("x"), want: "Personal", ok: true},
 		{url: "https://github.com/owner/repo", want: "Work", ok: true},
 		{url: "https://slack.com/app", want: "Work", ok: true},
 		{url: "https://www.youtube.com/watch?v=x", want: "Personal", ok: true},
@@ -520,9 +418,9 @@ func TestContainerForURL(t *testing.T) {
 
 func TestGoogleSearchURL(t *testing.T) {
 	cases := []struct{ query, want string }{
-		{"how to use hyperframes", "https://www.google.com/search?num=10&q=how+to+use+hyperframes"},
-		{"a&b", "https://www.google.com/search?num=10&q=a%26b"},
-		{"emoji 😀", "https://www.google.com/search?num=10&q=emoji+%F0%9F%98%80"},
+		{"how to use hyperframes", searchSERP("how+to+use+hyperframes")},
+		{"a&b", searchSERP("a%26b")},
+		{"emoji 😀", searchSERP("emoji+%F0%9F%98%80")},
 	}
 	for _, tc := range cases {
 		if got := googleSearchURL(tc.query, searchDefaultNum); got != tc.want {
