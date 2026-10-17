@@ -14,7 +14,7 @@
     **WORKFLOW**:
     1. **Product Overview Context (Read-Only)**: Read `PROJECT_OVERVIEW.md` in the project root to immediately understand our current product's architecture, key capabilities, workflows, and core value proposition. Do NOT read source code or iterate over source files unless strictly required to clarify a specific feature claim.
     2. **Identify Core Differentiators**: Based on `PROJECT_OVERVIEW.md`, ask and answer: *What is special, unique, or architecturally distinct about our product compared to typical solutions in this domain?*
-    3. **Competitor Discovery & External Research**: Research 2 to 4 key competitor products, commercial solutions, or open-source alternatives in this domain (using available research and search tools). For each competitor, capture its core architecture, primary feature set, target audience, and key strengths.
+    3. **Competitor Discovery & External Research**: Research 2 to 4 key competitor products using `search({ query: 'subject' })`, commercial solutions, or open-source alternatives in this domain (using available research and search tools). For each competitor, capture its core architecture, primary feature set, target audience, and key strengths.
     4. **Feature Comparison & Gap Matrix**: Build a feature-by-feature comparison matrix mapping our capabilities against competitor tools. Classify every feature into one of five categories:
        - **Our Core Advantage / Differentiator** — features where our approach is unique or fundamentally superior.
        - **We Have It (Comparable or Better)** — feature parity or better execution; note briefly.

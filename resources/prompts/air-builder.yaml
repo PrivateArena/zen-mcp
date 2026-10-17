@@ -1,8 +1,5 @@
 - name: air-builder
-  description: >
-    Generate a gold-standard Air live-reload configuration (.air.toml) for a Go
-    project. Inspects project layout, inferring sensible watch/build settings,
-    then outputs a complete production-ready TOML file.
+  description: Generate a gold-standard Air live-reload configuration (.air.toml) for a Go project. Inspects project layout, inferring sensible watch/build settings, then outputs a complete production-ready TOML file.
   arguments:
     - name: i
       description: >

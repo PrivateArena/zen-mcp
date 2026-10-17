@@ -1,9 +1,5 @@
 - name: prompt-builder
-  description: >
-    Research-driven prompt generator. Given a task description, gathers external
-    context (via browser.chat/search) and/or internal codebase context (via
-    codegraph) to produce a richly detailed, session-ready prompt optimized for
-    the next agent invocation.
+  description: Research-driven prompt generator. Given a task description, gathers external context (via browser.chat/search) and/or internal codebase context (via codegraph) to produce a richly detailed, session-ready prompt optimized for the next agent invocation.
   arguments:
     - name: i
       description: >

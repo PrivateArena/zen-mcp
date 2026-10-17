@@ -333,16 +333,16 @@ func buildHelpStatementsOpt(t cliTool, url string, aliases map[string]string) []
 		`echo "  POST ` + q(url) + `/mcp"`,
 		`echo ""`,
 		`echo "USAGE:"`,
-		`echo "  $0 --<param> <value>..."`,
-		`echo "  $0 --<param>=<value>   # equal-style, e.g. --upload_files=f1,f2 or -up=f1"`,
-		`echo "  $0 --json '{\"key\":\"val\"}'   # raw JSON escape hatch; '-' reads JSON from STDIN (heredoc/paste)"`,
-		`echo "  $0 --json-file <path>  # read raw JSON from a file (massive payloads)"`,
-		`echo "  $0 --<param> @<file>   # any param value may read from a file, e.g. --notes @notes.md"`,
-		`echo "  $0 --dry-run           # print the JSON-RPC body + metrics, do NOT send"`,
-		`echo "  $0 --sleep <sec>       # sleep before sending (test long-running survival)"`,
+		`echo " --<param> <value>..."`,
+		`echo " --<param>=<value>   # equal-style, e.g. --upload_files=f1,f2 or -up=f1"`,
+		`echo " --json '{\"key\":\"val\"}'   # raw JSON escape hatch; '-' reads JSON from STDIN (heredoc/paste)"`,
+		`echo " --json-file <path>  # read raw JSON from a file (massive payloads)"`,
+		`echo " --<param> @<file>    # any param value may read from a file, e.g. --notes @notes.md"`,
+		`echo " --dry-run           # print the JSON-RPC body + metrics, do NOT send"`,
+		`echo " --sleep <sec>       # sleep before sending (test long-running survival)"`,
 	}
 	if len(aliases) > 0 {
-		lines = append(lines, `echo "  $0 -<short> <value>...   # short aliases"`)
+		lines = append(lines, `echo " -<short> <value>...   # short aliases"`)
 	}
 	lines = append(lines,
 		`echo ""`,

@@ -243,7 +243,7 @@ func generatePiPrompts() error {
 			}
 		}
 
-		frontmatter := fmt.Sprintf("---\ndescription: %s\n", p.Description)
+		frontmatter := fmt.Sprintf("---\ndescription: \"%s\"\n", p.Description)
 		if len(hintParts) > 0 {
 			frontmatter += fmt.Sprintf("argument-hint: %s\n", strings.Join(hintParts, " "))
 		}
