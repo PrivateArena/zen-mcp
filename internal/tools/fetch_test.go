@@ -21,16 +21,6 @@ func fetchReq(args map[string]any) mcp.CallToolRequest {
 	}
 }
 
-func fetchPayload(t *testing.T, res *mcp.CallToolResult) map[string]any {
-	t.Helper()
-	text := resultText(t, res)
-	var out map[string]any
-	if err := json.Unmarshal([]byte(text), &out); err != nil {
-		t.Fatalf("result is not a JSON payload: %q", text)
-	}
-	return out
-}
-
 const fetchPageMarkdown = "# Example Domains\n\nThis domain is reserved for documentation."
 
 var fetchOKResponses = map[string]string{
@@ -76,25 +66,23 @@ func TestFetchNavigatesWaitsThenReads(t *testing.T) {
 		t.Errorf("read must extract the whole page when no selector is given, got %v", read["selector"])
 	}
 
-	out := fetchPayload(t, res)
-	if out["content"] != fetchPageMarkdown {
-		t.Errorf("content = %v, want %v", out["content"], fetchPageMarkdown)
-	}
+	doc := docOf(t, res)
+	wantVerbatim(t, doc.body, fetchPageMarkdown)
 	// URL/title/status come back from the bridge, so redirects are visible.
-	if out["url"] != "https://example.com/" {
-		t.Errorf("url = %v", out["url"])
+	if doc.terms["url"] != "https://example.com/" {
+		t.Errorf("url = %v", doc.terms["url"])
 	}
-	if out["title"] != "Example Domain" {
-		t.Errorf("title = %v", out["title"])
+	if doc.terms["title"] != "Example Domain" {
+		t.Errorf("title = %v", doc.terms["title"])
 	}
-	if fmt.Sprint(out["status"]) != "200" {
-		t.Errorf("status = %v, want 200", out["status"])
+	if doc.terms["status"] != "200" {
+		t.Errorf("status = %v, want 200", doc.terms["status"])
 	}
-	if out["source"] != "firefox_bridge_read" {
-		t.Errorf("source = %v", out["source"])
+	if _, present := doc.terms["selector"]; present {
+		t.Errorf("selector must be omitted for a whole-page read, got %v", doc.terms["selector"])
 	}
-	if out["truncated"] != false {
-		t.Errorf("truncated = %v, want false", out["truncated"])
+	if _, present := doc.terms["truncated"]; present {
+		t.Errorf("truncated flag must be absent for a page that fits, got %v", doc.terms["truncated"])
 	}
 }
 
@@ -195,14 +183,12 @@ func TestFetchSelectorScopesExtraction(t *testing.T) {
 		t.Errorf("idle_ms = %v, want 2500", idle["idle_ms"])
 	}
 
-	out := fetchPayload(t, res)
-	if out["content"] != "# Article" {
-		t.Errorf("content = %v", out["content"])
+	doc := docOf(t, res)
+	wantVerbatim(t, doc.body, "# Article")
+	if doc.terms["selector"] != "article" {
+		t.Errorf("provenance selector = %v", doc.terms["selector"])
 	}
-	if out["selector"] != "article" {
-		t.Errorf("payload selector = %v", out["selector"])
-	}
-	if _, present := out["status"]; !present {
+	if _, present := doc.terms["status"]; !present {
 		t.Error("status must be reported when the bridge captured it")
 	}
 }
@@ -231,8 +217,8 @@ func TestFetchParamValidation(t *testing.T) {
 			res := HandleFetchAction(context.Background(), t.TempDir(), Deps{}, fetchReq(args))
 
 			if len(tc.wants) == 0 {
-				if out := fetchPayload(t, res); out["content"] != fetchPageMarkdown {
-					t.Errorf("valid args %v must succeed, got %v", tc.args, out)
+				if doc := docOf(t, res); doc.body != fetchPageMarkdown {
+					t.Errorf("valid args %v must succeed, got %q", tc.args, probeSnippet(doc.body))
 				}
 				return
 			}
@@ -280,12 +266,12 @@ func TestFetchOmitsUncapturedNavigateStatus(t *testing.T) {
 	})
 
 	res := HandleFetchAction(context.Background(), t.TempDir(), Deps{}, fetchReq(map[string]any{"url": "https://example.com/"}))
-	out := fetchPayload(t, res)
-	if _, present := out["status"]; present {
-		t.Errorf("status must be omitted when uncaptured, got %v", out["status"])
+	doc := docOf(t, res)
+	if _, present := doc.terms["status"]; present {
+		t.Errorf("status must be omitted when uncaptured, got %v", doc.terms["status"])
 	}
-	if out["url"] != "https://example.com/" || out["title"] != "Example" {
-		t.Errorf("navigate report must still be surfaced: %v", out)
+	if doc.terms["url"] != "https://example.com/" || doc.terms["title"] != "Example" {
+		t.Errorf("navigate report must still be surfaced: %v", doc.terms)
 	}
 }
 
@@ -340,8 +326,8 @@ func TestFetchWaitFailureIsNonFatal(t *testing.T) {
 
 	res := HandleFetchAction(context.Background(), t.TempDir(), Deps{}, fetchReq(map[string]any{"url": "https://example.com/"}))
 
-	if out := fetchPayload(t, res); out["content"] != fetchPageMarkdown {
-		t.Errorf("content = %v, want %v", out["content"], fetchPageMarkdown)
+	if doc := docOf(t, res); doc.body != fetchPageMarkdown {
+		t.Errorf("body = %v, want %v", doc.body, fetchPageMarkdown)
 	}
 	if got, want := strings.Join(stub.actions(), ","), "navigate,wait_for_network_idle,read"; got != want {
 		t.Errorf("sequence must continue past the failed wait, got %q want %q", got, want)
@@ -399,16 +385,101 @@ func TestFetchTruncatesOversizedPage(t *testing.T) {
 	})
 
 	res := HandleFetchAction(context.Background(), t.TempDir(), Deps{}, fetchReq(map[string]any{"url": "https://example.com/long"}))
-	out := fetchPayload(t, res)
-	content, _ := out["content"].(string)
-	if out["truncated"] != true {
-		t.Errorf("truncated = %v, want true", out["truncated"])
+	doc := docOf(t, res)
+	if doc.terms["truncated"] != "true" {
+		t.Errorf("truncated flag = %v, want it reported in provenance", doc.terms["truncated"])
 	}
-	if !strings.Contains(content, fmt.Sprintf("[TRUNCATED %d chars]", 5000)) {
-		t.Errorf("missing truncation marker in %d-char content", len(content))
+	if !strings.Contains(doc.body, fmt.Sprintf("[TRUNCATED %d chars]", 5000)) {
+		t.Errorf("missing truncation marker in %d-char body", len(doc.body))
 	}
-	if len(content) >= len(huge) {
-		t.Errorf("content not clamped: %d >= %d", len(content), len(huge))
+	if len(doc.body) >= len(huge) {
+		t.Errorf("body not clamped: %d >= %d", len(doc.body), len(huge))
+	}
+}
+
+func TestFetchRespondsWithRawMarkdownNotJSON(t *testing.T) {
+	// The payload is markdown: a JSON envelope would escape every newline and
+	// quote of the page, which is pure token overhead for the caller.
+	page := "# Quotes \"and\" newlines\n\n- item \\ backslash\n- caf\u00e9 \u4e16"
+	stub := bridgeStubAt(t, map[string]string{
+		"navigate":              `{"success":true,"url":"https://example.com/","title":"Quotes","status":200}`,
+		"wait_for_network_idle": `{"success":true,"data":{"idle":true}}`,
+		"read":                  fmt.Sprintf(`{"success":true,"data":{"content":%q}}`, page),
+	})
+
+	res := HandleFetchAction(context.Background(), t.TempDir(), Deps{}, fetchReq(map[string]any{"url": "https://example.com/"}))
+
+	text := resultText(t, res)
+	if !strings.Contains(text, "\n\n- item \\ backslash\n") {
+		t.Errorf("markdown must reach the caller unescaped, got %q", probeSnippet(text))
+	}
+	if strings.Contains(text, `\n`) || strings.Contains(text, "\"content\"") || strings.Contains(text, "firefox_bridge_read") {
+		t.Errorf("response still looks JSON-shaped: %q", probeSnippet(text))
+	}
+	doc := docOf(t, res)
+	wantVerbatim(t, doc.body, page)
+	if len(stub.actions()) != 3 {
+		t.Errorf("unexpected call sequence %v", stub.actions())
+	}
+}
+
+func TestFetchMarkdownIsSmallerThanTheJSONItReplaces(t *testing.T) {
+	// Realistic page markdown is full of newlines and quotes; a JSON envelope has
+	// to escape every one of them, so the same payload costs more tokens.
+	page := strings.Repeat("## Section \"quoted\"\n\n- bullet \\ backslash\n- caf\u00e9\n\n", 80)
+	bridgeStubAt(t, map[string]string{
+		"navigate":              `{"success":true,"url":"https://example.com/","title":"Long Page","status":200}`,
+		"wait_for_network_idle": `{"success":true,"data":{"idle":true}}`,
+		"read":                  fmt.Sprintf(`{"success":true,"data":{"content":%q}}`, page),
+	})
+
+	res := HandleFetchAction(context.Background(), t.TempDir(), Deps{}, fetchReq(map[string]any{"url": "https://example.com/"}))
+	text := resultText(t, res)
+
+	raw, err := json.Marshal(map[string]any{
+		"url":       "https://example.com/",
+		"title":     "Long Page",
+		"source":    "firefox_bridge_read",
+		"content":   strings.TrimSpace(page),
+		"truncated": false,
+		"status":    200,
+	})
+	if err != nil {
+		t.Fatalf("marshal JSON baseline: %v", err)
+	}
+	if len(text) >= len(raw) {
+		t.Errorf("markdown response = %d bytes, want smaller than the %d-byte JSON envelope", len(text), len(raw))
+	}
+}
+
+func TestFetchProvenanceTerms(t *testing.T) {
+	cases := []struct {
+		name string
+		line string
+		want string
+	}{
+		{
+			name: "full navigate report",
+			line: fetchProvenance("https://example.com/", " Example Domain ", 200, "", false),
+			want: "url: https://example.com/ | title: Example Domain | status: 200",
+		},
+		{
+			name: "uncaptured status and no title",
+			line: fetchProvenance("https://example.com/", "", 0, "article", true),
+			want: "url: https://example.com/ | selector: article | truncated",
+		},
+		{
+			name: "url always present",
+			line: fetchProvenance("https://example.com/", "", 0, "", false),
+			want: "url: https://example.com/",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.line != tc.want {
+				t.Errorf("provenance = %q, want %q", tc.line, tc.want)
+			}
+		})
 	}
 }
 
@@ -467,8 +538,8 @@ func TestFetchToolRegisteredInAllDefs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handler returned go error: %v", err)
 	}
-	if out := fetchPayload(t, res); out["content"] != fetchPageMarkdown {
-		t.Errorf("registered handler content = %v", out["content"])
+	if doc := docOf(t, res); doc.body != fetchPageMarkdown {
+		t.Errorf("registered handler body = %q", probeSnippet(doc.body))
 	}
 	if len(stub.actions()) != 3 {
 		t.Errorf("registered handler sequence = %v", stub.actions())

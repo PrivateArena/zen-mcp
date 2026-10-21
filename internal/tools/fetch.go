@@ -43,7 +43,7 @@ func defFetch(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "fetch",
 		Title:       "Fetch Page (Firefox Bridge)",
-		Description: "Fetch a URL through the Firefox bridge (userChrome.js MCP Bridge) and return the page content as token-efficient markdown.",
+		Description: "Fetch a URL through the Firefox bridge (userChrome.js MCP Bridge) and return the page content as token-efficient markdown (provenance line, then the page markdown verbatim).",
 		Schema: jsonSchema(map[string]any{
 			"url":       strProp("URL to read; a bare host is upgraded to https:// (http:// for localhost and LAN IPs)"),
 			"selector":  strProp("[read] CSS selector to scope the extraction to one element; omit for whole-page article markdown"),
@@ -117,24 +117,66 @@ func HandleFetchAction(ctx context.Context, workspace string, deps Deps, req mcp
 		return toolresponse.WrapErrorWithContext(ctx, "fetch", fmt.Errorf("%s has no readable content", fetchSubject(targetURL, selector)), start)
 	}
 
-	out := map[string]any{
-		"url":       fetchNavString(nav, "url", targetURL),
-		"title":     fetchNavString(nav, "title", ""),
-		"source":    "firefox_bridge_read",
-		"content":   content,
-		"truncated": truncated,
-	}
+	finalURL := fetchNavString(nav, "url", targetURL)
+	title := fetchNavString(nav, "title", "")
 	// The bridge only reports a status when it managed to capture the channel;
-	// 0/absent means "unknown", which is not worth a field in the payload.
-	if status := fetchNavInt(nav, "status"); status > 0 {
-		out["status"] = status
-	}
-	if selector != "" {
-		out["selector"] = selector
-	}
-	logSessionEvent(workspace, "fetch", fmt.Sprintf("fetch: %s", out["url"]), content)
+	// 0/absent means "unknown", which is not worth a term in the provenance line.
+	status := fetchNavInt(nav, "status")
+
+	doc := renderBridgeMarkdown(fetchProvenance(finalURL, title, status, selector, truncated), content)
+	logSessionEvent(workspace, "fetch", fmt.Sprintf("fetch: %s", finalURL), content)
 	logfilter.Info(content)
-	return toolresponse.WrapSuccess(ctx, "fetch", out, start)
+	return toolresponse.WrapSuccess(ctx, "fetch", doc, start)
+}
+
+// fetchProvenance formats the metadata the caller needs to judge the payload:
+// the final URL (redirects are invisible otherwise), the page title, the HTTP
+// status when captured, the selector the extraction was scoped to, and whether
+// the page was clamped.
+func fetchProvenance(finalURL, title string, status int, selector string, truncated bool) string {
+	statusTerm := ""
+	if status > 0 {
+		statusTerm = fmt.Sprintf("status: %d", status)
+	}
+	return bridgeProvenance(
+		bridgeTerm("url", finalURL),
+		bridgeTerm("title", title),
+		statusTerm,
+		bridgeTerm("selector", selector),
+		truncatedTerm(truncated),
+	)
+}
+
+// bridgeTerm assembles one "label: value" provenance term and returns "" when
+// there is no value to report, so absent metadata costs nothing.
+func bridgeTerm(label, value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	return label + ": " + value
+}
+
+// bridgeProvenance joins the metadata terms of a markdown response into the one
+// leading line that renderBridgeMarkdown places above the payload. Empty terms
+// are dropped, so optional metadata costs nothing when absent.
+func bridgeProvenance(terms ...string) string {
+	kept := make([]string, 0, len(terms))
+	for _, term := range terms {
+		if strings.TrimSpace(term) != "" {
+			kept = append(kept, term)
+		}
+	}
+	return strings.Join(kept, " | ")
+}
+
+// truncatedTerm flags a clamped payload at the top of the document, where a
+// caller skimming a huge page still sees it.
+func truncatedTerm(truncated bool) string {
+	if !truncated {
+		return ""
+	}
+	return "truncated"
 }
 
 // fetchTargetURL normalizes the url argument: entities/mojibake are decoded, a
@@ -264,6 +306,16 @@ func fetchNavInt(nav map[string]any, key string) int {
 		return v
 	}
 	return 0
+}
+
+// renderBridgeMarkdown assembles the response of the bridge-backed content
+// tools: one provenance line, a blank line, then the extracted markdown
+// verbatim. Handing back markdown instead of a JSON envelope avoids escaping
+// every newline and quote of a multi-kilobyte page, which is pure token
+// overhead for the caller. Truncation stays visible because clampBridgeContent
+// appends its marker to the content itself.
+func renderBridgeMarkdown(provenance, content string) string {
+	return provenance + "\n\n" + strings.TrimSpace(content) + "\n"
 }
 
 // clampBridgeContent bounds extracted page text so a huge page can never flood

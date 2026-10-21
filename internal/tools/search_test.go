@@ -27,16 +27,6 @@ func searchReq(args map[string]any) mcp.CallToolRequest {
 	}
 }
 
-func searchPayload(t *testing.T, res *mcp.CallToolResult) map[string]any {
-	t.Helper()
-	text := resultText(t, res)
-	var out map[string]any
-	if err := json.Unmarshal([]byte(text), &out); err != nil {
-		t.Fatalf("result is not a JSON payload: %q", text)
-	}
-	return out
-}
-
 const searchOverviewAnswer = "HyperFrames is an open-source video rendering framework by HeyGen."
 
 var searchOKResponse = fmt.Sprintf(`{"success":true,"data":{"content":%q,"el":{"tag":"DIV"}}}`, searchOverviewAnswer)
@@ -94,18 +84,18 @@ func TestSearchNavigatesGoogleSERPAndExtractsAIOverview(t *testing.T) {
 		t.Fatalf("get_text selector = %v, want %v", get["selector"], aiOverviewSelector)
 	}
 
-	out := searchPayload(t, res)
-	if out["content"] != searchOverviewAnswer {
-		t.Errorf("content = %v, want %v", out["content"], searchOverviewAnswer)
+	doc := docOf(t, res)
+	wantVerbatim(t, doc.body, searchOverviewAnswer)
+	if doc.terms["query"] != "how to use hyperframes" {
+		t.Errorf("query = %v", doc.terms["query"])
 	}
-	if out["query"] != "how to use hyperframes" {
-		t.Errorf("query = %v", out["query"])
+	if _, present := doc.terms["truncated"]; present {
+		t.Errorf("truncated flag must be absent for an answer that fits, got %v", doc.terms["truncated"])
 	}
-	if out["source"] != "google_ai_overview" {
-		t.Errorf("source = %v", out["source"])
-	}
-	if out["truncated"] != false {
-		t.Errorf("truncated = %v, want false", out["truncated"])
+	// The SERP URL is derivable from the query, so it is kept out of the
+	// successful payload instead of paying its escaping cost on every call.
+	if strings.Contains(resultText(t, res), googleSearchEndpoint) {
+		t.Errorf("successful payload must not repeat the SERP url: %q", probeSnippet(resultText(t, res)))
 	}
 }
 
@@ -167,8 +157,8 @@ func TestSearchNumParam(t *testing.T) {
 			if want := "udm=" + tc.wantNum; !strings.Contains(fmt.Sprint(nav["url"]), want) {
 				t.Errorf("navigate url = %v, want to contain %q", nav["url"], want)
 			}
-			if out := searchPayload(t, res); fmt.Sprint(out["num"]) != tc.wantNum {
-				t.Errorf("payload num = %v, want %q", out["num"], tc.wantNum)
+			if doc := docOf(t, res); doc.terms["query"] != "hyperframes" {
+				t.Errorf("provenance query = %v, want %q", doc.terms["query"], "hyperframes")
 			}
 		})
 	}
@@ -252,8 +242,8 @@ func TestSearchWaitFailureIsNonFatal(t *testing.T) {
 
 	res := HandleSearchAction(context.Background(), t.TempDir(), Deps{}, searchReq(map[string]any{"query": "hyperframes"}))
 
-	if out := searchPayload(t, res); out["content"] != searchOverviewAnswer {
-		t.Errorf("content = %v, want %v", out["content"], searchOverviewAnswer)
+	if doc := docOf(t, res); doc.body != searchOverviewAnswer {
+		t.Errorf("body = %q, want %q", probeSnippet(doc.body), searchOverviewAnswer)
 	}
 	if got, want := strings.Join(stub.actions(), ","), "navigate,wait_for_network_idle,wait_for_selector,get_text"; got != want {
 		t.Errorf("sequence must continue past the failed wait, got %q want %q", got, want)
@@ -282,16 +272,64 @@ func TestSearchTruncatesOversizedOverview(t *testing.T) {
 	})
 
 	res := HandleSearchAction(context.Background(), t.TempDir(), Deps{}, searchReq(map[string]any{"query": "hyperframes"}))
-	out := searchPayload(t, res)
-	content, _ := out["content"].(string)
-	if out["truncated"] != true {
-		t.Errorf("truncated = %v, want true", out["truncated"])
+	doc := docOf(t, res)
+	if doc.terms["truncated"] != "true" {
+		t.Errorf("truncated flag = %v, want it reported in provenance", doc.terms["truncated"])
 	}
-	if !strings.Contains(content, fmt.Sprintf("[TRUNCATED %d chars]", 5000)) {
-		t.Errorf("missing truncation marker in %d-char content", len(content))
+	if !strings.Contains(doc.body, fmt.Sprintf("[TRUNCATED %d chars]", 5000)) {
+		t.Errorf("missing truncation marker in %d-char body", len(doc.body))
 	}
-	if len(content) >= len(huge) {
-		t.Errorf("content not clamped: %d >= %d", len(content), len(huge))
+	if len(doc.body) >= len(huge) {
+		t.Errorf("body not clamped: %d >= %d", len(doc.body), len(huge))
+	}
+}
+
+func TestSearchRespondsWithRawMarkdownNotJSON(t *testing.T) {
+	// The answer is plain text/markdown: wrapping it in JSON would escape every
+	// newline and quote, which is pure token overhead for the caller.
+	answer := "Line one\n\n- \"quoted\" point\n- caf\u00e9 \\ item"
+	bridgeStubAt(t, map[string]string{
+		"navigate":          `{"success":true,"index":7046}`,
+		"wait_for_selector": `{"success":true,"data":true}`,
+		"get_text":          fmt.Sprintf(`{"success":true,"data":{"content":%q}}`, answer),
+	})
+
+	res := HandleSearchAction(context.Background(), t.TempDir(), Deps{}, searchReq(map[string]any{"query": "hyperframes"}))
+
+	text := resultText(t, res)
+	if strings.Contains(text, `\n`) || strings.Contains(text, "\"content\"") || strings.Contains(text, "google_ai_overview") {
+		t.Errorf("response still looks JSON-shaped: %q", probeSnippet(text))
+	}
+	doc := docOf(t, res)
+	wantVerbatim(t, doc.body, answer)
+}
+
+func TestSearchMarkdownIsSmallerThanTheJSONItReplaces(t *testing.T) {
+	// An AI Overview is multi-paragraph markdown; a JSON envelope escapes every
+	// newline in it, so the same answer costs more tokens to deliver.
+	answer := strings.Repeat("Paragraph \"key point\" with a claim.\n\n- evidence line\n\n", 60)
+	bridgeStubAt(t, map[string]string{
+		"navigate":          `{"success":true,"index":7046}`,
+		"wait_for_selector": `{"success":true,"data":true}`,
+		"get_text":          fmt.Sprintf(`{"success":true,"data":{"content":%q}}`, answer),
+	})
+
+	res := HandleSearchAction(context.Background(), t.TempDir(), Deps{}, searchReq(map[string]any{"query": "hyperframes"}))
+	text := resultText(t, res)
+
+	raw, err := json.Marshal(map[string]any{
+		"query":     "hyperframes",
+		"url":       searchSERP("hyperframes"),
+		"num":       searchDefaultNum,
+		"source":    "google_ai_overview",
+		"content":   strings.TrimSpace(answer),
+		"truncated": false,
+	})
+	if err != nil {
+		t.Fatalf("marshal JSON baseline: %v", err)
+	}
+	if len(text) >= len(raw) {
+		t.Errorf("markdown response = %d bytes, want smaller than the %d-byte JSON envelope", len(text), len(raw))
 	}
 }
 
@@ -348,10 +386,8 @@ func TestSearchParsesListShapedBridgePayload(t *testing.T) {
 	})
 
 	res := HandleSearchAction(context.Background(), t.TempDir(), Deps{}, searchReq(map[string]any{"query": "hyperframes"}))
-	out := searchPayload(t, res)
-	if out["content"] != "part one\n\npart two" {
-		t.Errorf("content = %v", out["content"])
-	}
+	doc := docOf(t, res)
+	wantVerbatim(t, doc.body, "part one\n\npart two")
 	if stub.byAction("get_text") == nil {
 		t.Error("get_text never called")
 	}
@@ -386,8 +422,8 @@ func TestSearchToolRegisteredInAllDefs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handler returned go error: %v", err)
 	}
-	if out := searchPayload(t, res); out["content"] != searchOverviewAnswer {
-		t.Errorf("registered handler content = %v", out["content"])
+	if doc := docOf(t, res); doc.body != searchOverviewAnswer {
+		t.Errorf("registered handler body = %q", probeSnippet(doc.body))
 	}
 	if len(stub.actions()) != 4 {
 		t.Errorf("registered handler sequence = %v", stub.actions())

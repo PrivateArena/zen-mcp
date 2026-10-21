@@ -105,6 +105,74 @@ func installBridgeStub(t *testing.T, responses map[string]string, statuses map[s
 	return stub
 }
 
+// bridgeDoc is a parsed markdown response of a bridge-backed content tool
+// (fetch, search): the single leading provenance line split into its terms,
+// plus the payload body that follows it.
+type bridgeDoc struct {
+	terms map[string]string
+	body  string
+}
+
+// docOf parses a tool response and pins the token-efficiency contract: raw
+// markdown (never a JSON envelope, which would escape every newline of a
+// multi-kilobyte page), one provenance line, then the payload verbatim.
+func docOf(t *testing.T, res *mcp.CallToolResult) bridgeDoc {
+	t.Helper()
+	text := resultText(t, res)
+	if trimmed := strings.TrimSpace(text); strings.HasPrefix(trimmed, "{") {
+		var probe map[string]any
+		if json.Unmarshal([]byte(trimmed), &probe) == nil {
+			t.Fatalf("response is a JSON envelope, want raw markdown: %q", probeSnippet(trimmed))
+		}
+	}
+	line, body, ok := strings.Cut(text, "\n\n")
+	if !ok {
+		t.Fatalf("response has no provenance/body split: %q", probeSnippet(text))
+	}
+	if strings.Contains(line, "\n") {
+		t.Errorf("provenance must stay on a single line, got %q", probeSnippet(line))
+	}
+	doc := bridgeDoc{terms: map[string]string{}}
+	for _, term := range strings.Split(line, " | ") {
+		term = strings.TrimSpace(term)
+		if term == "" {
+			continue
+		}
+		label, value, hasValue := strings.Cut(term, ": ")
+		if !hasValue {
+			// Bare flag term, e.g. "truncated".
+			doc.terms[term] = "true"
+			continue
+		}
+		doc.terms[strings.TrimSpace(label)] = strings.TrimSpace(value)
+	}
+	doc.body = strings.TrimSuffix(body, "\n")
+	return doc
+}
+
+// wantVerbatim asserts that the extracted text reached the response untouched,
+// i.e. without JSON string escaping or re-wrapping.
+func wantVerbatim(t *testing.T, body, want string) {
+	t.Helper()
+	if body != want {
+		t.Errorf("body = %q, want the extracted text verbatim %q", probeSnippet(body), probeSnippet(want))
+	}
+	for _, escape := range []string{`\n`, `\"`, `\u00`} {
+		if strings.Contains(body, escape) {
+			t.Errorf("body carries JSON string escapes (%s): %q", escape, probeSnippet(body))
+		}
+	}
+}
+
+// probeSnippet shortens a long payload for failure messages.
+func probeSnippet(s string) string {
+	const max = 240
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
+}
+
 // resultText flattens a call result into its text content for message asserts.
 func resultText(t *testing.T, res *mcp.CallToolResult) string {
 	t.Helper()

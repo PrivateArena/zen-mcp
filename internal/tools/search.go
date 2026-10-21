@@ -46,7 +46,7 @@ func defSearch(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "search",
 		Title:       "Web Search (Google AI Overview)",
-		Description: "Search Google through the Firefox bridge (userChrome.js MCP Bridge) and return the AI Overview answer.",
+		Description: "Search Google through the Firefox bridge (userChrome.js MCP Bridge) and return the AI Overview answer as token-efficient markdown (provenance line, then the answer text).",
 		Schema: jsonSchema(map[string]any{
 			"query": strProp("Search query"),
 			"num":   numProp("[query] Google page size hint (num=), 1-100, default 10"),
@@ -112,17 +112,13 @@ func HandleSearchAction(ctx context.Context, workspace string, deps Deps, req mc
 		return toolresponse.WrapErrorWithContext(ctx, "search", fmt.Errorf("AI Overview for %q is empty (%s)", query, searchURL), start)
 	}
 
-	out := map[string]any{
-		"query":     query,
-		"url":       searchURL,
-		"num":       num,
-		"source":    "google_ai_overview",
-		"content":   content,
-		"truncated": truncated,
-	}
+	// The SERP URL is fully derivable from the query (and is quoted in every
+	// error), so the provenance line carries the query rather than repeating a
+	// long encoded URL in every successful response.
+	doc := renderBridgeMarkdown(bridgeProvenance(bridgeTerm("query", query), truncatedTerm(truncated)), content)
 	logSessionEvent(workspace, "search", fmt.Sprintf("search: %s", query), content)
 	logfilter.Info(content)
-	return toolresponse.WrapSuccess(ctx, "search", out, start)
+	return toolresponse.WrapSuccess(ctx, "search", doc, start)
 }
 
 // searchStringArg coerces an argument to a string; non-string scalars (a bare
