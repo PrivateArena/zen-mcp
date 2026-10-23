@@ -135,6 +135,9 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 		Reg:                   filteredReg,
 		Gatekeeper:            gk,
 		PendingCollaborations: pendingCollabs,
+		// The wrapper generator lives in internal/terminal (which imports this
+		// package), so it reaches the export_cli tool as an injected function.
+		ExportCLI: terminal.RunExportCLIText,
 	}
 
 	filteredFactory := func(id string) *mcpserver.MCPServer {

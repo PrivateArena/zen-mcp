@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"zen-mcp/internal/mcpcfg"
@@ -44,6 +45,59 @@ func ExportCLI(w io.Writer, cliPort, mcpPort int) {
 // can save tokens; full --param names remain accepted either way. Wrapper
 // files are named with the configured climode_prefix (default "zen-").
 func ExportCLIWithShort(w io.Writer, cliPort, mcpPort int, short bool) {
+	_ = exportCLIWithShort(w, cliPort, mcpPort, short)
+}
+
+// exportMu serializes wrapper generation for every caller of the export-cli command.
+// Two concurrent runs would fight over the same wrapper files and the
+// ~/.local/bin links, and each one's stale cleanup would see the other's
+// half-written set.
+var exportMu sync.Mutex
+
+// RunExportCLI is the single entry point of the export-cli command for
+// every caller: the terminal REPL and the export_cli MCP tool. Options left at
+// their zero value fall back to the config (climode_short, cliPort, mcpPort), so
+// a caller never has to know the port layout.
+func RunExportCLI(w io.Writer, opts tools.ExportCLIOptions) error {
+	if w == nil {
+		w = io.Discard
+	}
+	exportMu.Lock()
+	defer exportMu.Unlock()
+
+	if opts.Clean {
+		ExportCliClean(w)
+		return nil
+	}
+	short, cliPort, mcpPort := exportConfigDefaults()
+	if opts.Short != nil {
+		short = *opts.Short
+	}
+	return exportCLIWithShort(w, cliPort, mcpPort, short)
+}
+
+// RunExportCLIText runs the export and hands the report back as a string, which is
+// what a tool response needs instead of a terminal log writer.
+func RunExportCLIText(opts tools.ExportCLIOptions) (string, error) {
+	var out strings.Builder
+	err := RunExportCLI(&out, opts)
+	return out.String(), err
+}
+
+// exportConfigDefaults reports the values the export-cli command falls back to
+// when the caller states no preference.
+func exportConfigDefaults() (short bool, cliPort, mcpPort int) {
+	c := mcpcfg.Get()
+	if c == nil {
+		return false, 0, 0
+	}
+	return c.CliModeShort, c.CliPort, c.McpPort
+}
+
+// exportCLIWithShort is the generator behind ExportCLIWithShort, with the one
+// fatal failure surfaced: a cli/ directory that cannot be created means nothing
+// was exported at all.
+func exportCLIWithShort(w io.Writer, cliPort, mcpPort int, short bool) error {
 	prefix := mcpcfg.CliModePrefixOrDefault()
 	host := "127.0.0.1"
 	port := cliPort
@@ -60,7 +114,7 @@ func ExportCLIWithShort(w io.Writer, cliPort, mcpPort int, short bool) {
 
 	if err := os.MkdirAll(cliDir, 0o755); err != nil {
 		fmt.Fprintf(w, "ERROR: could not create %s: %v\n", cliDir, err)
-		return
+		return fmt.Errorf("could not create %s: %w", cliDir, err)
 	}
 
 	toolList := collectTools()
@@ -108,6 +162,7 @@ func ExportCLIWithShort(w io.Writer, cliPort, mcpPort int, short bool) {
 			fmt.Fprintf(w, "WARNING: %s is not in your PATH. Run: export PATH=\"$HOME/.local/bin:$PATH\"\n", symlinked)
 		}
 	}
+	return nil
 }
 
 // ExportCliClean removes generated CLI wrappers and their ~/.local/bin links.

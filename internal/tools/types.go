@@ -13,6 +13,12 @@ type Deps struct {
 	Reg                   *toolregistry.ToolRegistry
 	Gatekeeper            *gatekeeper.Gatekeeper
 	PendingCollaborations *CollaborationRegistry
+	// ExportCLI regenerates the zen-*/z* CLI wrapper scripts, i.e. the terminal
+	// `export-cli` command. It is injected by main.go because internal/terminal
+	// imports this package: a tool must never import terminal directly. nil means
+	// this server instance has no export wired (the export_cli tool then reports it
+	// as unavailable instead of guessing).
+	ExportCLI func(opts ExportCLIOptions) (string, error)
 	// HideTools marks the agent-facing MCP server in mcp2cli mode: server/tools.go
 	// then registers no tools onto the MCP server and tracks every tool as
 	// disabled, so the agent never sees tool schemas. The CLI server (zen-*
@@ -53,6 +59,7 @@ func AllDefs(workspace string, deps Deps) []ToolDef {
 		defPool(deps),
 		defSkills(workspace, deps),
 		defCodegraph(workspace, deps),
+		defExportCLI(workspace, deps),
 	}
 }
 

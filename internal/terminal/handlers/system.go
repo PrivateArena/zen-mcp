@@ -10,6 +10,7 @@ import (
 	"zen-mcp/internal/shell/processes"
 	"zen-mcp/internal/telemetry"
 	"zen-mcp/internal/terminal"
+	"zen-mcp/internal/tools"
 )
 
 var startTime = time.Now()
@@ -122,27 +123,12 @@ func init() {
 
 	terminal.Register("export-cli", func(args []string) error {
 		clean, _ := parseExportCLIArgs(args)
-		if clean {
-			terminal.ExportCliClean(terminal.LogOut)
-			return nil
-		}
-		c := mcpcfg.Get()
-		short := false
-		if c != nil {
-			short = c.CliModeShort
-		}
+		opts := tools.ExportCLIOptions{Clean: clean}
 		// An explicit --short/--long flag overrides the climode_short config default.
 		if on, set := exportShortFlag(args); set {
-			short = on
+			opts.Short = &on
 		}
-		cliPort := 0
-		mcpPort := 0
-		if c != nil {
-			cliPort = c.CliPort
-			mcpPort = c.McpPort
-		}
-		terminal.ExportCLIWithShort(terminal.LogOut, cliPort, mcpPort, short)
-		return nil
+		return terminal.RunExportCLI(terminal.LogOut, opts)
 	})
 }
 
