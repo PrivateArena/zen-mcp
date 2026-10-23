@@ -10,7 +10,7 @@ Every tool in `AllDefs` (`internal/tools/types.go`) also exists as a generated s
 
 After adding, renaming, or changing the schema of a tool, regenerate the wrappers — otherwise the `z*` command for it does not exist:
 
-- over MCP/CLI: `zexport_cli` (`--short` / `--long` to force alias style, `--clean` to remove wrappers)
+- over MCP/CLI: `zexport_cli` (`--short=false` for long-only flags, `--clean=true` to remove wrappers)
 - in the terminal REPL: `export-cli [--short|--long] [--clean]`
 
 Both paths run `terminal.RunExportCLI`, which is also what `tools.Deps.ExportCLI` injects, so an agent can refresh the CLI itself. It writes `./cli` of the **running server's** working directory and rebuilds every wrapper, so it is safe to re-run.
