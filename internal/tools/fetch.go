@@ -179,10 +179,17 @@ func truncatedTerm(truncated bool) string {
 	return "truncated"
 }
 
-// fetchTargetURL normalizes the url argument: entities/mojibake are decoded, a
-// missing scheme is added, and anything that is not a loadable http(s) host is
-// rejected before the bridge is touched.
+// fetchTargetURL normalizes the url argument of the fetch tool; see
+// bridgeTargetURL for the normalization rules shared by the bridge HTTP tools.
 func fetchTargetURL(v any) (string, error) {
+	return bridgeTargetURL("fetch", v)
+}
+
+// bridgeTargetURL normalizes the url argument shared by the bridge-backed HTTP
+// tools (fetch, request): entities/mojibake are decoded, a missing scheme is
+// added, and anything that is not a loadable http(s) host is rejected before the
+// bridge is touched. tool names the caller in the error text.
+func bridgeTargetURL(tool string, v any) (string, error) {
 	raw := strings.TrimSpace(bridge.DecodeHTMLEntities(bridge.FixMojibake(searchStringArg(v))))
 	if raw == "" {
 		return "", fmt.Errorf("url is required")
@@ -203,7 +210,7 @@ func fetchTargetURL(v any) (string, error) {
 		return "", fmt.Errorf("invalid url %q: no host", raw)
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return "", fmt.Errorf("unsupported url scheme %q in %q, fetch only speaks http(s)", u.Scheme, raw)
+		return "", fmt.Errorf("unsupported url scheme %q in %q, %s only speaks http(s)", u.Scheme, raw, tool)
 	}
 	return target, nil
 }
