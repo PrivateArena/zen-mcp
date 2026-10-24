@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 
+	"zen-mcp/internal/bridge"
 	"zen-mcp/internal/mcpcfg"
 	"zen-mcp/internal/pooling"
 )
@@ -209,5 +211,66 @@ func TestPoolUnknownAction(t *testing.T) {
 	res := HandlePoolAction(context.Background(), reg, poolRequest(map[string]any{"action": "explode"}))
 	if !strings.Contains(res.Content[0].(mcp.TextContent).Text, "unknown pool action") {
 		t.Errorf("expected unknown-action error, got: %s", res.Content[0].(mcp.TextContent).Text)
+	}
+}
+
+// A pooled browser job keeps driving the single bridge turn after its caller has
+// gone async, so the listing has to say who owns the browser and who is queued
+// behind them — otherwise "why is zfetch waiting" is unanswerable.
+func TestPoolListReportsBusyBridge(t *testing.T) {
+	withPoolToolConfig(t, poolToolConfig)
+	reg := pooling.NewRegistry(time.Minute, time.Minute, 4)
+	id, err := reg.Register("browser", &pooling.Job{})
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	// Idle bridge: the listing stays a plain job list.
+	res := HandlePoolAction(context.Background(), reg, poolRequest(map[string]any{"action": "list"}))
+	if _, found := poolPayload(t, res)["bridge"]; found {
+		t.Fatalf("idle bridge should not add a bridge field: %+v", poolPayload(t, res))
+	}
+
+	holder, err := bridge.DefaultGate().Acquire(context.Background(), "browser.chat")
+	if err != nil {
+		t.Fatalf("acquire holder: %v", err)
+	}
+	queued := make(chan struct{})
+	go func() {
+		release, err := bridge.DefaultGate().Acquire(context.Background(), "fetch-queued")
+		if err != nil {
+			return
+		}
+		<-queued
+		release()
+	}()
+	defer func() { close(queued); holder() }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && bridge.QueueStatus().Waiting != 1 {
+		time.Sleep(time.Millisecond)
+	}
+	// Long enough that the hold is measurable, so the unit of the reported
+	// duration is checkable: 20ms reads as 20, not as 20000000.
+	time.Sleep(20 * time.Millisecond)
+
+	res = HandlePoolAction(context.Background(), reg, poolRequest(map[string]any{"action": "list"}))
+	payload := poolPayload(t, res)
+	st, ok := payload["bridge"].(map[string]any)
+	if !ok {
+		t.Fatalf("busy bridge missing from listing: %+v", payload)
+	}
+	if st["holder"] != "browser.chat" {
+		t.Errorf("bridge holder = %v, want browser.chat", st["holder"])
+	}
+	if int64(st["waiting"].(float64)) != 1 {
+		t.Errorf("bridge waiting = %v, want 1", st["waiting"])
+	}
+	heldFor, ok := st["heldForMs"].(float64)
+	if !ok || heldFor < 1 || heldFor > 5000 {
+		t.Errorf("heldForMs = %v, want the hold in milliseconds", st["heldForMs"])
+	}
+	if !strings.Contains(fmt.Sprint(payload["jobs"]), id) {
+		t.Errorf("jobs lost from listing: %+v", payload)
 	}
 }

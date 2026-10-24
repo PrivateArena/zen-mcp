@@ -77,6 +77,15 @@ func HandleFetchAction(ctx context.Context, workspace string, deps Deps, req mcp
 		return toolresponse.WrapErrorWithContext(ctx, "fetch", err, start)
 	}
 
+	// The bridge reads whatever tab is active, so navigate, the idle wait and the
+	// read are one indivisible operation with respect to any other bridge caller:
+	// WithTurn holds the queue turn across all three.
+	ctx, releaseTurn, err := bridge.WithTurn(ctx, "fetch "+targetURL)
+	if err != nil {
+		return toolresponse.WrapErrorWithContext(ctx, "fetch", err, start)
+	}
+	defer releaseTurn()
+
 	navigateParams := map[string]any{"url": targetURL, "new_tab": true, "timeout": fetchNavigateTimeoutMs}
 	if container, ok := containerForURL(targetURL); ok {
 		navigateParams["container"] = container

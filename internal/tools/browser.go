@@ -22,8 +22,6 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
-var currentContainer string
-
 var CONTAINER_MAP = map[string]string{
 	"github.com":  "Work",
 	"slack.com":   "Work",
@@ -87,9 +85,6 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 			}
 		}
 	}
-	if c, ok := params["container"].(string); ok && c != "" {
-		currentContainer = c
-	}
 
 	bridgeParams := make(map[string]any, len(params))
 	for k, v := range params {
@@ -132,6 +127,18 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 
 	var res map[string]any
 	var err error
+
+	// read and search are multi-step flows (navigate -> wait -> read) that must not
+	// interleave with another caller's tab, so they reserve the bridge turn for the
+	// whole sequence (see internal/bridge/gate.go).
+	if action == "read" || action == "search" {
+		reserved, releaseTurn, turnErr := bridge.WithTurn(ctx, "browser "+action+" "+browserTurnSubject(params))
+		if turnErr != nil {
+			return toolresponse.WrapErrorWithContext(ctx, "browser", turnErr, start)
+		}
+		defer releaseTurn()
+		ctx = reserved
+	}
 
 	switch action {
 	case "read":
@@ -566,6 +573,17 @@ func parseURL(s string) (*url.URL, error) {
 		s = "https://" + s
 	}
 	return url.Parse(s)
+}
+
+// browserTurnSubject names what a reserved browser sequence is working on, so a
+// queued bridge caller can see in the busy error which action owns the browser.
+func browserTurnSubject(params map[string]any) string {
+	for _, key := range []string{"url", "query", "selector"} {
+		if s, ok := params[key].(string); ok && strings.TrimSpace(s) != "" {
+			return strings.TrimSpace(s)
+		}
+	}
+	return ""
 }
 
 func extractData(v any) any {

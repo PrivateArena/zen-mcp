@@ -94,12 +94,29 @@ type PoolingConfig struct {
 	MaxJobs    int      `json:"maxJobs,omitempty"`
 }
 
+// BridgeConfig controls client-side access to the Firefox bridge. The bridge is
+// a single-resource device (every action targets the active tab), so by default
+// exactly one operation is allowed in flight, in arrival order. See
+// internal/bridge/gate.go.
+type BridgeConfig struct {
+	// MaxConcurrent is how many bridge operations may run at the same time.
+	// Values below 1 are ignored, 1 (the default) is strict one-by-one.
+	MaxConcurrent int `json:"maxConcurrent,omitempty"`
+	// QueueTimeoutMs bounds how long a call waits for its turn before failing
+	// with "bridge busy" instead of hanging behind a wedged bridge.
+	QueueTimeoutMs int `json:"queueTimeoutMs,omitempty"`
+	// QueueAgentActions also puts the long-running chat/brainstorm actions through
+	// the queue. Off by default because a chat can hold the browser for minutes.
+	QueueAgentActions *bool `json:"queueAgentActions,omitempty"`
+}
+
 type ZenConfig struct {
 	DaemonPort                   int                        `json:"daemonPort"`
 	McpPort                      int                        `json:"mcpPort"`
 	CliPort                      int                        `json:"cliPort"`
 	ProxyPort                    int                        `json:"proxyPort"`
 	FirefoxBridgePort            int                        `json:"firefoxBridgePort"`
+	Bridge                       BridgeConfig               `json:"bridge"`
 	ZenCapPort                   int                        `json:"zenCapPort"`
 	CdpPort                      int                        `json:"cdpPort"`
 	WhiteboardPort               int                        `json:"whiteboardPort"`
@@ -154,11 +171,16 @@ const DefaultCliModePrefix = "zen-"
 
 func defaultConfig() ZenConfig {
 	return ZenConfig{
-		DaemonPort:         31337,
-		McpPort:            3001,
-		CliPort:            2999,
-		ProxyPort:          31313,
-		FirefoxBridgePort:  9999,
+		DaemonPort:        31337,
+		McpPort:           3001,
+		CliPort:           2999,
+		ProxyPort:         31313,
+		FirefoxBridgePort: 9999,
+		Bridge: BridgeConfig{
+			MaxConcurrent:     1,
+			QueueTimeoutMs:    120000,
+			QueueAgentActions: boolPtr(false),
+		},
 		ZenCapPort:         4444,
 		CdpPort:            9222,
 		WhiteboardPort:     3033,
@@ -397,7 +419,7 @@ func mergeConfig(def ZenConfig, user map[string]any) (ZenConfig, error) {
 	for k, v := range user {
 		merged[k] = v
 	}
-	for _, key := range []string{"token_optimization", "sandbox", "toolConfigs", "toolTimeouts", "pooling", "prompt_features", "prompt_memory_context", "enabled_tools"} {
+	for _, key := range []string{"token_optimization", "sandbox", "toolConfigs", "toolTimeouts", "pooling", "bridge", "prompt_features", "prompt_memory_context", "enabled_tools"} {
 		if uv, ok := user[key].(map[string]any); ok {
 			dv, _ := defMap[key].(map[string]any)
 			merged[key] = mergeNested(dv, uv)

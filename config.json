@@ -47,6 +47,11 @@
     "ttlMinutes": 60,
     "maxJobs": 256
   },
+  "bridge": {
+    "maxConcurrent": 1,
+    "queueTimeoutMs": 120000,
+    "queueAgentActions": false
+  },
   "codegraph_watcher_debounce_ms": 300000,
   "codegraph_skip_embeddings": true,
   "codegraph_markdown_files": true,

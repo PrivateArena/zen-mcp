@@ -477,3 +477,50 @@ func TestCliModePrefixOrDefault(t *testing.T) {
 		t.Errorf("custom prefix = %q, want zn-", got)
 	}
 }
+
+// The bridge block is what makes CallBridge one-by-one instead of all-at-once,
+// so its defaults are a behavioural contract, not a style choice.
+func TestBridgeConfigDefaults(t *testing.T) {
+	withConfig(t, `{}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	b := Get().Bridge
+	if b.MaxConcurrent != 1 {
+		t.Errorf("bridge.maxConcurrent default = %d, want 1 (the bridge has one active tab)", b.MaxConcurrent)
+	}
+	if b.QueueTimeoutMs != 120000 {
+		t.Errorf("bridge.queueTimeoutMs default = %d, want 120000", b.QueueTimeoutMs)
+	}
+	if b.QueueAgentActions == nil || *b.QueueAgentActions {
+		t.Errorf("bridge.queueAgentActions default should be off, got %v", b.QueueAgentActions)
+	}
+}
+
+func TestBridgeConfigPartialMerge(t *testing.T) {
+	withConfig(t, `{"bridge":{"maxConcurrent":3}}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	b := Get().Bridge
+	if b.MaxConcurrent != 3 {
+		t.Errorf("maxConcurrent = %d, want the configured 3", b.MaxConcurrent)
+	}
+	if b.QueueTimeoutMs != 120000 {
+		t.Errorf("queueTimeoutMs should keep its default, got %d", b.QueueTimeoutMs)
+	}
+}
+
+func TestBridgeConfigFullOverride(t *testing.T) {
+	withConfig(t, `{"bridge":{"maxConcurrent":2,"queueTimeoutMs":5000,"queueAgentActions":true}}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	b := Get().Bridge
+	if b.MaxConcurrent != 2 || b.QueueTimeoutMs != 5000 {
+		t.Errorf("bridge block wrong: %+v", b)
+	}
+	if b.QueueAgentActions == nil || !*b.QueueAgentActions {
+		t.Errorf("queueAgentActions = %v, want true", b.QueueAgentActions)
+	}
+}

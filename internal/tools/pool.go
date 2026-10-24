@@ -7,6 +7,7 @@ import (
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 
+	"zen-mcp/internal/bridge"
 	"zen-mcp/internal/mcpcfg"
 	"zen-mcp/internal/pooling"
 	"zen-mcp/internal/toolresponse"
@@ -91,7 +92,13 @@ func HandlePoolAction(ctx context.Context, reg *pooling.Registry, req mcp.CallTo
 		}
 		return toolresponse.WrapErrorWithContext(ctx, "pool", unknownPoolIDError(id), start)
 	case "list":
-		return toolresponse.WrapSuccess(ctx, "pool", map[string]any{"jobs": reg.List()}, start)
+		out := map[string]any{"jobs": reg.List()}
+		// A pooled browser job keeps navigating while the caller is gone, so the
+		// listing also reports who currently owns the single bridge turn.
+		if st := bridge.QueueStatus(); st.Active > 0 || st.Waiting > 0 {
+			out["bridge"] = st
+		}
+		return toolresponse.WrapSuccess(ctx, "pool", out, start)
 	default:
 		return toolresponse.WrapErrorWithContext(ctx, "pool",
 			fmt.Errorf("unknown pool action %q (poll|status|cancel|list)", action), start)

@@ -1,7 +1,24 @@
 {
+  "/media/jang/home/PortableApp/firefox/profile/chrome": {
+    "description": "Firefox Bridge and userChrome.js script to control Firefox using HTTP REST API, cannot be blocked.",
+    "lastVisited": "2026-10-24T06:21:39.058Z",
+    "scopes": {
+      "ai": [
+        "JS/bridge/ai"
+      ],
+      "bridge": [
+        "JS/bridge",
+        "JS/bridge.uc.js",
+        "MCP_BRIDGE_API.md"
+      ],
+      "crawl": [
+        "JS/bridge/crawl"
+      ]
+    }
+  },
   "/media/jang/home/Deve/zen-mcp": {
     "description": "ZenMCP is multi-purpose MCP server designed for ZenECO system.",
-    "lastVisited": "2026-10-23T13:51:39.539Z",
+    "lastVisited": "2026-10-24T02:34:26.074Z",
     "scopes": {
       "browser": [
         "cli/zen-browser",
@@ -45,6 +62,9 @@
         "internal/tools/workspace.go"
       ]
     }
+  },
+  "/media/jang/home/Deve/zen-val/extracted_assets": {
+    "lastVisited": "2026-10-23T15:37:45.476Z"
   },
   "/media/jang/home/Deve/zen-board": {
     "description": "ZenBoard is whiteboard video generator.",
@@ -334,22 +354,5 @@
   },
   "/media/jang/home/PortableApp/betterbird/addons/thunderbird-mcp-main": {
     "lastVisited": "2026-07-25T12:15:07.163Z"
-  },
-  "/media/jang/home/PortableApp/firefox/profile/chrome": {
-    "description": "Firefox Bridge and userChrome.js script to control Firefox using HTTP REST API, cannot be blocked.",
-    "lastVisited": "2026-08-01T14:33:07.467Z",
-    "scopes": {
-      "ai": [
-        "JS/bridge/ai"
-      ],
-      "bridge": [
-        "JS/bridge",
-        "JS/bridge.uc.js",
-        "MCP_BRIDGE_API.md"
-      ],
-      "crawl": [
-        "JS/bridge/crawl"
-      ]
-    }
   }
 }

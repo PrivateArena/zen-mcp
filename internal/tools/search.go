@@ -76,6 +76,14 @@ func HandleSearchAction(ctx context.Context, workspace string, deps Deps, req mc
 
 	searchURL := googleSearchURL(query, num)
 
+	// navigate -> wait -> extract must land on this call's SERP, so the whole
+	// sequence holds the bridge turn (see internal/bridge/gate.go).
+	ctx, releaseTurn, err := bridge.WithTurn(ctx, "search "+query)
+	if err != nil {
+		return toolresponse.WrapErrorWithContext(ctx, "search", err, start)
+	}
+	defer releaseTurn()
+
 	navigateParams := map[string]any{"url": searchURL, "new_tab": true, "timeout": searchNavigateTimeoutMs}
 	if container, ok := containerForURL(searchURL); ok {
 		navigateParams["container"] = container

@@ -26,7 +26,26 @@ func (e *ErrBridgeFailure) Error() string {
 }
 
 // CallBridge POSTs to the Firefox bridge and returns the parsed JSON response.
+//
+// It takes a turn on the bridge queue (see Gate) unless ctx already carries one
+// from WithTurn, so concurrent callers are served one at a time instead of
+// racing for the active tab. Callers that need several actions to land on the
+// same page reserve the turn themselves with WithTurn.
 func CallBridge(ctx context.Context, action string, params map[string]any) (map[string]any, error) {
+	if Held(ctx) || agentActionExempt(action) {
+		return postBridge(ctx, action, params)
+	}
+	release, err := DefaultGate().Acquire(ctx, "bridge:"+action)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return postBridge(ctx, action, params)
+}
+
+// postBridge is the transport half of CallBridge: it runs with the turn already
+// settled, either by the caller's reservation or by the queue.
+func postBridge(ctx context.Context, action string, params map[string]any) (map[string]any, error) {
 	base := mcpcfg.FirefoxBridgeURL()
 	if base == "" {
 		return nil, fmt.Errorf("bridge URL is empty")
