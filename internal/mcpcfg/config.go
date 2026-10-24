@@ -108,6 +108,12 @@ type BridgeConfig struct {
 	// QueueAgentActions also puts the long-running chat/brainstorm actions through
 	// the queue. Off by default because a chat can hold the browser for minutes.
 	QueueAgentActions *bool `json:"queueAgentActions,omitempty"`
+	// TabParallel lets calls that address a TabRegistry id (and navigations that
+	// open their own background tab) run concurrently, each queued on its own tab
+	// instead of on the browser. On by default; set false to force every bridge
+	// call through the single global turn, e.g. against a bridge build that does
+	// not report tab ids. See internal/bridge/address.go.
+	TabParallel *bool `json:"tabParallel,omitempty"`
 }
 
 type ZenConfig struct {
@@ -180,6 +186,7 @@ func defaultConfig() ZenConfig {
 			MaxConcurrent:     1,
 			QueueTimeoutMs:    120000,
 			QueueAgentActions: boolPtr(false),
+			TabParallel:       boolPtr(true),
 		},
 		ZenCapPort:         4444,
 		CdpPort:            9222,

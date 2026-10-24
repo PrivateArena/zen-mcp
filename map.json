@@ -1,24 +1,7 @@
 {
-  "/media/jang/home/PortableApp/firefox/profile/chrome": {
-    "description": "Firefox Bridge and userChrome.js script to control Firefox using HTTP REST API, cannot be blocked.",
-    "lastVisited": "2026-10-24T06:21:39.058Z",
-    "scopes": {
-      "ai": [
-        "JS/bridge/ai"
-      ],
-      "bridge": [
-        "JS/bridge",
-        "JS/bridge.uc.js",
-        "MCP_BRIDGE_API.md"
-      ],
-      "crawl": [
-        "JS/bridge/crawl"
-      ]
-    }
-  },
   "/media/jang/home/Deve/zen-mcp": {
     "description": "ZenMCP is multi-purpose MCP server designed for ZenECO system.",
-    "lastVisited": "2026-10-24T02:34:26.074Z",
+    "lastVisited": "2026-10-24T06:39:58.870Z",
     "scopes": {
       "browser": [
         "cli/zen-browser",
@@ -60,6 +43,23 @@
         "cli/zen-workspace",
         "internal/workspace",
         "internal/tools/workspace.go"
+      ]
+    }
+  },
+  "/media/jang/home/PortableApp/firefox/profile/chrome": {
+    "description": "Firefox Bridge and userChrome.js script to control Firefox using HTTP REST API, cannot be blocked.",
+    "lastVisited": "2026-10-24T06:21:39.058Z",
+    "scopes": {
+      "ai": [
+        "JS/bridge/ai"
+      ],
+      "bridge": [
+        "JS/bridge",
+        "JS/bridge.uc.js",
+        "MCP_BRIDGE_API.md"
+      ],
+      "crawl": [
+        "JS/bridge/crawl"
       ]
     }
   },

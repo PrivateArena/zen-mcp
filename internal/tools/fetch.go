@@ -16,10 +16,10 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
-// Page fetch settings for the fetch tool. The flow mirrors the browser tool's
-// read action: navigate (new tab, foreground) -> wait_for_network_idle -> read,
-// which is what makes the extraction land on the freshly loaded page instead of
-// whatever tab was already active.
+// Page fetch settings for the fetch tool. The flow is tab-addressed: navigate
+// (own background tab) -> wait_for_network_idle -> read, every step carrying the
+// TabRegistry id of that tab, which is what makes the extraction land on the
+// freshly loaded page instead of whatever tab was already active.
 const (
 	// fetchNavigateTimeoutMs bounds the page load inside the bridge. Kept well
 	// under the tool timeout so a hanging site fails fast instead of eating the
@@ -49,6 +49,7 @@ func defFetch(workspace string, deps Deps) ToolDef {
 			"selector":  strProp("[read] CSS selector to scope the extraction to one element; omit for whole-page article markdown"),
 			"idle_ms":   numProp(fmt.Sprintf("[wait_for_network_idle] quiet period before reading, %d-%d, default %d", fetchMinIdleMs, fetchMaxIdleMs, fetchDefaultIdleMs)),
 			"max_chars": numProp(fmt.Sprintf("Cap on returned markdown, %d-%d, default %d", fetchMinChars, fetchMaxChars, fetchDefaultMaxChars)),
+			"keep_tab":  boolProp("Leave the page tab open; by default it is closed once the content is extracted"),
 		}, []string{"url"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return HandleFetchAction(ctx, workspace, deps, req), nil
@@ -56,9 +57,9 @@ func defFetch(workspace string, deps Deps) ToolDef {
 	}
 }
 
-// HandleFetchAction loads the URL in a new foreground tab, waits for the
+// HandleFetchAction loads the URL in a background tab of its own, waits for the
 // network to go quiet, then returns the Readability markdown of the page (or of
-// the element matched by selector).
+// the element matched by selector), and closes the tab again.
 func HandleFetchAction(ctx context.Context, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult {
 	start := time.Now()
 	args := req.GetArguments()
@@ -77,20 +78,15 @@ func HandleFetchAction(ctx context.Context, workspace string, deps Deps, req mcp
 		return toolresponse.WrapErrorWithContext(ctx, "fetch", err, start)
 	}
 
-	// The bridge reads whatever tab is active, so navigate, the idle wait and the
-	// read are one indivisible operation with respect to any other bridge caller:
-	// WithTurn holds the queue turn across all three.
-	ctx, releaseTurn, err := bridge.WithTurn(ctx, "fetch "+targetURL)
-	if err != nil {
-		return toolresponse.WrapErrorWithContext(ctx, "fetch", err, start)
+	// Tab-addressed flow: navigate opens a background tab of its own and reports its
+	// TabRegistry id, and every later step carries that id. The sequence therefore
+	// never depends on which tab is selected, and concurrent flows cannot read each
+	// other's pages, so it no longer reserves the whole bridge (address.go).
+	container := ""
+	if c, ok := containerForURL(targetURL); ok {
+		container = c
 	}
-	defer releaseTurn()
-
-	navigateParams := map[string]any{"url": targetURL, "new_tab": true, "timeout": fetchNavigateTimeoutMs}
-	if container, ok := containerForURL(targetURL); ok {
-		navigateParams["container"] = container
-	}
-	nav, err := bridge.CallBridge(ctx, "navigate", navigateParams)
+	nav, err := bridge.CallBridge(ctx, "navigate", navigateParamsTab(targetURL, fetchNavigateTimeoutMs, container))
 	if err != nil {
 		return toolresponse.WrapErrorWithContext(ctx, "fetch", err, start)
 	}
@@ -99,17 +95,32 @@ func HandleFetchAction(ctx context.Context, workspace string, deps Deps, req mcp
 	if detail, failed := bridgeError(nav); failed {
 		return toolresponse.WrapErrorWithContext(ctx, "fetch", fmt.Errorf("navigate to %s failed: %s", targetURL, detail), start)
 	}
+	tabID, err := requireTabID(nav, targetURL)
+	if err != nil {
+		return toolresponse.WrapErrorWithContext(ctx, "fetch", err, start)
+	}
+
+	// One reservation on this one tab: a second caller holding the same id waits
+	// instead of driving the page underneath, while other tabs run in parallel.
+	ctx, releaseTab, err := bridge.WithTabTurn(ctx, tabID, "fetch "+targetURL)
+	if err != nil {
+		return toolresponse.WrapErrorWithContext(ctx, "fetch", err, start)
+	}
+	defer releaseTab()
+	if !keepTabArg(args["keep_tab"]) {
+		defer closeTabFlow(ctx, tabID)
+	}
 
 	// Best-effort: late XHR-driven content may still be in flight. A quiet network
 	// is a bonus, not a requirement, so a failing wait must not lose the page.
-	if _, err := bridge.CallBridge(ctx, "wait_for_network_idle", map[string]any{
+	if _, err := bridge.CallBridge(ctx, "wait_for_network_idle", withTab(map[string]any{
 		"idle_ms": idleMs,
 		"timeout": fetchIdleTimeoutMs,
-	}); err != nil {
+	}, tabID)); err != nil {
 		logfilter.Debugf("[fetch] network idle wait skipped: %v", err)
 	}
 
-	readParams := map[string]any{}
+	readParams := withTab(map[string]any{}, tabID)
 	if selector != "" {
 		readParams["selector"] = selector
 	}
@@ -119,6 +130,9 @@ func HandleFetchAction(ctx context.Context, workspace string, deps Deps, req mcp
 	}
 	if detail, failed := bridgeError(res); failed {
 		return toolresponse.WrapErrorWithContext(ctx, "fetch", fmt.Errorf("read %s failed: %s", fetchSubject(targetURL, selector), detail), start)
+	}
+	if err := verifyTab(res, tabID, fetchSubject(targetURL, selector)); err != nil {
+		return toolresponse.WrapErrorWithContext(ctx, "fetch", err, start)
 	}
 
 	content, truncated := clampBridgeContent(fetchPageContent(res), maxChars)

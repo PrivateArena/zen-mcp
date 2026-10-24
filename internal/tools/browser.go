@@ -42,6 +42,8 @@ func defBrowser(workspace string, deps Deps) ToolDef {
 				"screenshot", "request",
 			}),
 			"url":             strProp("[nav/new_tab/cookie/search] URL"),
+			"index":           strProp("[-i] TabRegistry id from navigate/active_tab (\"t_…\") to address that tab in any window, or a positional tab index; omit for the active tab"),
+			"keep_tab":        boolProp("[read/search with url] Leave the opened tab open; by default it is closed once the content is extracted"),
 			"upload_files":    arrayStringProp("[chat] File path(s); string or array"),
 			"code":            strProp("[web_eval/chrome_eval] JS; must \"return\""),
 			"method":          strProp("[request] HTTP method"),
@@ -128,27 +130,23 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 	var res map[string]any
 	var err error
 
-	// read and search are multi-step flows (navigate -> wait -> read) that must not
-	// interleave with another caller's tab, so they reserve the bridge turn for the
-	// whole sequence (see internal/bridge/gate.go).
-	if action == "read" || action == "search" {
-		reserved, releaseTurn, turnErr := bridge.WithTurn(ctx, "browser "+action+" "+browserTurnSubject(params))
-		if turnErr != nil {
-			return toolresponse.WrapErrorWithContext(ctx, "browser", turnErr, start)
-		}
-		defer releaseTurn()
-		ctx = reserved
-	}
-
 	switch action {
 	case "read":
-		if urlStr, ok := bridgeParams["url"].(string); ok && urlStr != "" {
-			if _, err := bridge.CallBridge(ctx, "navigate", map[string]any{"url": urlStr, "new_tab": true}); err != nil {
-				return toolresponse.WrapErrorWithContext(ctx, "browser", err, start)
-			}
+		// read is tab-addressed: an `index` that is a TabRegistry id reads that tab
+		// whatever is selected, and a bare url is opened in this call's own
+		// background tab so the flow never touches another caller's page.
+		targetURL, _ := bridgeParams["url"].(string)
+		ctx, tabID, releaseTab, tabErr := browserFlowTab(ctx, "browser read "+browserTurnSubject(params), strings.TrimSpace(targetURL), params)
+		if tabErr != nil {
+			return toolresponse.WrapErrorWithContext(ctx, "browser", tabErr, start)
 		}
-		res, err = bridge.CallBridge(ctx, "read", bridgeParams)
+		defer releaseTab()
+
+		res, err = bridge.CallBridge(ctx, "read", addressStep(tabStepParams(bridgeParams), tabID))
 		if err != nil {
+			return toolresponse.WrapErrorWithContext(ctx, "browser", err, start)
+		}
+		if err := verifyTab(res, tabID, "read"); err != nil {
 			return toolresponse.WrapErrorWithContext(ctx, "browser", err, start)
 		}
 		return toolresponse.WrapSuccess(ctx, "browser", extractData(res), start)
@@ -166,19 +164,22 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 		if limit, ok := params["limit"].(float64); ok {
 			searchCount = int(limit)
 		}
-		if _, err := bridge.CallBridge(ctx, "navigate", map[string]any{"url": searchQueryStr, "new_tab": true}); err != nil {
-			return toolresponse.WrapErrorWithContext(ctx, "browser", err, start)
+		ctx, tabID, releaseTab, tabErr := browserFlowTab(ctx, "browser search "+searchQueryStr, searchQueryStr, params)
+		if tabErr != nil {
+			return toolresponse.WrapErrorWithContext(ctx, "browser", tabErr, start)
 		}
-		if _, err := bridge.CallBridge(ctx, "wait_for_network_idle", map[string]any{"idle_ms": 1000}); err != nil {
+		defer releaseTab()
+
+		if _, err := bridge.CallBridge(ctx, "wait_for_network_idle", addressStep(map[string]any{"idle_ms": 1000}, tabID)); err != nil {
 			// ignore wait error
 		}
-		readParams := make(map[string]any, len(bridgeParams))
-		for k, v := range bridgeParams {
-			readParams[k] = v
-		}
+		readParams := addressStep(tabStepParams(bridgeParams), tabID)
 		readParams["limit"] = searchCount
 		res, err = bridge.CallBridge(ctx, "read", readParams)
 		if err != nil {
+			return toolresponse.WrapErrorWithContext(ctx, "browser", err, start)
+		}
+		if err := verifyTab(res, tabID, "search read"); err != nil {
 			return toolresponse.WrapErrorWithContext(ctx, "browser", err, start)
 		}
 		return toolresponse.WrapSuccess(ctx, "browser", extractData(res), start)
@@ -577,6 +578,73 @@ func parseURL(s string) (*url.URL, error) {
 
 // browserTurnSubject names what a reserved browser sequence is working on, so a
 // queued bridge caller can see in the busy error which action owns the browser.
+// browserFlowTab resolves the tab a read/search flow works on and reserves it for
+// the whole sequence:
+//
+//   - an index that is a TabRegistry id addresses that tab, and a url given with it
+//     navigates that same tab in place;
+//   - a url with no id opens this call's own background tab, which is closed again
+//     on release unless keep_tab is set;
+//   - neither means the active tab, which is not reservable and stays on the global
+//     queue.
+//
+// The returned context carries the tab reservation, so the follow-up calls of the
+// flow reuse it instead of queueing again.
+func browserFlowTab(ctx context.Context, label, targetURL string, params map[string]any) (context.Context, string, func(), error) {
+	noop := func() {}
+	container, _ := params["container"].(string)
+
+	if tabID := bridge.RegistryID(params["index"]); tabID != "" {
+		if targetURL != "" {
+			navParams := withTab(map[string]any{"url": targetURL}, tabID)
+			if container != "" {
+				navParams["container"] = container
+			}
+			nav, err := bridge.CallBridge(ctx, "navigate", navParams)
+			if err != nil {
+				return ctx, tabID, noop, err
+			}
+			if detail, failed := bridgeError(nav); failed {
+				return ctx, tabID, noop, fmt.Errorf("navigate to %s failed: %s", targetURL, detail)
+			}
+		}
+		turnCtx, release, err := bridge.WithTabTurn(ctx, tabID, label)
+		if err != nil {
+			return ctx, tabID, noop, err
+		}
+		return turnCtx, tabID, release, nil
+	}
+
+	if targetURL == "" {
+		return ctx, "", noop, nil
+	}
+
+	// timeout 0 leaves the page-load budget at the bridge's own default.
+	nav, err := bridge.CallBridge(ctx, "navigate", navigateParamsTab(targetURL, 0, container))
+	if err != nil {
+		return ctx, "", noop, err
+	}
+	if detail, failed := bridgeError(nav); failed {
+		return ctx, "", noop, fmt.Errorf("navigate to %s failed: %s", targetURL, detail)
+	}
+	tabID, err := requireTabID(nav, targetURL)
+	if err != nil {
+		return ctx, "", noop, err
+	}
+	turnCtx, releaseTab, err := bridge.WithTabTurn(ctx, tabID, label)
+	if err != nil {
+		closeTabFlow(ctx, tabID)
+		return ctx, tabID, noop, err
+	}
+	if keepTabArg(params["keep_tab"]) {
+		return turnCtx, tabID, releaseTab, nil
+	}
+	return turnCtx, tabID, func() {
+		releaseTab()
+		closeTabFlow(turnCtx, tabID)
+	}, nil
+}
+
 func browserTurnSubject(params map[string]any) string {
 	for _, key := range []string{"url", "query", "selector"} {
 		if s, ok := params[key].(string); ok && strings.TrimSpace(s) != "" {

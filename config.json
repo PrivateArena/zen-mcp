@@ -50,7 +50,8 @@
   "bridge": {
     "maxConcurrent": 1,
     "queueTimeoutMs": 120000,
-    "queueAgentActions": false
+    "queueAgentActions": false,
+    "tabParallel": true
   },
   "codegraph_watcher_debounce_ms": 300000,
   "codegraph_skip_embeddings": true,

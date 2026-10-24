@@ -17,8 +17,9 @@ import (
 )
 
 // Google SERP extraction settings for the search tool. The "AI Overview" block
-// is rendered asynchronously inside the aimc subtree, so the flow mirrors the
-// browser tool: navigate (new tab) -> wait for the container -> extract text.
+// is rendered asynchronously inside the aimc subtree, so the flow is tab-addressed
+// like fetch: navigate (own background tab) -> wait for the container -> extract
+// text, every step carrying the TabRegistry id of that tab.
 const (
 	// googleSearchEndpoint is the plain Google web search endpoint.
 	googleSearchEndpoint = "https://www.google.com/search"
@@ -31,10 +32,13 @@ const (
 	searchMaxNum     = 50
 	// searchNavigateTimeoutMs bounds the SERP load inside the bridge.
 	searchNavigateTimeoutMs = 30000
-	// searchOverviewWaitMs bounds the wait for the async AI Overview container.
+	// searchOverviewWaitMs bounds the first wait for the async AI Overview container.
 	// Bounded well under the tool timeout so a query without an AI Overview fails
 	// fast instead of stalling the whole handler budget.
-	searchOverviewWaitMs = 15000
+	searchOverviewWaitMs = 10000
+	// searchOverviewRetryWaitMs is the second, shorter wait, for a SERP whose AI
+	// Overview renders late because its tab is in the background.
+	searchOverviewRetryWaitMs = 8000
 	// searchOverviewIdleMs is the mutation-quiet period required before extracting,
 	// so a still-streaming overview is not read half-written.
 	searchOverviewIdleMs = 800
@@ -48,8 +52,9 @@ func defSearch(workspace string, deps Deps) ToolDef {
 		Title:       "Web Search (Google AI Overview)",
 		Description: "Search Google through the Firefox bridge (userChrome.js MCP Bridge) and return the AI Overview answer as token-efficient markdown (provenance line, then the answer text).",
 		Schema: jsonSchema(map[string]any{
-			"query": strProp("Search query"),
-			"num":   numProp("[query] Google page size hint (num=), 1-100, default 10"),
+			"query":    strProp("Search query"),
+			"num":      numProp("[query] Google page size hint (num=), 1-100, default 10"),
+			"keep_tab": boolProp("Leave the result tab open; by default it is closed once the answer is extracted"),
 		}, []string{"query"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return HandleSearchAction(ctx, workspace, deps, req), nil
@@ -76,46 +81,45 @@ func HandleSearchAction(ctx context.Context, workspace string, deps Deps, req mc
 
 	searchURL := googleSearchURL(query, num)
 
-	// navigate -> wait -> extract must land on this call's SERP, so the whole
-	// sequence holds the bridge turn (see internal/bridge/gate.go).
-	ctx, releaseTurn, err := bridge.WithTurn(ctx, "search "+query)
+	// Tab-addressed flow, the same shape as fetch: this call's own background tab,
+	// its TabRegistry id on every step, so the extraction cannot land on another
+	// caller's SERP and the sequence needs no reservation of the whole browser
+	// (see internal/bridge/address.go).
+	container := ""
+	if c, ok := containerForURL(searchURL); ok {
+		container = c
+	}
+	nav, err := bridge.CallBridge(ctx, "navigate", navigateParamsTab(searchURL, searchNavigateTimeoutMs, container))
 	if err != nil {
 		return toolresponse.WrapErrorWithContext(ctx, "search", err, start)
 	}
-	defer releaseTurn()
-
-	navigateParams := map[string]any{"url": searchURL, "new_tab": true, "timeout": searchNavigateTimeoutMs}
-	if container, ok := containerForURL(searchURL); ok {
-		navigateParams["container"] = container
+	if detail, failed := bridgeError(nav); failed {
+		return toolresponse.WrapErrorWithContext(ctx, "search", fmt.Errorf("navigate to the SERP for %q failed: %s", query, detail), start)
 	}
-	if _, err := bridge.CallBridge(ctx, "navigate", navigateParams); err != nil {
+	tabID, err := requireTabID(nav, searchURL)
+	if err != nil {
 		return toolresponse.WrapErrorWithContext(ctx, "search", err, start)
 	}
 
-	if _, err := bridge.CallBridge(ctx, "wait_for_network_idle", map[string]any{"idle_ms": 1000}); err != nil {
-		// ignore wait error
+	ctx, releaseTab, err := bridge.WithTabTurn(ctx, tabID, "search "+query)
+	if err != nil {
+		return toolresponse.WrapErrorWithContext(ctx, "search", err, start)
+	}
+	defer releaseTab()
+	if !keepTabArg(args["keep_tab"]) {
+		defer closeTabFlow(ctx, tabID)
 	}
 
-	// Best-effort: the AI Overview streams in after the SERP paints. A failing
-	// wait (no overview for this query, CSP hiccup, ...) must not abort extraction.
-	if _, err := bridge.CallBridge(ctx, "wait_for_selector", map[string]any{
-		"selector": aiOverviewSelector,
-		"timeout":  searchOverviewWaitMs,
-		"deep":     true,
-		"idle_ms":  searchOverviewIdleMs,
-	}); err != nil {
-		logfilter.Debugf("[search] AI Overview wait skipped: %v", err)
+	if _, err := bridge.CallBridge(ctx, "wait_for_network_idle", withTab(map[string]any{"idle_ms": 1000}, tabID)); err != nil {
+		logfilter.Debugf("[search] network idle wait skipped: %v", err)
 	}
 
-	res, err := bridge.CallBridge(ctx, "get_text", map[string]any{"selector": aiOverviewSelector})
+	overview, err := searchOverview(ctx, tabID)
 	if err != nil {
 		return toolresponse.WrapErrorWithContext(ctx, "search", searchMissError(query, searchURL, err), start)
 	}
-	if detail, failed := bridgeError(res); failed {
-		return toolresponse.WrapErrorWithContext(ctx, "search", fmt.Errorf("no AI Overview for %q (%s): %s", query, searchURL, detail), start)
-	}
 
-	content, truncated := clampSearchContent(aiOverviewContent(res))
+	content, truncated := clampSearchContent(overview)
 	if strings.TrimSpace(content) == "" {
 		return toolresponse.WrapErrorWithContext(ctx, "search", fmt.Errorf("AI Overview for %q is empty (%s)", query, searchURL), start)
 	}
@@ -127,6 +131,43 @@ func HandleSearchAction(ctx context.Context, workspace string, deps Deps, req mc
 	logSessionEvent(workspace, "search", fmt.Sprintf("search: %s", query), content)
 	logfilter.Info(content)
 	return toolresponse.WrapSuccess(ctx, "search", doc, start)
+}
+
+// searchOverview waits for the AI Overview container on the addressed tab and
+// extracts its text. The block streams in after the SERP paints, and a background
+// tab is not painted at all, so a first pass is followed by one retry with a fresh
+// wait before the query is called answerless. A failing wait is never fatal —
+// extraction is what decides.
+func searchOverview(ctx context.Context, tabID string) (string, error) {
+	var lastErr error = fmt.Errorf("no AI Overview container found")
+	for _, waitMs := range []int{searchOverviewWaitMs, searchOverviewRetryWaitMs} {
+		if _, err := bridge.CallBridge(ctx, "wait_for_selector", withTab(map[string]any{
+			"selector": aiOverviewSelector,
+			"timeout":  waitMs,
+			"deep":     true,
+			"idle_ms":  searchOverviewIdleMs,
+		}, tabID)); err != nil {
+			logfilter.Debugf("[search] AI Overview wait skipped: %v", err)
+		}
+
+		res, err := bridge.CallBridge(ctx, "get_text", withTab(map[string]any{"selector": aiOverviewSelector}, tabID))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if detail, failed := bridgeError(res); failed {
+			lastErr = fmt.Errorf("%s", detail)
+			continue
+		}
+		if err := verifyTab(res, tabID, "AI Overview"); err != nil {
+			return "", err
+		}
+		if content := aiOverviewContent(res); strings.TrimSpace(content) != "" {
+			return content, nil
+		}
+		lastErr = fmt.Errorf("AI Overview container is empty")
+	}
+	return "", lastErr
 }
 
 // searchStringArg coerces an argument to a string; non-string scalars (a bare

@@ -31,7 +31,36 @@ func (e *ErrBridgeFailure) Error() string {
 // from WithTurn, so concurrent callers are served one at a time instead of
 // racing for the active tab. Callers that need several actions to land on the
 // same page reserve the turn themselves with WithTurn.
+//
+// Routing follows how the call addresses a tab (see address.go):
+//
+//   - a background navigation creates its own tab, so it is independent by
+//     construction and runs immediately;
+//   - a call addressed by TabRegistry id is queued on that tab rather than on the
+//     whole browser, so concurrent flows on different tabs overlap. Actions that
+//     need the real cursor or the selected tab take the global turn as well;
+//   - everything else, where the active tab is the target, takes a turn on the
+//     global queue.
 func CallBridge(ctx context.Context, action string, params map[string]any) (map[string]any, error) {
+	if opensOwnTab(action, params) && tabParallelEnabled() {
+		return postBridge(ctx, action, params)
+	}
+	if tabID := addressedTab(params); tabID != "" && tabParallelEnabled() {
+		if !Held(ctx) && FocusBound(action) {
+			turnCtx, releaseTurn, err := WithTurn(ctx, "bridge:"+action+" tab "+tabID)
+			if err != nil {
+				return nil, err
+			}
+			defer releaseTurn()
+			ctx = turnCtx
+		}
+		turnCtx, releaseTab, err := WithTabTurn(ctx, tabID, "bridge:"+action)
+		if err != nil {
+			return nil, err
+		}
+		defer releaseTab()
+		return postBridge(turnCtx, action, params)
+	}
 	if Held(ctx) || agentActionExempt(action) {
 		return postBridge(ctx, action, params)
 	}

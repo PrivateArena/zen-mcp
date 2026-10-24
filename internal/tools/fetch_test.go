@@ -23,6 +23,11 @@ func fetchReq(args map[string]any) mcp.CallToolRequest {
 
 const fetchPageMarkdown = "# Example Domains\n\nThis domain is reserved for documentation."
 
+// fetchFlow is the call sequence of the tab-addressed fetch flow: navigate opens
+// its own background tab, the wait and the read carry that tab's registry id, and
+// the tab is closed again on the way out.
+const fetchFlow = "navigate,wait_for_network_idle,read,close_tab"
+
 var fetchOKResponses = map[string]string{
 	"navigate":              `{"success":true,"url":"https://example.com/","containerId":5,"title":"Example Domain","status":200,"statusText":"OK"}`,
 	"wait_for_network_idle": `{"success":true,"data":{"idle":true,"deep":false}}`,
@@ -36,18 +41,26 @@ func TestFetchNavigatesWaitsThenReads(t *testing.T) {
 		"url": "https://example.com/",
 	}))
 
-	if got, want := strings.Join(stub.actions(), ","), "navigate,wait_for_network_idle,read"; got != want {
+	if got, want := strings.Join(stub.actions(), ","), fetchFlow; got != want {
 		t.Fatalf("bridge call sequence = %q, want %q", got, want)
+	}
+
+	tabID := stub.lastTabID()
+	if !strings.HasPrefix(tabID, "t_") {
+		t.Fatalf("navigate reported no tab id (%q)", tabID)
 	}
 
 	nav := stub.byAction("navigate")
 	if nav["url"] != "https://example.com/" {
 		t.Errorf("navigate url = %v", nav["url"])
 	}
-	// The page must load in a foreground new tab: read has no tab selector, it
-	// always extracts from the active tab.
-	if nav["new_tab"] != true {
-		t.Errorf("navigate must open a foreground new_tab, got %v", nav["new_tab"])
+	// The page must load in this call's own background tab: a foreground new_tab
+	// would move the selection out from under every other caller and the user.
+	if nav["back_tab"] != true {
+		t.Errorf("navigate must open a background tab, got %v", nav)
+	}
+	if nav["new_tab"] != nil {
+		t.Errorf("navigate must not request a foreground new_tab, got %v", nav["new_tab"])
 	}
 	// Both bridge round-trips must carry a bounded load timeout instead of
 	// inheriting the browser tool's 40-minute tool config.
@@ -57,6 +70,15 @@ func TestFetchNavigatesWaitsThenReads(t *testing.T) {
 	idle := stub.byAction("wait_for_network_idle")
 	if ms, ok := idle["timeout"].(float64); !ok || ms <= 0 || ms > 20000 {
 		t.Errorf("wait timeout = %v, want a bounded positive ms", ms)
+	}
+	if idle["index"] != tabID {
+		t.Errorf("wait is not addressed to the flow's tab: %v != %v", idle["index"], tabID)
+	}
+	if read := stub.byAction("read"); read["index"] != tabID {
+		t.Errorf("read is not addressed to the flow's tab: %v != %v", read["index"], tabID)
+	}
+	if close := stub.byAction("close_tab"); close["index"] != tabID {
+		t.Errorf("close_tab is not addressed to the flow's tab: %v != %v", close["index"], tabID)
 	}
 	if ms, ok := idle["idle_ms"].(float64); !ok || ms != fetchDefaultIdleMs {
 		t.Errorf("idle_ms = %v, want the %d ms default", idle["idle_ms"], fetchDefaultIdleMs)
@@ -250,7 +272,7 @@ func TestFetchEmptyPageIsAnError(t *testing.T) {
 		if text := resultText(t, res); !strings.Contains(text, "has no readable content") {
 			t.Errorf("body %s: expected empty-content error, got %q", body, text)
 		}
-		if len(stub.actions()) != 3 {
+		if len(stub.actions()) != 4 {
 			t.Errorf("unexpected call sequence %v", stub.actions())
 		}
 	}
@@ -329,7 +351,7 @@ func TestFetchWaitFailureIsNonFatal(t *testing.T) {
 	if doc := docOf(t, res); doc.body != fetchPageMarkdown {
 		t.Errorf("body = %v, want %v", doc.body, fetchPageMarkdown)
 	}
-	if got, want := strings.Join(stub.actions(), ","), "navigate,wait_for_network_idle,read"; got != want {
+	if got, want := strings.Join(stub.actions(), ","), fetchFlow; got != want {
 		t.Errorf("sequence must continue past the failed wait, got %q want %q", got, want)
 	}
 }
@@ -418,7 +440,7 @@ func TestFetchRespondsWithRawMarkdownNotJSON(t *testing.T) {
 	}
 	doc := docOf(t, res)
 	wantVerbatim(t, doc.body, page)
-	if len(stub.actions()) != 3 {
+	if len(stub.actions()) != 4 {
 		t.Errorf("unexpected call sequence %v", stub.actions())
 	}
 }
@@ -528,7 +550,7 @@ func TestFetchToolRegisteredInAllDefs(t *testing.T) {
 		t.Errorf("fetch schema required = %v, want [url]", found.Schema["required"])
 	}
 	props, _ := found.Schema["properties"].(map[string]any)
-	for _, name := range []string{"url", "selector", "idle_ms", "max_chars"} {
+	for _, name := range []string{"url", "selector", "idle_ms", "max_chars", "keep_tab"} {
 		if _, ok := props[name]; !ok {
 			t.Errorf("fetch schema missing %s property", name)
 		}
@@ -541,7 +563,7 @@ func TestFetchToolRegisteredInAllDefs(t *testing.T) {
 	if doc := docOf(t, res); doc.body != fetchPageMarkdown {
 		t.Errorf("registered handler body = %q", probeSnippet(doc.body))
 	}
-	if len(stub.actions()) != 3 {
+	if len(stub.actions()) != 4 {
 		t.Errorf("registered handler sequence = %v", stub.actions())
 	}
 }

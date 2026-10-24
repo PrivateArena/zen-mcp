@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 
+	"zen-mcp/internal/bridge"
+
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -27,6 +29,60 @@ type bridgeStub struct {
 	// fail lists actions answered with HTTP 502, i.e. a transport-level bridge
 	// failure (as opposed to a success:false body).
 	fail map[string]bool
+	// seq mints the TabRegistry ids of the stub, and lastID remembers the newest
+	// one so tests can assert the follow-up calls carry it.
+	seq     int
+	lastID  string
+	noTabID bool
+}
+
+// withoutTabRegistry answers navigate without a tab id, i.e. a bridge build that
+// predates the TabRegistry, so the "no id available" paths stay testable.
+func (s *bridgeStub) withoutTabRegistry() *bridgeStub {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.noTabID = true
+	return s
+}
+
+// stampTabID applies the bridge's tab-registry protocol to a canned body: navigate
+// reports the id of the tab it opened, and an addressed call echoes that id back as
+// provenance (runFrameAction in JS/bridge/server.mjs). Bodies that are not JSON
+// (error texts) are passed through.
+func (s *bridgeStub) stampTabID(action string, req map[string]any, raw string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.noTabID {
+		return raw
+	}
+	var body map[string]any
+	if err := json.Unmarshal([]byte(raw), &body); err != nil {
+		return raw
+	}
+	switch action {
+	case "navigate", "new_tab":
+		if bridge.TabID(body) == "" {
+			s.seq++
+			s.lastID = fmt.Sprintf("t_stub_%d", s.seq)
+			body["id"] = s.lastID
+		}
+	default:
+		if id := bridge.RegistryID(req["index"]); id != "" && body["id"] == nil {
+			body["id"] = id
+		}
+	}
+	out, err := json.Marshal(body)
+	if err != nil {
+		return raw
+	}
+	return string(out)
+}
+
+// lastTabID is the id the stub handed out most recently.
+func (s *bridgeStub) lastTabID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastID
 }
 
 func (s *bridgeStub) serve(w http.ResponseWriter, req *http.Request) {
@@ -56,7 +112,7 @@ func (s *bridgeStub) serve(w http.ResponseWriter, req *http.Request) {
 	if !ok {
 		raw = `{"success":true,"data":{"content":"generic"}}`
 	}
-	_, _ = w.Write([]byte(raw))
+	_, _ = w.Write([]byte(s.stampTabID(action, body, raw)))
 }
 
 func (s *bridgeStub) actions() []string {

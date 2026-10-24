@@ -37,6 +37,15 @@ var searchOKResponses = map[string]string{
 	"get_text":          searchOKResponse,
 }
 
+// searchFlow is the call sequence of the tab-addressed search flow: this call's own
+// background tab, the registry id on every step, and the tab closed on the way out.
+const searchFlow = "navigate,wait_for_network_idle,wait_for_selector,get_text,close_tab"
+
+// searchFlowRetry is what a SERP with no (or empty) AI Overview costs: a second,
+// shorter wait because a background tab is not painted and the async block can
+// settle later than it would in a visible one.
+const searchFlowRetry = "navigate,wait_for_network_idle,wait_for_selector,get_text,wait_for_selector,get_text,close_tab"
+
 func TestSearchNavigatesGoogleSERPAndExtractsAIOverview(t *testing.T) {
 	stub := bridgeStubAt(t, searchOKResponses)
 
@@ -44,8 +53,13 @@ func TestSearchNavigatesGoogleSERPAndExtractsAIOverview(t *testing.T) {
 		"query": "how to use hyperframes",
 	}))
 
-	if got, want := strings.Join(stub.actions(), ","), "navigate,wait_for_network_idle,wait_for_selector,get_text"; got != want {
+	if got, want := strings.Join(stub.actions(), ","), searchFlow; got != want {
 		t.Fatalf("bridge call sequence = %q, want %q", got, want)
+	}
+
+	tabID := stub.lastTabID()
+	if !strings.HasPrefix(tabID, "t_") {
+		t.Fatalf("navigate reported no tab id (%q)", tabID)
 	}
 
 	nav := stub.byAction("navigate")
@@ -54,8 +68,8 @@ func TestSearchNavigatesGoogleSERPAndExtractsAIOverview(t *testing.T) {
 	if nav["url"] != searchSERP("how+to+use+hyperframes") {
 		t.Errorf("navigate url = %v", nav["url"])
 	}
-	if nav["new_tab"] != true {
-		t.Errorf("navigate must open a foreground new_tab, got %v", nav["new_tab"])
+	if nav["back_tab"] != true {
+		t.Errorf("navigate must open a background tab, got %v", nav)
 	}
 	// Parity with browser.go: google.com traffic uses the CONTAINER_MAP container.
 	if nav["container"] != "Personal" {
@@ -65,6 +79,9 @@ func TestSearchNavigatesGoogleSERPAndExtractsAIOverview(t *testing.T) {
 	wait := stub.byAction("wait_for_selector")
 	if wait["selector"] != aiOverviewSelector {
 		t.Errorf("wait selector = %v", wait["selector"])
+	}
+	if wait["index"] != tabID {
+		t.Errorf("wait is not addressed to the flow's tab: %v != %v", wait["index"], tabID)
 	}
 	if wait["deep"] != true {
 		t.Errorf("wait must use deep mode so a streaming overview settles, got %v", wait["deep"])
@@ -82,6 +99,12 @@ func TestSearchNavigatesGoogleSERPAndExtractsAIOverview(t *testing.T) {
 	get := stub.byAction("get_text")
 	if get["selector"] != aiOverviewSelector {
 		t.Fatalf("get_text selector = %v, want %v", get["selector"], aiOverviewSelector)
+	}
+	if get["index"] != tabID {
+		t.Errorf("get_text is not addressed to the flow's tab: %v != %v", get["index"], tabID)
+	}
+	if close := stub.byAction("close_tab"); close["index"] != tabID {
+		t.Errorf("close_tab is not addressed to the flow's tab: %v != %v", close["index"], tabID)
 	}
 
 	doc := docOf(t, res)
@@ -185,8 +208,8 @@ func TestSearchReportsMissingAIOverview(t *testing.T) {
 	if !strings.Contains(text, "Not found") {
 		t.Errorf("bridge detail must be reported, got %q", text)
 	}
-	if stub.byAction("get_text") == nil {
-		t.Error("get_text should still have been attempted")
+	if got, want := strings.Join(stub.actions(), ","), searchFlowRetry; got != want {
+		t.Errorf("miss sequence = %q, want %q", got, want)
 	}
 }
 
@@ -227,7 +250,7 @@ func TestSearchEmptyOverviewIsAnError(t *testing.T) {
 	if text := resultText(t, res); !strings.Contains(text, "is empty") {
 		t.Errorf("expected empty-overview error, got %q", text)
 	}
-	if len(stub.actions()) != 4 {
+	if len(stub.actions()) != 7 {
 		t.Errorf("unexpected call sequence %v", stub.actions())
 	}
 }
@@ -245,7 +268,7 @@ func TestSearchWaitFailureIsNonFatal(t *testing.T) {
 	if doc := docOf(t, res); doc.body != searchOverviewAnswer {
 		t.Errorf("body = %q, want %q", probeSnippet(doc.body), searchOverviewAnswer)
 	}
-	if got, want := strings.Join(stub.actions(), ","), "navigate,wait_for_network_idle,wait_for_selector,get_text"; got != want {
+	if got, want := strings.Join(stub.actions(), ","), searchFlow; got != want {
 		t.Errorf("sequence must continue past the failed wait, got %q want %q", got, want)
 	}
 }
@@ -425,7 +448,7 @@ func TestSearchToolRegisteredInAllDefs(t *testing.T) {
 	if doc := docOf(t, res); doc.body != searchOverviewAnswer {
 		t.Errorf("registered handler body = %q", probeSnippet(doc.body))
 	}
-	if len(stub.actions()) != 4 {
+	if len(stub.actions()) != 5 {
 		t.Errorf("registered handler sequence = %v", stub.actions())
 	}
 }

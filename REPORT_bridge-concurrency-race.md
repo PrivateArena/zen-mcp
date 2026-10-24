@@ -2,6 +2,8 @@
 
 Scope: why two bridge-backed tool calls issued at the same time (zfetch × N, zsearch, zbrowser read) came back with **one URL's provenance line over another URL's content**, and what was changed so the calls are served one at a time in arrival order.
 
+> **[UPDATE, same day]** Finding 1 — "cannot be fixed from the MCP side" — has since been fixed at the source: the bridge now hands out a TabRegistry id per tab, and the flows below are tab-addressed and genuinely parallel, with the Gate kept for active-tab and focus-bound calls. See **Follow-up: tab-addressed parallelism** at the end of this report. Everything above that line is kept as the record of the incident and of why the queue exists.
+
 Measured on: `zen-mcp` @ `be4bc72` (before) and the queue patch (after), live Zen bridge `127.0.0.1:9999`, 2026-10-24.
 Fixture: `.scratch/bridge-race/` (gitignored — keep a copy). `pages.py` is a two-line Python server that tags every response with its own path (`/one` → `PAGE one`, `marker-one-…`), `race.sh` fires two `fetch` calls simultaneously through the MCP endpoint and reports the tag that actually came back.
 
@@ -181,3 +183,43 @@ Mutation check `[VERIFIED]`: with the two `WithTurn` calls stubbed out, `TestPar
 1. **Tab-scoped bridge API** `[HYPOTHESIS]` — the real cure for finding 1 is a `tab_id` on `read`/`get_text`/`wait_*` in `userChrome.js`, so two callers can work in parallel tabs instead of waiting. The Go side is then free to raise `maxConcurrent`; the gate already supports it.
 2. **Long turn holders** — `CallBridge` has no client deadline by design, so a wedged bridge action holds the turn until the *bridge* answers; `queueTimeoutMs` only protects the waiters. A keep-alive/abort for the POST itself would shorten worst-case queueing.
 3. **Queue observability** — `[VERIFIED]` `pool -a list` now carries a `bridge` field (`limit / active / waiting / holder / heldForMs / queue[]`) whenever the turn is occupied, so an agent can ask who owns the browser instead of guessing. Not yet exposed: a per-call `bridge wait time` in the tool's own provenance line, which would make slow queues visible without a second call.
+
+---
+
+## Follow-up: tab-addressed parallelism (the finding that *was* fixable at the source)
+
+The queue was a workaround for a missing primitive: the bridge had no tab handle in the request or the response. It has one now.
+
+### What the bridge does (`zen-browser-patch` profile, `JS/bridge/`)
+
+| Change | Where |
+|---|---|
+| `navigate` reports the id of the tab it opened (`id`), including on `navigate_timeout`, so the tab can still be inspected or closed | `action_handlers.mjs` |
+| every frame action echoes the tab it really ran on: `{ id, url }` alongside the payload | `server.mjs` → `runFrameAction` |
+| an `index` that no longer resolves is a hard `tab_not_found` — the silent fallback to the selected tab, which is what mixed two callers' results, is gone | `server.mjs`, `tab_manager.mjs` (`resolveTab`, `resolveBrowser`) |
+| `active_tab` / `switch_tab` / `refresh` / `close_tab` echo `id` too, and `close_tab` no longer reports success for a tab that was not there | `action_handlers.mjs` |
+
+`index` therefore accepts a TabRegistry id, a positional index, or nothing (active tab). See `MCP_BRIDGE_API.md` → “TAB ADDRESSING & CONCURRENCY”.
+
+### What the client does (`zen-mcp`)
+
+* `internal/bridge/address.go` — routing in `CallBridge`: a background navigation and any call carrying a registry id are queued **on that tab** instead of on the whole browser. Actions that steer the real cursor/keyboard or need the selected tab (`FocusBound`: native/trusted input, `switch_tab`, `screenshot`) still take the global turn — an id does not give you a second mouse.
+* `internal/tools/tabflow.go` — `fetch`, `search` and `browser read`/`search` are one flow: own background tab (never the caller's selection), id on every step, `close_tab` on the way out unless `keep_tab`.
+* Provenance is verified, not assumed: a payload whose echoed id is not the flow's own tab is rejected (`verifyTab`), so a mis-attributed page fails loudly instead of arriving as a plausible document.
+* `bridge.tabParallel` (default `true`) is the escape hatch: `false` puts every call back on the single global queue.
+
+### Measured, against the live bridge
+
+Fixture: three local servers, each page tagged with its own marker and a 1.5 s delay; 4 `navigate(back_tab) → read → close_tab` flows.
+
+| | Wall time | Result |
+|---|---|---|
+| one after another | 10.31 s | 4/4 correct |
+| four at once, no queue | 6.02 s | 4/4 correct, each carrying its own marker |
+| control: `new_tab` + read-the-active-tab (the old shape) | — | 2 of 3 reads returned another page's content |
+
+Unit coverage: `internal/bridge/address_test.go` (different tabs overlap, same tab serializes, reservation covers a sequence, background navigation is not blocked by a wedged holder, focus-bound actions keep the global queue, `tabParallel: false` restores strict serial), `internal/tools/bridge_race_test.go` (parallel fetch/search/read with per-tab overlap assertions), `internal/tools/tabflow_test.go` (tab cleanup, missing registry refused, provenance mismatch rejected).
+
+### What the queue is still for
+
+`zcolab` (the bridge's colab controller addresses the selected tab with no id at all), raw `curl` clients, `chat`/`brainstorm` (serialized inside the bridge and deliberately exempt), and every action in `FocusBound`. Removing it would have traded a documented silent-wrong-page bug for the same bug plus a lost fairness guarantee; it now simply sits behind the calls that cannot race.
