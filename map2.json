@@ -1,7 +1,90 @@
 {
+  "/media/jang/home/Deve/zen-tts": {
+    "description": "Universal TTS local server.",
+    "lastVisited": "2026-10-28T01:45:04.457Z"
+  },
+  "/media/jang/home/Deve/zen-esp32": {
+    "lastVisited": "2026-10-27T11:15:07.567Z"
+  },
+  "/media/jang/home/Deve/worldproxy/zendes/zen-webserver": {
+    "description": "ZenServer is multi-purpose webserver that hosts the ZenECO system (ZenNote whiteboard note taking app, ZenRAG) and can multiply itself.",
+    "lastVisited": "2026-10-27T03:27:04.650Z",
+    "scopes": {
+      "news": [
+        "www/news.yaml",
+        "www/web/themes/news"
+      ],
+      "note": [
+        "www/web/themes/note",
+        "www/web/pages/note-article.html",
+        "www/web/pages/note-home.html",
+        "www/web/pages/note-whiteboard.html",
+        "www/note.yaml"
+      ]
+    }
+  },
+  "/media/jang/home/Deve/pi-disciple": {
+    "lastVisited": "2026-10-26T09:14:19.561Z"
+  },
+  "/media/jang/home/Deve/worldproxy/zendes/zen2": {
+    "description": "ZenProxy is uBO-like adblock proxy with higher capabilities like Tagging  (from Privoxy), header filtering, download accelerating, proxying, leeching and bandwidth controlling.",
+    "lastVisited": "2026-10-26T09:01:41.184Z",
+    "scopes": {
+      "cosmetic": [
+        "zen-core/cosmetic"
+      ],
+      "dns": [
+        "zen-core/engine/dns_client"
+      ],
+      "dpi": [
+        "zen-core/engine/dpi"
+      ],
+      "gio": [
+        "internal/gio"
+      ],
+      "htmlfilter": [
+        "zen-core/rewrite/html/htmlfilter"
+      ],
+      "interceptor": [
+        "zen-core/networkrules/intercept_rule.go",
+        "zen-core/webserver/interceptor.go",
+        "zen-core/webserver/interceptor"
+      ],
+      "mimic": [
+        "zen-core/engine/mimic"
+      ],
+      "networkrules": [
+        "zen-core/networkrules"
+      ],
+      "proxy": [
+        "zen-core/proxy"
+      ],
+      "proxypool": [
+        "zen-core/engine/iptree",
+        "zen-core/networkrules/proxypool",
+        "zen-core/webserver/proxypool/dashboard"
+      ],
+      "tester": [
+        "zen-core/networkrules/decision.go",
+        "zen-core/networkrules/pipeline.go",
+        "zen-core/webserver/tester.go",
+        "zen-core/webserver/tester"
+      ],
+      "trie": [
+        "zen-core/engine/pathtree",
+        "zen-core/engine/ruletree"
+      ],
+      "tui": [
+        "internal/tui"
+      ]
+    }
+  },
+  ".": {
+    "lastVisited": "2026-10-25T09:37:16.433Z"
+  },
   "/media/jang/home/Deve/zen-mcp": {
     "description": "ZenMCP is multi-purpose MCP server designed for ZenECO system.",
-    "lastVisited": "2026-10-24T06:39:58.870Z",
+    "lastVisited": "2026-10-25T04:41:39.016Z",
     "scopes": {
       "browser": [
         "cli/zen-browser",
@@ -45,6 +128,9 @@
         "internal/tools/workspace.go"
       ]
     }
+  },
+  "/media/jang/home/Deve/zen-nurse": {
+    "lastVisited": "2026-10-24T15:55:36.456Z"
   },
   "/media/jang/home/PortableApp/firefox/profile/chrome": {
     "description": "Firefox Bridge and userChrome.js script to control Firefox using HTTP REST API, cannot be blocked.",
@@ -117,9 +203,6 @@
     "description": "bashrc builder.",
     "lastVisited": "2026-10-22T10:36:29.153Z"
   },
-  "/media/jang/home/Deve/zen-esp32": {
-    "lastVisited": "2026-10-22T06:29:37.546Z"
-  },
   "/media/jang/home/ArtCraft": {
     "lastVisited": "2026-10-21T07:06:57.420Z"
   },
@@ -138,79 +221,6 @@
   },
   "/media/jang/home/Deve/zen-vsix": {
     "lastVisited": "2026-10-14T08:12:32.427Z"
-  },
-  "/media/jang/home/Deve/worldproxy/zendes/zen2": {
-    "description": "ZenProxy is uBO-like adblock proxy with higher capabilities like Tagging  (from Privoxy), header filtering, download accelerating, proxying, leeching and bandwidth controlling.",
-    "lastVisited": "2026-10-14T03:13:46.234Z",
-    "scopes": {
-      "cosmetic": [
-        "zen-core/cosmetic"
-      ],
-      "dns": [
-        "zen-core/engine/dns_client"
-      ],
-      "dpi": [
-        "zen-core/engine/dpi"
-      ],
-      "gio": [
-        "internal/gio"
-      ],
-      "htmlfilter": [
-        "zen-core/rewrite/html/htmlfilter"
-      ],
-      "interceptor": [
-        "zen-core/networkrules/intercept_rule.go",
-        "zen-core/webserver/interceptor.go",
-        "zen-core/webserver/interceptor"
-      ],
-      "mimic": [
-        "zen-core/engine/mimic"
-      ],
-      "networkrules": [
-        "zen-core/networkrules"
-      ],
-      "proxy": [
-        "zen-core/proxy"
-      ],
-      "proxypool": [
-        "zen-core/engine/iptree",
-        "zen-core/networkrules/proxypool",
-        "zen-core/webserver/proxypool/dashboard"
-      ],
-      "tester": [
-        "zen-core/networkrules/decision.go",
-        "zen-core/networkrules/pipeline.go",
-        "zen-core/webserver/tester.go",
-        "zen-core/webserver/tester"
-      ],
-      "trie": [
-        "zen-core/engine/pathtree",
-        "zen-core/engine/ruletree"
-      ],
-      "tui": [
-        "internal/tui"
-      ]
-    }
-  },
-  "/media/jang/home/Deve/worldproxy/zendes/zen-webserver": {
-    "description": "ZenServer is multi-purpose webserver that hosts the ZenECO system (ZenNote whiteboard note taking app, ZenRAG) and can multiply itself.",
-    "lastVisited": "2026-09-13T06:58:17.787Z",
-    "scopes": {
-      "news": [
-        "www/news.yaml",
-        "www/web/themes/news"
-      ],
-      "note": [
-        "www/web/themes/note",
-        "www/web/pages/note-article.html",
-        "www/web/pages/note-home.html",
-        "www/web/pages/note-whiteboard.html",
-        "www/note.yaml"
-      ]
-    }
-  },
-  ".": {
-    "lastVisited": "2026-09-05T07:39:02.993Z"
   },
   "/media/jang/home/Deve/zen-dragon": {
     "lastVisited": "2026-08-22T15:39:07.356Z"
@@ -344,10 +354,6 @@
   },
   "/media/jang/home/Deve/zen-tm": {
     "lastVisited": "2026-07-08T04:32:48.633Z"
-  },
-  "/media/jang/home/Deve/zen-tts": {
-    "description": "Universal TTS local server.",
-    "lastVisited": "2026-07-29T10:13:04.141Z"
   },
   "/media/jang/home/Deve/zen-typo": {
     "lastVisited": "2026-07-05T22:37:31.561Z"
