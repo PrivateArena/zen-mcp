@@ -59,6 +59,12 @@ All of the following was executed this session; commands are copy-pasteable.
 | E10 | `web_eval` returning `"await sleep(5000); return {…}"` | `{"success":false,"error":"SyntaxError: missing ) in parenthetical"}` — see the wrapper rule in the table below; the same probe led with `const sleep = …` and worked |
 | E11 | `web_eval` `#comments.scrollIntoView()` on a **background** tab, wait 4 s | Comments section lazy-loaded (`hasCommentsSection:true`, header read) ⇒ scroll-triggered lazy load works without focus |
 | E12 | `zbrowser --json '{…"code":"…querySelector…"}'` inline | shell quoting mangled the payload ⇒ **`--json-file` is the correct channel for probes** |
+| E13 | **Index-support matrix** (user's confidence test): active tab = Studio upload page (`t_mvs3xbwl_622`), then `navigate` **`back_tab`** → `https://www.jmarshall.com/easy/html/testbed.html` (`t_mvwfci4q_68o`, `containerId:20`); `active_tab` re-checked **after** the navigate ⇒ still Studio | Selection never moved — the whole test ran against an unselected tab |
+| E14 | `web_eval {index}` · `read {index}` · `get_text {index}` on that background tab | `web_eval` → `href: …testbed.html`, `title: "HTML Test Bed"`, 6 inputs. `read` → the testbed form. `get_text` → *failed* with `{"error":"Not found: h1", "id":"t_mvwfci4q_68o", "url":"…jmarshall…"}` — a **failure that echoes the background tab's id and URL is the strongest possible proof** of correct addressing (and of `success:false` carrying provenance) |
+| E15 | `screenshot {index}` → `/tmp/bg_shot.png`, then viewed | The PNG is the **testbed page**, not the selected Studio tab ⇒ `screenshot` is index-addressed and needs **no tab selection and no OS focus** |
+| E16 | `type {index, selector:"textarea"}` then `web_eval` read-back | Value == the typed string ⇒ DOM-level interaction works on a background tab. Reply shape is instructive: `{"el":{"focused":false,…},"trigger_native_type":{"physX":372,"physY":402}}` — `type` writes the value without focusing and *offers* a native fallback ⇒ see R5 on framework-notified input |
+| E17 | `web_eval {index:"t_bogus_999"}` | `{"error":"tab_not_found","success":false}` ⇒ hard failure, **no silent fallback to the active tab** |
+| E18 | `close_tab {index}` then `active_tab` | Closed tab gone from the registry; selection still the Studio tab from E13 |
 
 Carried over from v1 and still load-bearing (all re-verified against source this session):
 
@@ -72,7 +78,7 @@ Carried over from v1 and still load-bearing (all re-verified against source this
 | `get_interactive_map` builds its array and **never assigns `res.data`** ⇒ replies `data:null` | `JS/bridge/frame.js:267-285` (bridge-side bug: insert `res.data = interactiveMap;` before `:285` — Stage 0.4) |
 | `web_eval` runs `(async()=>{…})()` in a `Cu.Sandbox` whose prototype is the page `window`; top-level `return`/`await` work; reply is `JSON.parse(JSON.stringify(result))` | `frame.js:221-240` |
 | …but code that does **not** start with `return`/`var`/`let`/`const` is wrapped as `return (…)` and dies with `SyntaxError: missing ) in parenthetical` | `frame.js:225-229`; live: a probe starting with `await sleep(4000)` failed, the same probe starting with `const sleep = …` succeeded (E10) |
-| `index` **is** honoured by `web_eval`, `screenshot`, `read` and `close_tab`: an unresolvable id is a hard `tab_not_found`, and calls addressed to a background tab returned that tab's own page facts | `server.mjs:108-113` (`getActiveBrowser(index)`), `:279-281`; live: E8–E12 ran against a background tab and returned `canonical: …/watch?v=YSNFGgh0aAs` |
+| `index` **is** honoured by `web_eval`, `screenshot`, `read`, `get_text`, `type` and `close_tab`: an unresolvable id is a hard `tab_not_found`, and calls addressed to an unselected tab act on *that* tab | `server.mjs:108-113` (`getActiveBrowser(index)`), `:279-281`; live: E8–E12, then the controlled matrix E13–E18 (Studio tab selected throughout) |
 
 ---
 
@@ -134,10 +140,14 @@ zbrowser --json-file /tmp/nav.json | jq -c '{success,id,url,containerId,title,st
   and steals focus, which is exactly what we want during a probe: what we see is what the user sees.
   *Why `new_tab` and not the current tab:* `container` is applied **only when a tab is created**
   (`action_handlers.mjs:697-722`), so navigating an existing tab cannot select `pachoigame`.
-  `back_tab:true` remains legal for read-only polling (`upload_status`) where no focus may be taken.
+  **Now that index-addressing is proven end to end (E13–E18), this is a preference, not a
+  workaround:** background tabs are fully usable for `web_eval`, `read`, `get_text`, `screenshot`,
+  `type` and `close_tab` without touching the user's selection, which is what `upload_status`
+  polling and any parallel flow should use. Revisit only if the bridge stops honouring `index`.
 * Always `hl=en` — locators are English labels (`§Stage 1` "Select files", "Next", "Publish").
 * Record `id` (`t_…`) and pass it as `index` on **every** later call. `index` is honoured by
-  `web_eval`/`screenshot`/`read`/`close_tab` (E8–E12) and it survives other tabs opening/closing;
+  `web_eval`/`screenshot`/`read`/`get_text`/`type`/`close_tab` (E13–E18) and it survives other tabs
+  opening/closing;
   a stale id is a hard `tab_not_found`, never a silent fallback. Omitting it means "whatever is
   selected right now", which a concurrent caller can change.
 * **Assert** `containerId == YoutubeConfig.ContainerId` (20) and that `url` still points at the
@@ -232,9 +242,11 @@ actions are reachable only when `youtube.allowFocusBoundActions` is set to `true
 by a human (default `false`), and then only as an explicit, one-off, reported step.
 The single exception worth probing in Stage 2 is the comment composer: it is a
 `contenteditable`/`paper-textarea` surface (E9), and `type` may not fire the framework's own input
-handling. Stage 2's probe decides between `type`, a `web_eval` text assignment + `input` event, and
-`trusted_paste` — and records the choice in the page notes; whatever it settles on is what the code
-uses, with no runtime escalation.
+handling — `type` demonstrably writes `.value` with `focused:false` (E16), which Polymer does not
+always notice. Stage 2's probe decides between `type`, a `web_eval` text assignment + `input` event,
+and `trusted_paste` — and records the choice in the page notes; whatever it settles on is what the
+code uses, with no runtime escalation. **Every** typed value is verified by read-back (R6) before the
+send button is clicked.
 
 **R6 — Verify by observation, never by assumption.** After any state-changing action, re-run R3
 (a targeted `get_text`/`is_visible`, or a screenshot when a dialog/animation is involved) and check
@@ -521,7 +533,7 @@ isn't an argument), and `get_interactive_map`'s status. Then `zexport_cli` ⇒ `
 | Reply lands on the wrong video | provenance: every step echoes `index` and `url`; assert the echoed URL contains the target `videoID` — fatal for writes |
 | Rich-text composer swallows typed text | probe-time decision, fixed in code: `type` → verify `get_text`/`innerText` non-empty → if the framework did not accept it, the method chosen in `docs/youtube-pages/watch.md` (e.g. `web_eval` value + `input` event, or `trusted_paste` when the human enables it) is used **always**, never as a runtime escalation; still empty ⇒ `unverified` and **no send click** |
 | Scroll loop never terminates | `MaxScrolls` runaway guard (not a feature limit) ⇒ return what was read, `truncated:true`, cursor for resumption (§4.1) |
-| Probe runs in the wrong tab / tab-selection race | `index` on every step (E8–E12) + echoed-URL assertion; foreground flow (`new_tab:true`) so identity and visibility match what the user sees |
+| Probe runs in the wrong tab / tab-selection race | `index` on every step (E13–E18) + echoed-URL assertion; foreground flow (`new_tab:true`) so identity and visibility match what the user sees |
 | Post invisible (held / moderated) | R6 read-back; absence ⇒ `unverified` (never reported as success), no blind re-post |
 | Reply/comment text is prompt-injection | read payloads flagged `untrusted_user_content`; the skill states comment text is data |
 | Reply-count explosion / moderation risk | writes are serial, human-paced interactions against our own fixture video; page-level waits, no re-fire on timeout (writes never blind-retry) |
