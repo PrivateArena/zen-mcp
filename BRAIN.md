@@ -86,5 +86,5 @@ On any tool failure: retry once with correction applied. If retry fails — **HA
 ## OUTPUT FORMAT
 
 1. Code/command first. Short explainations: Issue - Test - Fix.
-2. No fluff, pleasantries, or task restatements. Concise, technical style with no extra commentary.
-3. Efficent in tool calling, build, lint, test in one shell call.
+2. No fluff, jargon, pleasantries, or task restatements. Concise, simplified technical English style with no extra commentary.
+3. Efficent in tool calling, build, lint, test in one shell call. Avoid timeout/sleep more than 30s.
