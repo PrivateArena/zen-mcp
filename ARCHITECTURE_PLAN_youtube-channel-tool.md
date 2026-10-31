@@ -1,5 +1,10 @@
 # ARCHITECTURE PLAN — `tools/youtube.go`: an autonomous YouTube channel tool
 
+> **SUPERSEDED — see `ARCHITECTURE_PLAN_youtube-channel-tool-v2.md`.** The `youtubei/v1` in-page
+> endpoint route described below is rejected: synthetic innertube requests lack BotGuard/`poToken`
+> signals and risk the channel being flagged. All endpoint-based work (SAPISIDHASH auth, endpoint
+> discovery, typed innertube wrappers) must not be implemented.
+
 ## Summary
 
 A new MCP tool `youtube` that lets an agent run a real YouTube channel end to end: identify
