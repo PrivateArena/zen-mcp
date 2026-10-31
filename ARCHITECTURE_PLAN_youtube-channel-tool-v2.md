@@ -20,8 +20,8 @@ Two rules govern the whole design:
    to `fetch`/`XMLHttpRequest` a YouTube or Studio API path. Rationale: a synthetic `youtubei` POST
    is indistinguishable from a bot to YouTube's own risk signals (no BotGuard/`poToken`, no real
    pointer/keyboard history), and a false positive costs the channel. The bridge can reproduce a
-   human interaction exactly (`trusted_click`, `trusted_paste`, native mouse paths), so there is
-   nothing to gain and a channel to lose.
+   human interaction exactly — DOM-level JS interaction first, `trusted_*`/`native_*` only as a
+   human-gated exception (R5) — so there is nothing to gain and a channel to lose.
 2. **Probe in the terminal, then freeze into code.** No Go page-flow is written before that flow
    has been executed live, by hand, through `zbrowser`/`zyoutube` CLI calls, with each selector
    copied out of a real probe response. Stages below are ordered so that each one is a complete,
@@ -41,7 +41,7 @@ Two rules govern the whole design:
 
 ---
 
-## 1. Live evidence for v2 (gathered for this rewrite, container `pachoigame`)
+## 1. Live evidence for v2 (gathered for this rewrite and the answer round, container `pachoigame`)
 
 All of the following was executed this session; commands are copy-pasteable.
 
@@ -54,6 +54,11 @@ All of the following was executed this session; commands are copy-pasteable.
 | E5 | same, `document.querySelectorAll("input[type=file]")` | **1 file input exists in the light DOM**, `accept:""`, `className:""` ⇒ the bridge `upload` action's default target works; note it has **no `#files-input` id** (v1 assumed one) |
 | E6 | `web_eval` — `typeof deepQuery` / `typeof deepQueryAll` | **`deepQuery` is injected into the sandbox** (`JS/bridge/frame.js:224`) and walks shadow roots; **`deepQueryAll` is NOT** ⇒ list-of-elements probes must carry their own shadow walker |
 | E7 | `close_tab {"index":"t_mvwedpch_68i"}` | `{"id":"t_mvwedpch_68i","success":true}` — id echo confirms the tab we created was the tab we closed |
+| E8 | fixture probe: `navigate` → `https://www.youtube.com/watch?v=YSNFGgh0aAs&hl=en` (container `pachoigame`) | `containerId:20`, logged in (`ytd-masthead #avatar-btn` present), `canonical` = the fixture URL |
+| E9 | page facts after `readyState:complete` | title **`whiteboard - YouTube`**, `#comments` present, header text **`0 Comments\nSort by`**, `ytd-comment-thread-renderer` count **0**, composer present (`#simplebox-placeholder` / `#contenteditable-root`) ⇒ the fixture currently has **no comments at all**, which sets Stage 2's test design (§Stage 2) |
+| E10 | `web_eval` returning `"await sleep(5000); return {…}"` | `{"success":false,"error":"SyntaxError: missing ) in parenthetical"}` — see the wrapper rule in the table below; the same probe led with `const sleep = …` and worked |
+| E11 | `web_eval` `#comments.scrollIntoView()` on a **background** tab, wait 4 s | Comments section lazy-loaded (`hasCommentsSection:true`, header read) ⇒ scroll-triggered lazy load works without focus |
+| E12 | `zbrowser --json '{…"code":"…querySelector…"}'` inline | shell quoting mangled the payload ⇒ **`--json-file` is the correct channel for probes** |
 
 Carried over from v1 and still load-bearing (all re-verified against source this session):
 
@@ -66,6 +71,8 @@ Carried over from v1 and still load-bearing (all re-verified against source this
 | `navigate` applies `container` **only when `new_tab`/`back_tab` creates a tab**; navigating an existing tab calls `loadURI` and cannot change its identity | `JS/bridge/action_handlers.mjs:697-722` (`cid` is used only in the `openTab` branch) |
 | `get_interactive_map` builds its array and **never assigns `res.data`** ⇒ replies `data:null` | `JS/bridge/frame.js:267-285` (bridge-side bug: insert `res.data = interactiveMap;` before `:285` — Stage 0.4) |
 | `web_eval` runs `(async()=>{…})()` in a `Cu.Sandbox` whose prototype is the page `window`; top-level `return`/`await` work; reply is `JSON.parse(JSON.stringify(result))` | `frame.js:221-240` |
+| …but code that does **not** start with `return`/`var`/`let`/`const` is wrapped as `return (…)` and dies with `SyntaxError: missing ) in parenthetical` | `frame.js:225-229`; live: a probe starting with `await sleep(4000)` failed, the same probe starting with `const sleep = …` succeeded (E10) |
+| `index` **is** honoured by `web_eval`, `screenshot`, `read` and `close_tab`: an unresolvable id is a hard `tab_not_found`, and calls addressed to a background tab returned that tab's own page facts | `server.mjs:108-113` (`getActiveBrowser(index)`), `:279-281`; live: E8–E12 ran against a background tab and returned `canonical: …/watch?v=YSNFGgh0aAs` |
 
 ---
 
@@ -105,35 +112,58 @@ graph TD
 ## 3. The Reconnaissance Protocol  *(the method every stage uses)*
 
 This is the standing procedure for learning any YouTube page and then acting on it. It is the
-"3 steps" workflow (open → look → interact) formalised with verified commands and the two traps
-that make naive attempts fail (shadow DOM, focus-bound actions).
+"3 steps" workflow (open → look → interact) formalised with verified commands and the four traps
+that make naive attempts fail: shadow DOM (E4), the `return`-first wrapper rule (E10), shell quoting
+of probe code (E12), and focus-bound actions stealing the OS cursor (R5).
 
 ### 3.1 Steps
 
 **R1 — Open the page in the right container and capture provenance.**
 
 ```bash
-zbrowser --json '{"action":"navigate","url":"https://www.youtube.com/watch?v=<ID>&hl=en",
-                  "container":"pachoigame","back_tab":true}' | jq -c '{success,id,url,containerId,title,status,error}'
+cat > /tmp/nav.json <<'EOF'
+{"action":"navigate","url":"https://www.youtube.com/watch?v=YSNFGgh0aAs&hl=en",
+ "container":"pachoigame","new_tab":true}
+EOF
+zbrowser --json-file /tmp/nav.json | jq -c '{success,id,url,containerId,title,status,error}'
 ```
 
-* Always `back_tab:true` (background tab ⇒ DOM actions need no focus, and the user's window is untouched).
+* **Foreground by default (`new_tab:true`, not `back_tab:true`)** — per the user's instruction for
+  testing: work in the tab the browser is actually showing. It costs the global bridge turn per call
+  (a foreground `new_tab` moves the selection ⇒ `opensOwnTab` is false, `internal/bridge/address.go:74-86`)
+  and steals focus, which is exactly what we want during a probe: what we see is what the user sees.
+  *Why `new_tab` and not the current tab:* `container` is applied **only when a tab is created**
+  (`action_handlers.mjs:697-722`), so navigating an existing tab cannot select `pachoigame`.
+  `back_tab:true` remains legal for read-only polling (`upload_status`) where no focus may be taken.
 * Always `hl=en` — locators are English labels (`§Stage 1` "Select files", "Next", "Publish").
-* Record `id` (`t_…`) and reuse it for **every** later call. Numeric indices shift; a stale `t_` id is
-  a hard `tab_not_found`, never a silent fallback (skill: *Tab addressing*).
+* Record `id` (`t_…`) and pass it as `index` on **every** later call. `index` is honoured by
+  `web_eval`/`screenshot`/`read`/`close_tab` (E8–E12) and it survives other tabs opening/closing;
+  a stale id is a hard `tab_not_found`, never a silent fallback. Omitting it means "whatever is
+  selected right now", which a concurrent caller can change.
 * **Assert** `containerId == YoutubeConfig.ContainerId` (20) and that `url` still points at the
   intended page. A wrong container means the *identity* is wrong — stop, don't continue.
+* Probe payloads go through **`--json-file`**, never inline `--json '…'` (E12).
 
 **R2 — Settle the page.** Prefer element conditions over time:
 
 ```bash
-zbrowser --json '{"action":"wait_for_selector","index":"t_…","byText":"Select files","timeout":20000}'
-zbrowser --json '{"action":"wait_for_function","index":"t_…","polling":1000,"timeout":60000,
-                  "code":"return !document.querySelector(\"tp-yt-paper-progress\") || document.querySelector(\"tp-yt-paper-progress\").getAttribute(\"aria-valuenow\")===\"100\""}'
+cat > /tmp/wait.json <<'EOF'
+{"action":"wait_for_selector","index":"t_…","byText":"Select files","timeout":20000}
+EOF
+zbrowser --json-file /tmp/wait.json
+cat > /tmp/waitfn.json <<'EOF'
+{"action":"wait_for_function","index":"t_…","polling":1000,"timeout":300000,
+ "code":"const p = document.querySelector('tp-yt-paper-progress'); return !p || p.getAttribute('aria-valuenow') === '100';"}
+EOF
+zbrowser --json-file /tmp/waitfn.json
 ```
-> [HYPOTHESIS] `wait_for_network_idle` is unreliable on YouTube/Studio (telemetry beacons keep
-> requests in flight). Treat it as unusable; wait for the element/text you are about to act on.
-> Confirm in Stage 1 and record the outcome in the stage's page notes.
+> **Never `wait_for_network_idle` on YouTube/Studio.** It waits for *zero* in-flight requests and the
+> Studio SPA keeps beacons rolling, so the call burns its whole timeout and returns a failure — which
+> is why the bridge's own `crawl` profile schema settles navigate-mode profiles with `wait_ms`
+> (`resources/skills/firefox-bridge.md`). Use `wait_for_selector` / `wait_for_function` on the exact
+> text or node you are about to act on, then act. Confirm in Stage 1 and record the outcome.
+> Note: the `browser` schema has no `by_*` params (Stage 0.1), so a locator-based `wait_for_selector`
+> needs `--json-file` until that is added.
 
 **R3 — Look at it.** Two channels, used together:
 
@@ -171,9 +201,17 @@ const cssPath = (el) => { const p = []; let n = el; while (n && n.nodeType === 1
 return visit(document, []).slice(0, 40);
 ```
 
-Notes that are load-bearing: use `deepQuery(sel, root)` (injected, `frame.js:224`) for single-node
-lookups — `deepQueryAll` does **not** exist in the sandbox (E6). Never `return` the raw page HTML;
-the 1 MiB cap turns that into `{"raw":…}`.
+Notes that are load-bearing:
+
+* **The program's first token must be `return`, `var`, `let` or `const`.** Otherwise `frame.js:225-229`
+  wraps it in `return (…)` and a leading `await …` / `if …` dies with `SyntaxError` (E10). Idiom that
+  always works: `const sleep = ms => new Promise(r => setTimeout(r, ms)); await sleep(1500); return …`.
+* Use `deepQuery(sel, root)` (injected, `frame.js:224`) for single-node lookups — it walks shadow
+  roots; `deepQueryAll` does **not** exist in the sandbox (E6), hence the walker in the template.
+* Never `return` the raw page HTML; the 1 MiB cap turns that into `{"raw":…}`.
+* Lazy sections (comments, the Studio table) must be scrolled into view first —
+  `document.querySelector('#comments').scrollIntoView()` then a wait — before any count is trusted
+  (E9/E11: `#comments` exists with 0 rendered threads until scrolled).
 
 **R5 — Act with the most resilient locator, DOM-level first.**
 Selector priority (skill: *Selector Priority Guide*): `byRole`+`name` → `byLabel` → `byText` →
@@ -181,15 +219,22 @@ Selector priority (skill: *Selector Priority Guide*): `byRole`+`name` → `byLab
 them over classes when present (record which the page actually has).
 
 ```bash
-zbrowser --json '{"action":"click","index":"t_…","byRole":"button","name":"Next"}'
-zbrowser --json '{"action":"type","index":"t_…","byLabel":"Title","text":"…"}'
+zbrowser --json-file /tmp/click.json     # {"action":"click","index":"t_…","byRole":"button","name":"Next"}
 ```
-`click`/`type`/`trusted_paste` differ in cost, and the difference is architectural, not cosmetic:
-DOM-level `click` is tab-queued, while `trusted_click`/`native_*`/`screenshot` are
-**focus-bound** and additionally take the *global* bridge turn (`internal/bridge/address.go:100-124`,
-`bridge.go:50-57`). So: DOM `click` → if the page did not react, `trusted_click` → if it needs real
-keyboard history (e.g. a Rich Text editor), `trusted_paste`. Every retry must be justified by a
-re-read (R6), not by a blind repeat.
+**DOM-level only, by decision.** `click`, `type`, `select_option`, `scroll`, `clear`, `focus`,
+`upload` and `web_eval` are JavaScript-level and tab-queued; `trusted_click`, `trusted_paste`,
+`native_*`, `human_click`, `key_combo` and `screenshot` are **focus-bound** — they steal the OS
+cursor *and* take the global bridge turn (`internal/bridge/address.go:96-124`, `bridge.go:50-57`).
+Per the user: the non-trusted path is "good enough for interacting, faster and doesn't steal focus",
+so the ladder is one rung deep — `click` → re-read (R6) → if it did not register, that is a
+**`locator_unresolved` finding to report (§4.4), not something to escalate past**. Focus-bound
+actions are reachable only when `youtube.allowFocusBoundActions` is set to `true` in `config.json`
+by a human (default `false`), and then only as an explicit, one-off, reported step.
+The single exception worth probing in Stage 2 is the comment composer: it is a
+`contenteditable`/`paper-textarea` surface (E9), and `type` may not fire the framework's own input
+handling. Stage 2's probe decides between `type`, a `web_eval` text assignment + `input` event, and
+`trusted_paste` — and records the choice in the page notes; whatever it settles on is what the code
+uses, with no runtime escalation.
 
 **R6 — Verify by observation, never by assumption.** After any state-changing action, re-run R3
 (a targeted `get_text`/`is_visible`, or a screenshot when a dialog/animation is involved) and check
@@ -227,8 +272,9 @@ type YoutubeConfig struct {
     MaxUploadsPerDay  int    `json:"maxUploadsPerDay"`    // 1
     DefaultVisibility string `json:"defaultVisibility"`   // "private"
     Timezone          string `json:"timezone"`
-    MaxComments       int    `json:"maxComments"`         // 40 — bounds the scroll loop
-    MaxScrolls        int    `json:"maxScrolls"`          // 6
+    MaxComments       int    `json:"maxComments"`         // 0 = read all (default; see note)
+    MaxScrolls        int    `json:"maxScrolls"`          // 40 — hard safety ceiling, not a feature limit
+    AllowFocusBoundActions bool `json:"allowFocusBoundActions"` // false — human-set escape hatch (R5)
     PageTimeoutMs     int    `json:"pageTimeoutMs"`       // 45000 per wait
     WizardTimeoutMs   int    `json:"wizardTimeoutMs"`     // 900000
     ProcessTimeoutMs  int    `json:"processTimeoutMs"`    // 1800000
@@ -237,6 +283,13 @@ type YoutubeConfig struct {
 ```
 Defaults in `defaultConfig()` (`:178`), field after `Bridge` (`:125`). `containerId` is data, not a
 guess: Stage 0 reads it from `list_containers` and refuses to run if the two disagree.
+
+**Read depth (user decision):** the default is **read everything** — `maxComments: 0` means "until
+the thread list stops growing", simple and predictable on a small channel. `MaxScrolls` is a *runaway
+guard*, not a policy knob: hitting it returns what was read plus `truncated:true` and the scroll
+cursor, so the read resumes where it stopped. When the channel grows and a full read gets expensive,
+`MaxComments`/`MaxScrolls` become the tuning point, together with a prioritisation pass
+(newest / unanswered / top) — explicitly deferred, per the user.
 
 ### 4.2 `internal/youtube/errors.go` (create)
 
@@ -256,20 +309,26 @@ const (OriginWatch Origin = "www.youtube.com"; OriginStudio Origin = "studio.you
 
 type Page struct{ TabID, Container, URL string }
 func Open(ctx context.Context, container string, o Origin, path string) (*Page, error)
-    // navigate {url, back_tab:true, container} → requireTabID → assert containerId/url/identity
+    // navigate {url, new_tab:true, container} → requireTabID → assert containerId/url/identity
+    //   (new_tab, not back_tab: container only applies when a tab is created — R1)
     // no WithTabTurn here: turns are taken per step (v1 rationale holds — never hold a turn for minutes)
 
 func (p *Page) Eval(ctx context.Context, code string, args map[string]any) (json.RawMessage, error)
     // web_eval {index, code} → bridgeError(res) → raw-cap check → data:null check → provenance echo check
+    // code must start with return|var|let|const (frame.js:225-229) — asserted here, before the call
 func (p *Page) Text(ctx context.Context, loc Locator) (string, error)      // get_text
 func (p *Page) Visible(ctx context.Context, loc Locator) (bool, error)     // is_visible
-func (p *Page) Click(ctx context.Context, loc Locator) error              // click, with justified trusted_click retry
-func (p *Page) Type(ctx context.Context, loc Locator, text string) error   // clear+type, retry trusted_paste
+func (p *Page) Click(ctx context.Context, loc Locator) error              // DOM click only; no focus-bound retry (R5)
+func (p *Page) Type(ctx context.Context, loc Locator, text string) error   // clear+type; verified by read-back, no escalation (R5)
 func (p *Page) UploadFile(ctx context.Context, loc Locator, path string) error
     // upload {index, …locator, path}, triggerDrop omitted (frame.js:436 warns of duplicate processing)
 func (p *Page) Wait(ctx context.Context, loc Locator, timeoutMs int) error // wait_for_selector
-func (p *Page) Shot(ctx context.Context, tag string) (string, error)       // screenshot → /tmp path
+func (p *Page) Shot(ctx context.Context, tag string) (string, error)
+    // screenshot → /tmp path. Focus-bound ⇒ error path and interactive probes only, never the happy path
 func (p *Page) Close(ctx context.Context)                                  // close_tab, WithoutCancel
+
+// Gated escape hatch (R5): returns an error unless youtube.allowFocusBoundActions is true.
+func (p *Page) FocusBound(ctx context.Context, action string, loc Locator) (map[string]any, error)
 
 type Locator struct{ ByRole, Name, ByLabel, ByText, ByName, ByAlt, Selector string }
 func (l Locator) String() string                       // for errors: "byRole=button name=Next"
@@ -330,18 +389,24 @@ Register: `defYoutube(workspace, deps),` after `defBrowser` in `AllDefs` (`inter
 
 ### Stage 0 — Prerequisites (no YouTube writes)
 
-1. `browser` tool: add `container` (`strProp`) to the schema and **stop `containerForURL` from
-   overriding an explicit `container`** (it already defers when `container` is present — verify;
-   `browser.go:83-88`), so the probe loop can pin identity without the `--json` escape hatch.
-   Alternative if we touch no web-facing tool: `--json` is documented in the skill and used verbatim.
+1. `browser` tool schema: it declares only `action,url,index,keep_tab,upload_files,code,method,
+   headers,body,provider,message,take_screenshot` (`internal/tools/browser.go:46-56`), so the params a
+   real flow needs are invisible to an agent. Add `container`, `new_tab`, `back_tab`, `path` (upload),
+   `y`/`block` (scroll) and the locator set `selector,by_text,by_role,name,by_label,by_name,by_alt`
+   — `sanitizeBrowserParams` (`:503-525`) **already maps** `by_*` → camelCase, so only the schema is
+   missing. Also confirm `containerForURL` never overrides an explicit `container` (it defers when
+   present, `:83-88`) — with `youtube.com → Personal` in `CONTAINER_MAP` (`:25-31`) a silent override
+   would put every flow in the wrong identity. Until this lands, `--json-file` is the fallback for
+   every probe call (the passthrough is complete — E-table).
 2. `config.json`: `youtube` block (§4.1), `"toolConfigs":{"youtube":{"timeout":900000,"format":"raw"}}`.
 3. `list_containers` → confirm `pachoigame` = id **20** (E1 said 20; assert, don't assume) and store
    `containerId` in config.
 4. Optional bridge fix, one line, separate commit: `res.data = interactiveMap;` (`frame.js:285`).
    Until fixed, the skill must not use `get_interactive_map` (E-table: it replies `data:null`).
 5. Create `docs/youtube-pages/` and this plan's page-notes skeleton.
-   **Accept:** `zbrowser -a navigate --url https://www.youtube.com/ --container pachoigame --back_tab=true`
-   returns `containerId:20`; `zyoutube` does not exist yet and the server restarts clean.
+   **Accept:** `zbrowser --json '{"action":"navigate","url":"https://www.youtube.com/","container":"pachoigame","new_tab":true}'`
+   returns `containerId:20` and that tab is the selected one; `zyoutube` does not exist yet and the
+   server restarts clean.
 
 ### Stage 1 — `zyoutube -a upload` (the flagship; 1 live upload in this stage)
 
@@ -352,6 +417,12 @@ description, thumbnail, category, more-options, made-for-kids, "Show more") → 
 For each panel run R2–R4 and copy the real `byRole`/`byLabel`/`data-test-id` values into
 `docs/youtube-pages/upload-wizard.md`, plus the exact text of the step header ("Details",
 "Video checks", "Visibility") used as the "did the panel change" check.
+
+**Artifact (user decision):** the file is **supplied by the user** — no synthetic/ffmpeg-generated
+video is ever pushed to the channel. The Stage 1 run is therefore scheduled with the human: the
+implementing session asks for a path, verifies it with `ValidateFile`, and stops if none is given.
+(The existing channel video `YSNFGgh0aAs` is the Stage 2 fixture, **not** a substitute for this run —
+the wizard itself still needs one live pass to be proven.)
 
 Code: `errors.go`, `page.go`, `journal.go`, `diagnose.go`, `pages/upload_wizard.go`,
 `wizard.go` (`ValidateFile`, `Upload`, `Status`), actions `upload` / `upload_status` / `upload_abort`.
@@ -374,23 +445,34 @@ channel's, and there is no second attempt budget).
 
 ### Stage 2 — `comments` / `comment` / `reply` (watch page; 0 uploads)
 
-Probe: open `watch?v=<fixture>&hl=en`, confirm `ytInitialData`-free text routes work: the comments
-section loads lazily ⇒ use `wait_for_selector byText "Comments"`, then a bounded loop of
-`web_eval` `scrollTo` → `get_text`/probe of `ytd-comment-thread-renderer` subtrees. Record in
-`docs/youtube-pages/watch.md`: how many comments per pass (~20 expected), the scroll step, the
-"Show more replies" control, the composer control (`contenteditable`/`#contenteditable-root` —
-probe, don't assume), the Cancel/Comment buttons, and the sort control text.
+**Test subject (user-supplied, fixed):** `https://www.youtube.com/watch?v=YSNFGgh0aAs` — title
+`whiteboard`, **unlisted**, belongs to `pachoigame`, comments enabled. Probed facts (E8–E11):
+logged-in masthead avatar present, `#comments` renders only after `scrollIntoView()`, header reads
+`0 Comments`, and **there are no comments yet** — so this stage's own posts are the test data, and
+the unlisted URL keeps everything off the public feed.
 
-Code: `pages/watch_comments.go` — `Comments(videoID, max)` (bounded by `MaxComments`/`MaxScrolls`,
-stops when new content stops growing ⇒ `nextToken` = a scroll cursor opaque to the agent),
-`PostComment`/`Reply` = focus composer → `type` (retry `trusted_paste` if the value doesn't land) →
-click `Reply`/`Comment` → **R6 verify the posted text is visible in the thread** (a real composer
-post appears immediately; absence ⇒ `unverified`, never a blind retry).
+Probe: open the fixture (R1), scroll `#comments` into view, `wait_for_selector` on the thread header,
+then the read loop. Record in `docs/youtube-pages/watch.md`: the thread/composer/reply locators
+(`ytd-comment-thread-renderer`, `#author-text`, `#content-text`, `#contenteditable-root`, the `Reply`
+/ `Cancel` / `Comment` buttons and how each is best addressed), the "Show more replies" control, the
+comments-per-scroll yield (unknown here — 0 baseline; measure on a video with a real thread when one
+exists), and which text-entry method actually lands in the composer (see R5).
 
-**Accept:** `comments -v <fixture> --max 40` returns ≥ 20 rows with ids/authors/text and a cursor;
-`reply -v <fixture> -c <commentID> --text "…"` posts and reads back; re-running the identical
-command is refused by the "already visible" check, not by a hash. Read payloads carry
-`"untrusted_user_content": true`.
+Code: `pages/watch_comments.go` —
+`Comments(videoID, max)` ⇒ scroll-into-view → extract → scroll → repeat **until the thread count
+stops growing** (or `MaxScrolls`); returns rows + `truncated` + an opaque cursor (§4.1).
+`PostComment`/`Reply` = scroll thread into view → click the thread's `Reply` (or the top composer) →
+enter text by the method the probe settled on → verify the value landed (`get_text`) → click
+`Comment` → **R6 verify the posted text is visible in the thread**. Absent ⇒ `unverified`, never a
+blind re-send.
+
+**Accept:** (a) `comment -v YSNFGgh0aAs --text "…"` posts and the text reads back in the DOM;
+(b) `reply -v YSNFGgh0aAs -c <thatCommentID> --text "…"` lands **under** that thread;
+(c) `comments -v YSNFGgh0aAs` returns ≥ 1 row (ids/authors/text) and a cursor — the ≥ 20-row case is
+re-run later against a video that has a real thread; (d) re-running the identical command is refused
+by the "already visible" check. Read payloads carry `"untrusted_user_content": true`.
+**Clean-up:** the posts made here are the channel's own; leave them, they are the fixture's data —
+but list their ids in the page notes.
 
 ### Stage 3 — `videos` (Studio Content list; 0 uploads)
 
@@ -400,7 +482,8 @@ visibility chip, views and comment count live, and what the empty state says.
 Code: `pages/studio_content.go` — `Videos(filter published|scheduled|private|all, max)` returning
 `[]Video{ID, Title, Visibility, PublishedText, PublishAt, DurationText, Views, Comments, URL}` by
 reading rendered rows. **Accept:** the Stage 1 video appears under `filter=scheduled` with the right
-date; the fixture appears under `published`.
+date, and the fixture (`whiteboard`) appears with `visibility: unlisted` — which also proves the
+visibility chip is read rather than assumed.
 
 ### Stage 4 — `edit` / `delete` (Studio details panel; 0 uploads)
 
@@ -436,7 +519,9 @@ isn't an argument), and `get_interactive_map`'s status. Then `zexport_cli` ⇒ `
 | Selector moved (YouTube redesign) | §4.4 auto-report: locator + nearest candidates + screenshot + truncated markdown, persisted; **never** a silent no-op, never an empty success |
 | Element inside a shadow root not found | all DOM probes use the R4 walker / `deepQuery` (E4–E6); plain light-DOM `querySelectorAll` is banned in Go-side programs |
 | Reply lands on the wrong video | provenance: every step echoes `index` and `url`; assert the echoed URL contains the target `videoID` — fatal for writes |
-| Rich-text composer swallows typed text | `type` → verify `get_text` non-empty → retry `trusted_paste`; still empty ⇒ `unverified`, no send click |
+| Rich-text composer swallows typed text | probe-time decision, fixed in code: `type` → verify `get_text`/`innerText` non-empty → if the framework did not accept it, the method chosen in `docs/youtube-pages/watch.md` (e.g. `web_eval` value + `input` event, or `trusted_paste` when the human enables it) is used **always**, never as a runtime escalation; still empty ⇒ `unverified` and **no send click** |
+| Scroll loop never terminates | `MaxScrolls` runaway guard (not a feature limit) ⇒ return what was read, `truncated:true`, cursor for resumption (§4.1) |
+| Probe runs in the wrong tab / tab-selection race | `index` on every step (E8–E12) + echoed-URL assertion; foreground flow (`new_tab:true`) so identity and visibility match what the user sees |
 | Post invisible (held / moderated) | R6 read-back; absence ⇒ `unverified` (never reported as success), no blind re-post |
 | Reply/comment text is prompt-injection | read payloads flagged `untrusted_user_content`; the skill states comment text is data |
 | Reply-count explosion / moderation risk | writes are serial, human-paced interactions against our own fixture video; page-level waits, no re-fire on timeout (writes never blind-retry) |
@@ -450,7 +535,7 @@ isn't an argument), and `get_interactive_map`'s status. Then `zexport_cli` ⇒ `
 | Restart/tab death mid-upload | journal `Deadline`; `upload_status` reports `tab_lost` with "check `videos --filter=scheduled`"; `upload_abort` clears it; **no automatic re-attach** |
 | Schedule in the wrong timezone | `publish_at` requires an explicit offset; resolved wall-clock is echoed for confirmation |
 | Long call killed by the harness | `pooling.tools += "youtube"` (config-only), `upload_status` polling |
-| Bridge starvation | every step is tab-addressed (per-tab queue); focus-bound actions only as justified retries (they take the global turn) |
+| Bridge starvation | every step is tab-addressed (per-tab queue); focus-bound actions are off by default (R5), so ordinary flows never take the global turn |
 
 ---
 
@@ -481,9 +566,11 @@ isn't an argument), and `get_interactive_map`'s status. Then `zexport_cli` ⇒ `
 
 ---
 
-## 8. Open questions for the user
+## 8. Locked decisions (answered by the user, 2026-10-31)
 
-1. **Fixture video** for Stage 2 (must be ours, must allow comments) — which video, or shall Stage 1 produce it?
-2. **Comment-read depth**: is `maxComments: 40` (≈ 2 pages, 6 scrolls) the right default, or should Stage 2 default to "first visible page" (≈ 20) and treat deeper reads as an explicit ask?
-3. **`trusted_click`/`native_*` policy**: these steal OS focus (`address.go:100-124`). OK to use them as automatic retries when a DOM click does not register, or must the tool ask first?
-4. **Stage 1 upload artifact**: may I generate a tiny synthetic `.mp4` (e.g. 5 s, ffmpeg) for the single live upload, or do you want to supply the file and watch that run yourself?
+1. **Test subject** — `https://www.youtube.com/watch?v=YSNFGgh0aAs` (`whiteboard`, unlisted, owned by `pachoigame`, comments enabled, currently 0 comments — E8–E11). Used for Stage 2 and as a Stage 3 read target; Stage 4's destructive tests (`delete`, title round-trip) run against a **throwaway** video the user names at that point, never against this fixture.
+2. **Comment depth** — default **read everything** (`maxComments: 0`): the cost is low and it keeps the tool simple. Configurable per run (`--max`); `MaxScrolls` is a runaway guard, not a policy limit. Limiting/prioritising is deferred until the channel grows (§4.1).
+3. **Focus-bound actions** — **avoid `trusted_*` / `native_*`**; DOM-level JS interaction is the only happy path ("good enough for interacting, faster and doesn't steal focus"). Reachable only behind a human-set `youtube.allowFocusBoundActions: true`, and then as an explicit reported step (R5, `Page.FocusBound`).
+4. **Upload artifact** — supplied by the user; no synthetic video is ever uploaded. Stage 1 asks for a file path and stops without one.
+
+Nothing else is waiting on an answer: Stage 0 and the Stage 1 probe can start as is.
