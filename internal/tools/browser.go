@@ -95,7 +95,15 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 		}
 		bridgeParams[k] = v
 	}
-	bridgeParams["timeout"] = mcpcfg.GetToolConfig("browser").Timeout
+	// The bridge reads `timeout` as the *action's own* wait budget (page load, frame
+	// round-trip, network idle). Only the agent actions that genuinely run for minutes
+	// may inherit the browser tool timeout — injecting it into every payload made a
+	// single wait action wedge the bridge for the whole tool timeout, long after its
+	// caller gave up. A caller-supplied timeout always wins; otherwise the bridge's own
+	// per-action defaults apply.
+	if _, ok := bridgeParams["timeout"]; !ok && isChatLike(action) {
+		bridgeParams["timeout"] = mcpcfg.GetToolConfig("browser").Timeout
+	}
 
 	if uploadFiles, ok := bridgeParams["upload_files"]; ok {
 		if resolved := resolveUploadFiles(uploadFiles, workspace); resolved != nil {
@@ -185,7 +193,10 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 		return toolresponse.WrapSuccess(ctx, "browser", extractData(res), start)
 
 	case "get_interactive_map":
-		res, err = bridge.CallBridge(ctx, "get_interactive_map", nil)
+		// Forward the params: this is a frame action, so `index` addresses the tab.
+		// Dropping them made the call always map the active tab and report someone
+		// else's page under a concurrent caller's handle.
+		res, err = bridge.CallBridge(ctx, "get_interactive_map", bridgeParams)
 		if err != nil {
 			return toolresponse.WrapErrorWithContext(ctx, "browser", err, start)
 		}

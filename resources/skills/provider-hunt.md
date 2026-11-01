@@ -1,11 +1,33 @@
 ---
 name: provider-hunt
 description: "Discover and integrate new AI providers into the Bridge by reverse-engineering their web chat UI"
+framework: "zen-mcp"
+triggers: provider hunt, add ai provider, providers.yaml
 ---
 
 ## 🎯 Mission
 
 Add a new web AI provider to `JS/bridge/ai/providers.yaml` by navigating to the chat page, understanding the DOM, and creating a working profile.
+
+## 🧰 Transport
+
+Every probe below is a `zbrowser` CLI call — the generated wrapper around the bridge (`zbrowser -a <action> --<param> <value>`). Full action reference: the `firefox-bridge` skill (`MCP_BRIDGE_API.md`).
+
+```bash
+zbrowser -a ping                    # bridge + zen-mcp alive before you start
+zbrowser -a chrome_logs             # bridge-side log when an action fails
+zbrowser -a web_logs -i "$ID"       # page console log
+ZENMCP_TIMEOUT=30 zbrowser -a ...    # client ceiling, so a wedged wait cannot hang the hunt
+zpool -a list                        # what is running / queued
+zpool -a cancel -p browser_N         # unstick a call that outlived its use
+```
+
+`--timeout` is overwritten by zen-mcp with the `browser` tool timeout (`toolConfigs.browser.timeout`, 40 min in this config), so a condition that never fires blocks the bridge queue for minutes. Prefer short, repeatable probes (`web_eval`, `get_text`, `is_visible`) over one long wait.
+
+Keep the tab handle from `navigate` in `$ID` and pass `-i "$ID"` everywhere — DOM actions then run in a background tab without stealing focus, and nothing races your other tabs.
+
+> [!IMPORTANT]
+> Flag values arrive as **strings**. Strings, and `--timeout`-style ints, are fine on flags; booleans that must be `false`, coordinates, and objects (`target`, `headers`, `vars`) need `zbrowser --json '{"action":…}'`. A prompt with a comma in `-mes` splits into two prompts — use `--json` for real prose.
 
 ## 🧠 Mindset
 
@@ -19,15 +41,19 @@ Add a new web AI provider to `JS/bridge/ai/providers.yaml` by navigating to the 
 
 ### 1. Navigate & Observe
 
-
-`browser({ action:navigate, url:<chat_url>})`
-`browser({ action:read })`
-`browser({ action:screenshot })`
-
+```bash
+ID=$(zbrowser -a navigate --url <chat_url> --back_tab true | jq -r .id)
+zbrowser -a read -i "$ID"
+zbrowser -a get_interactive_map            # NOTE: maps the ACTIVE tab, -i is ignored
+zbrowser -a screenshot -i "$ID"            # visual check; needs real visibility
+```
 
 ### 2. Find the Chat Input
 
-`browser({ action: web_eval, code: "return <code>" })`
+```bash
+zbrowser -a web_eval -i "$ID" -c 'return <code>'
+zbrowser -a web_eval -i "$ID" -c @/tmp/probe.js   # long probe: write JS to a file
+```
 
 Key selectors to look for:
 - `textarea` with placeholder text
@@ -38,29 +64,33 @@ Key selectors to look for:
 
 Always try simplest first, then escalate:
 
-`browser({ action:click, selector:"<selector>" })`
-`browser({ action:type, selector:"<selector>", text:"<text>" })`
+```bash
+zbrowser -a click -i "$ID" --selector "<selector>"
+zbrowser -a type  -i "$ID" --selector "<selector>" --text "<text>"
+```
 
 ### 4. Submit
 
 Try **Enter first** (no focus steal):
 
-`browser({ action:key_combo, combo:"Return" })`
+```bash
+zbrowser -a key_combo --combo Return
+```
 
 If Enter doesn't work, find and click the submit button:
 
-`browser({ action: web_eval, code: "return <code>" })`
-
-
-Then click it:
-
-`browser({ action:click, byText:"Send" })`
+```bash
+zbrowser -a web_eval -i "$ID" -c 'return <code>'
+zbrowser -a click -i "$ID" --by_text "Send"
+```
 
 ### 5. Verify Submit Worked
 
 Check that the input cleared and a response appeared:
 
-`browser({ action: web_eval, code: "return <code>" })`
+```bash
+zbrowser -a web_eval -i "$ID" -c 'return <code>'
+```
 
 If empty, Enter worked.
 
@@ -68,20 +98,28 @@ If empty, Enter worked.
 
 Wait for response to appear and extract text:
 
-`browser({ action: wait_for_selector, selector: "<selector>", timeout: <value> })`
-`browser({ action: read })`
+```bash
+zbrowser -a wait_for_selector -i "$ID" --selector "<selector>"   # bounded by the injected tool timeout, not by --timeout
+zbrowser -a read -i "$ID"
+```
+
+For streaming responses do not wait on the container alone — it exists from the first token. Poll the finish condition (`submit` re-enabled, `stop` button gone) with repeated `web_eval`, or `wait_for_function` on that exact predicate.
 
 ### 7. Identify Response Selectors
 
 Find stable selectors for the response container:
 
-`browser({ action: web_eval, code: "return <code>" })`
+```bash
+zbrowser -a web_eval -i "$ID" -c 'return <code>'
+```
 
 Look for `div.prose`, `[class*="message"]`, or stable class patterns.
 
 ### 8. Match URL Pattern
 
-`browser({ action: active_tab })`
+```bash
+zbrowser -a active_tab -i "$ID"
+```
 
 The `match` field in providers.yaml should be a substring of the domain. Check if chat URLs follow a pattern like `/c/...` to avoid matching non-chat pages.
 
@@ -89,7 +127,10 @@ The `match` field in providers.yaml should be a substring of the domain. Check i
 
 While generating, the submit button often gets disabled. Check using:
 
-`browser({ action: web_eval, code: "return <code>" })`
+```bash
+zbrowser -a web_eval -i "$ID" -c 'return <code>'
+zbrowser -a get_attribute -i "$ID" --selector "<submit>" --attribute _all
+```
 
 Look for `disabled`, `pointer-events-none`, `opacity-50` classes.
 
@@ -97,7 +138,9 @@ Look for `disabled`, `pointer-events-none`, `opacity-50` classes.
 
 To get ONLY AI responses (not the user's own message), examine parent class patterns:
 
-`browser({ action: web_eval, code: "return <code>" })`
+```bash
+zbrowser -a web_eval -i "$ID" -c 'return <code>'
+```
 
 - **AI response** ➜ parent has generic `flex flex-col gap-3` → no `bg-surface-raised`
 - **User message** ➜ parent has `bg-surface-raised` bubble
@@ -126,7 +169,13 @@ provider_name:
 
 ### 12. Test
 
-`browser({ action: chat, provider: "<provider_name>", message: "<text>" })`
+```bash
+zbrowser -a chat -p <provider_name> -mes "Say OK"
+# prose prompts (commas) or screenshot payloads → exact types:
+zbrowser --json '{"action":"chat","provider":"<provider_name>","message":"Say OK in one word."}'
+```
+
+Then confirm the response landed on disk / in the returned text, and re-run the failing step with `zbrowser -a chrome_logs` if it does not.
 
 ## 📐 Pipe DSL Reference
 
@@ -207,3 +256,4 @@ In order of preference:
 - **DO NOT** assume Enter works — verify by checking `textarea.value` is empty after submission.
 - **BEWARE** of consent banners and cookie modals — dismiss them before testing.
 - **BEWARE** of streaming responses — the response element exists immediately but content fills gradually. Wait for the submit button to become re-enabled.
+- **BEWARE** of flag typing — `--back_tab false` is truthy, `--x 1280` is text. Prefer `zbrowser --json` when a param is not a plain string.

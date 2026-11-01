@@ -338,3 +338,54 @@ func TestBrowserNonChatUploadFilesPreserved(t *testing.T) {
 		t.Errorf("non-chat upload_files must be resolved absolute, got %#v", got["upload_files"])
 	}
 }
+
+// The bridge reads `timeout` as the action's own wait budget (page load, frame
+// round-trip, network idle), so only the agent actions that run for minutes may
+// inherit the browser tool timeout. Injecting it everywhere made one wait action
+// wedge the bridge long after its caller had given up.
+func TestBrowserTimeoutOnlyForAgentActions(t *testing.T) {
+	rec := &bridgeRecorder{}
+	ts := httptest.NewServer(rec.handler(t))
+	defer ts.Close()
+	pointBridgeAt(t, ts.URL)
+
+	ctx := context.Background()
+	HandleBrowserAction(ctx, t.TempDir(), Deps{}, browserReq(map[string]any{"action": "read"}))
+	if got := rec.last()["timeout"]; got != nil {
+		t.Errorf("read must not inherit the browser tool timeout, got %v", got)
+	}
+
+	// A caller that asks for a budget gets exactly that, not the tool timeout.
+	HandleBrowserAction(ctx, t.TempDir(), Deps{}, browserReq(map[string]any{
+		"action": "wait_for_network_idle", "timeout": float64(8000),
+	}))
+	if got := rec.last()["timeout"]; got != float64(8000) {
+		t.Errorf("caller timeout must reach the bridge, got %v", got)
+	}
+
+	agentTimeout := mcpcfg.GetToolConfig("browser").Timeout
+	for _, action := range []string{"chat", "brainstorm", "brainstorm_status"} {
+		HandleBrowserAction(ctx, t.TempDir(), Deps{}, browserReq(map[string]any{
+			"action": action, "id": "sess", "message": "q", "provider": "claude",
+		}))
+		if got := rec.last()["timeout"]; got != float64(agentTimeout) {
+			t.Errorf("%s must inherit the tool timeout %v, got %v", action, agentTimeout, got)
+		}
+	}
+}
+
+// get_interactive_map is a frame action: without the tab param it silently maps
+// whatever tab is selected and reports that page under the caller's handle.
+func TestBrowserGetInteractiveMapCarriesTabHandle(t *testing.T) {
+	rec := &bridgeRecorder{}
+	ts := httptest.NewServer(rec.handler(t))
+	defer ts.Close()
+	pointBridgeAt(t, ts.URL)
+
+	HandleBrowserAction(context.Background(), t.TempDir(), Deps{}, browserReq(map[string]any{
+		"action": "get_interactive_map", "index": "t_stub_1",
+	}))
+	if got := rec.last()["index"]; got != "t_stub_1" {
+		t.Errorf("get_interactive_map must forward the tab handle, got %v", got)
+	}
+}
