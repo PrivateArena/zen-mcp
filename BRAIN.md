@@ -6,7 +6,7 @@
 
 ## SESSION INIT ⚠️ MANDATORY
 
-**[REQUIRED]** Use shell `zworkspace -p <project_dir>` — **HALT until complete.**
+**[REQUIRED]** Use shell `zworkspace -p <project_absolute_path>` — **HALT until complete.**
 
 ---
 
