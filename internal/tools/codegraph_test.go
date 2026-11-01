@@ -702,3 +702,104 @@ func TestExpandQueryPathsRejectsOutsideWorkspace(t *testing.T) {
 
 	ClearSessionGraphByWorkspace(ws)
 }
+
+// TestExplainMultipleTargets verifies that explain accepts the same
+// comma-separated path list as skeletons and renders one block per target.
+func TestExplainMultipleTargets(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "calc.go", goFixture)
+	writeFixture(t, ws, "doubler.go", `package foo
+
+func Doubles(v int) int {
+	return v + v
+}
+`)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	res = HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "explain", "query": "calc.go, doubler.go"}))
+	text := toolText(res)
+	t.Logf("explain multi-target output:\n%s", text)
+
+	for _, want := range []string{"=== [1] calc.go ===", "=== [2] doubler.go ===", "func Add", "func Doubles", "Cross-file edges"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("expected %q in multi-target explain output, got:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "not found") {
+		t.Fatalf("multi-target explain on indexed files must not report misses, got:\n%s", text)
+	}
+
+	ClearSessionGraphByWorkspace(ws)
+}
+
+// TestExplainMixedTargetKinds verifies that one query can mix a qualified symbol,
+// a bare file path and an unresolvable token: the resolvable targets still render
+// and the bad one is reported inside its own block.
+func TestExplainMixedTargetKinds(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "calc.go", goFixture)
+	writeFixture(t, ws, "doubler.go", `package foo
+
+func Doubles(v int) int {
+	return v + v
+}
+`)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	res = HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "explain", "query": "calc.go:Add, doubler.go, missing.go"}))
+	text := toolText(res)
+	t.Logf("explain mixed output:\n%s", text)
+
+	if !strings.Contains(text, "Symbol: Add") {
+		t.Fatalf("expected qualified symbol block, got:\n%s", text)
+	}
+	if !strings.Contains(text, "=== [2] doubler.go ===") || !strings.Contains(text, "func Doubles") {
+		t.Fatalf("expected file block for doubler.go, got:\n%s", text)
+	}
+	if !strings.Contains(text, "=== [3] missing.go ===") || !strings.Contains(text, `No indexed file or symbol matched "missing.go"`) {
+		t.Fatalf("expected a per-target miss report for missing.go, got:\n%s", text)
+	}
+
+	ClearSessionGraphByWorkspace(ws)
+}
+
+// TestExplainAllTargetsMissing verifies the whole call still errors out when no
+// target resolves, naming every token that failed.
+func TestExplainAllTargetsMissing(t *testing.T) {
+	ws := t.TempDir()
+	writeFixture(t, ws, "calc.go", goFixture)
+
+	ctx := context.Background()
+	deps := Deps{}
+
+	res := HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "index"}))
+	if strings.Contains(toolText(res), "failed") {
+		t.Fatalf("index failed: %s", toolText(res))
+	}
+
+	res = HandleCodegraphAction(ctx, ws, deps, makeFakeRequest(map[string]any{"action": "explain", "query": "missing.go,AlsoMissing"}))
+	text := toolText(res)
+	t.Logf("explain all-missing output: %s", text)
+	if !strings.Contains(text, "Explain found nothing for any of the 2 target(s)") {
+		t.Fatalf("expected aggregate error naming both targets, got:\n%s", text)
+	}
+	if !strings.Contains(text, "missing.go, AlsoMissing") {
+		t.Fatalf("expected both failed tokens in error, got:\n%s", text)
+	}
+
+	ClearSessionGraphByWorkspace(ws)
+}

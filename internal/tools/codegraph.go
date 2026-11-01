@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -1032,19 +1031,180 @@ func actionDeadcode(session *layeredGraphSession, isolate int, query string, lim
 	return formatLayered(results, isolate != 0), nil
 }
 
+// Bounds for a single explain call: a token that expands to a directory is
+// capped so one query cannot dump a whole subtree into the caller's context.
+const (
+	maxExplainFiles       = 5
+	maxExplainEdgeFiles   = 8
+	maxExplainEdgeSymbols = 6
+)
+
+// splitQueryTargets splits a comma-separated query into target tokens, trimming
+// whitespace and rewriting absolute paths inside the workspace as relative ones.
+// Path-taking actions (skeletons, related, explain) all accept the same list.
+func splitQueryTargets(query string, session *layeredGraphSession) []string {
+	var tokens []string
+	for _, raw := range strings.Split(query, ",") {
+		tok := strings.TrimSpace(raw)
+		if tok == "" {
+			continue
+		}
+		if filepath.IsAbs(tok) {
+			if rel, err := filepath.Rel(session.workspaceRoot, tok); err == nil && !strings.HasPrefix(rel, "..") {
+				tok = rel
+			}
+		}
+		tokens = append(tokens, tok)
+	}
+	return tokens
+}
+
 func actionExplain(session *layeredGraphSession, isolate int, query string) (string, error) {
 	targets, err := getTargetGraphs(session, isolate)
 	if err != nil {
 		return "", err
 	}
 
-	qualifiedMatch := regexp.MustCompile(`^(.+\.\w+):(.+)$`).FindStringSubmatch(query)
-	exactFile := ""
-	exactName := ""
+	tokens := splitQueryTargets(query, session)
+	if len(tokens) == 0 {
+		return "", fmt.Errorf(`Symbol name or file path (query) is required for the explain action, got %q.`, query)
+	}
+	if len(tokens) == 1 {
+		return explainToken(session, targets, tokens[0])
+	}
+
+	blocks := make([]string, 0, len(tokens))
+	failed := make([]string, 0, len(tokens))
+	for i, tok := range tokens {
+		text, err := explainToken(session, targets, tok)
+		if err != nil {
+			failed = append(failed, tok)
+			blocks = append(blocks, fmt.Sprintf("=== [%d] %s ===\n%s", i+1, tok, err.Error()))
+			continue
+		}
+		blocks = append(blocks, fmt.Sprintf("=== [%d] %s ===\n%s", i+1, tok, text))
+	}
+	if len(failed) == len(tokens) {
+		return "", fmt.Errorf("Explain found nothing for any of the %d target(s): %s. Ensure the files are indexed (run codegraph index) and symbol names are exact.", len(tokens), strings.Join(failed, ", "))
+	}
+	return strings.Join(blocks, "\n\n"), nil
+}
+
+// explainToken resolves one explain target: "file:symbol" for a precise symbol,
+// an indexed file or directory path for a file-level explanation (skeleton plus
+// cross-file edges, i.e. what skeletons returns with the call graph added), or a
+// bare symbol name searched across the active scopes.
+func explainToken(session *layeredGraphSession, targets []layeredGraphEntry, token string) (string, error) {
+	exactFile, exactName := parseSymbolQuery(token)
+	if exactFile != "" {
+		return explainSymbol(session, targets, token, exactFile, exactName)
+	}
+	if text, ok := explainFiles(session, targets, token); ok {
+		return text, nil
+	}
+	text, err := explainSymbol(session, targets, token, "", token)
+	if err != nil {
+		// The token was neither an indexed path nor a resolvable symbol name.
+		return "", fmt.Errorf("No indexed file or symbol matched %q. Run codegraph files to list indexed paths, or codegraph search to find the exact symbol name.", token)
+	}
+	return text, nil
+}
+
+// explainFiles renders every indexed file a path token expands to.
+func explainFiles(session *layeredGraphSession, targets []layeredGraphEntry, token string) (string, bool) {
+	expanded := expandQueryPaths(token, session)
+	if len(expanded) == 0 {
+		return "", false
+	}
+	note := ""
+	if len(expanded) > maxExplainFiles {
+		skipped := len(expanded) - maxExplainFiles
+		expanded = expanded[:maxExplainFiles]
+		note = fmt.Sprintf("\n\n… %d more file(s) matched %q; pass fewer paths, or use skeletons to list them all.", skipped, token)
+	}
+
+	blocks := make([]string, 0, len(expanded))
+	rendered := 0
+	for _, p := range expanded {
+		found := false
+		for _, target := range targets {
+			skel, err := target.graph.GetSkeleton(p)
+			if err != nil || skel == "" || strings.HasPrefix(skel, "File not found") {
+				continue
+			}
+			blocks = append(blocks, strings.TrimRight(skel, "\n")+"\n"+explainEdges(target, p))
+			rendered++
+			found = true
+			break
+		}
+		if !found {
+			blocks = append(blocks, fmt.Sprintf("File not found in any active scope: %s", p))
+		}
+	}
+	if rendered == 0 {
+		return "", false
+	}
+	return strings.Join(blocks, "\n\n") + note, true
+}
+
+// explainEdges summarises a file's cross-file edges: which files it reaches and
+// which reach it, with a few representative symbols each.
+func explainEdges(target layeredGraphEntry, path string) string {
+	related, err := target.graph.RelatedFiles(path, 50)
+	if err != nil || len(related) == 0 {
+		return "\nCross-file edges: none indexed. Run codegraph index after changing imports."
+	}
+
+	type edgeGroup struct {
+		path string
+		in   int
+		out  int
+		syms []string
+	}
+	groups := make([]*edgeGroup, 0, len(related))
+	byPath := make(map[string]*edgeGroup)
+	for _, r := range related {
+		g, ok := byPath[r.RelatedPath]
+		if !ok {
+			g = &edgeGroup{path: r.RelatedPath}
+			byPath[r.RelatedPath] = g
+			groups = append(groups, g)
+		}
+		if r.Direction == "incoming" {
+			g.in++
+		} else {
+			g.out++
+		}
+		if r.SymbolName != "" && len(g.syms) < maxExplainEdgeSymbols {
+			g.syms = append(g.syms, r.SymbolName)
+		}
+	}
+
+	lines := []string{fmt.Sprintf("--- Cross-file edges (%d file(s)) ---", len(groups))}
+	for i, g := range groups {
+		if i == maxExplainEdgeFiles {
+			lines = append(lines, fmt.Sprintf("  … %d more file(s)", len(groups)-i))
+			break
+		}
+		arrow := "→"
+		switch {
+		case g.in > 0 && g.out == 0:
+			arrow = "←"
+		case g.in > 0:
+			arrow = "↔"
+		}
+		line := fmt.Sprintf("  %s %s (%d)", arrow, g.path, g.in+g.out)
+		if len(g.syms) > 0 {
+			line += ": " + strings.Join(g.syms, ", ")
+		}
+		lines = append(lines, line)
+	}
+	return "\n" + strings.Join(lines, "\n")
+}
+
+func explainSymbol(session *layeredGraphSession, targets []layeredGraphEntry, query, exactFile, exactName string) (string, error) {
 	searchScope := query
-	if len(qualifiedMatch) > 0 {
-		exactFile = qualifiedMatch[1]
-		exactName = qualifiedMatch[2]
+	if exactFile != "" {
 		searchScope = exactName
 		// Convert absolute path to relative path using workspace root
 		if filepath.IsAbs(exactFile) {
@@ -1502,7 +1662,7 @@ func HandleCodegraphAction(ctx context.Context, workspace string, deps Deps, req
 		return run(func() (string, error) { return actionFiles(session, isolate, query, limit) })
 	case "explain":
 		if query == "" {
-			return toolresponse.WrapErrorWithContext(ctx, "codegraph", fmt.Errorf("symbol name (query) is required for explain action"), start)
+			return toolresponse.WrapErrorWithContext(ctx, "codegraph", fmt.Errorf(`symbol name or file path(s) (query) required for explain action; e.g. "myFunction", "src/a.ts", or "src/a.ts:myFunction, src/b.ts"`), start)
 		}
 		return run(func() (string, error) { return actionExplain(session, isolate, query) })
 	case "symbol":
@@ -1542,7 +1702,7 @@ func defCodegraph(workspace string, deps Deps) ToolDef {
 				"usage", "neighbors", "files", "explain", "related",
 				"deadcode", "shortestPath", "findCycles", "markdown", "impact", "symbol",
 			}),
-			"query": strProp("Search query or symbol name"),
+			"query": strProp("Search query, symbol name, or file path. Path-taking actions (skeletons, related, explain) accept comma-separated lists; explain also takes file:symbol qualified names and bare symbol names, mixed in one call."),
 			//"format":  strEnumProp("Output format: text (default) or json", []string{"text", "json"}),
 			//"limit":   numProp("Result limit"),
 			//"isolate": numProp("Graph isolate level (0 = root)"),
