@@ -407,9 +407,13 @@ func buildHelpStatementsOpt(t cliTool, url string, aliases map[string]string) []
 		req, vals := paramSuffix(p)
 		lines = append(lines, `echo "  `+flagLabel(p, aliases)+req+`  `+q(p.desc)+vals+`"`)
 	}
+	// "ACTION VALUES" summarises what -a accepts. Only the `action` param's enum is
+	// that list; every other enum param (a scroll `block`, a visibility choice) is
+	// already rendered on its own line by paramSuffix, and folding it in here would
+	// advertise a value no action takes.
 	var allValues []string
 	for _, p := range params {
-		if len(p.values) > 0 {
+		if p.key == "action" {
 			allValues = append(allValues, p.values...)
 		}
 	}
