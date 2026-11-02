@@ -389,3 +389,76 @@ func TestBrowserGetInteractiveMapCarriesTabHandle(t *testing.T) {
 		t.Errorf("get_interactive_map must forward the tab handle, got %v", got)
 	}
 }
+
+// --- Stage 0.1 (ARCHITECTURE_PLAN_youtube-channel-tool-v2) -----------------
+//
+// A page flow cannot be driven through the tool while the params it needs are
+// invisible to an agent, and the identity a caller names must never be replaced
+// by the per-domain container default (CONTAINER_MAP maps youtube.com to
+// "Personal", which is a different channel).
+
+func TestBrowserSchemaDeclaresTheParamsAPageFlowNeeds(t *testing.T) {
+	props, _ := defBrowser(t.TempDir(), Deps{}).Schema["properties"].(map[string]any)
+	for _, name := range []string{
+		"container", "new_tab", "back_tab", "path", "text", "y", "block", "timeout",
+		"selector", "by_text", "by_role", "name", "by_label", "by_name", "by_alt",
+	} {
+		if _, ok := props[name]; !ok {
+			t.Errorf("browser schema is missing param %q", name)
+		}
+	}
+}
+
+func TestBrowserExplicitContainerBeatsTheDomainDefault(t *testing.T) {
+	rec := &bridgeRecorder{}
+	ts := httptest.NewServer(rec.handler(t))
+	defer ts.Close()
+	pointBridgeAt(t, ts.URL)
+
+	HandleBrowserAction(context.Background(), t.TempDir(), Deps{}, browserReq(map[string]any{
+		"action": "navigate", "url": "https://studio.youtube.com/channel/UC_x/videos",
+		"container": "pachoigame", "new_tab": true,
+	}))
+	if got := rec.last()["container"]; got != "pachoigame" {
+		t.Fatalf("explicit container must survive CONTAINER_MAP, got %v", got)
+	}
+
+	// Without an explicit container the default still applies (regression guard for
+	// the youtube tool, which relies on the assertion, not on the map).
+	HandleBrowserAction(context.Background(), t.TempDir(), Deps{}, browserReq(map[string]any{
+		"action": "navigate", "url": "https://www.youtube.com/watch?v=YSNFGgh0aAs",
+	}))
+	if got := rec.last()["container"]; got != "Personal" {
+		t.Errorf("default container for youtube.com = %v, want Personal", got)
+	}
+}
+
+func TestBrowserLocatorAndScrollParamsReachBridge(t *testing.T) {
+	rec := &bridgeRecorder{}
+	ts := httptest.NewServer(rec.handler(t))
+	defer ts.Close()
+	pointBridgeAt(t, ts.URL)
+
+	HandleBrowserAction(context.Background(), t.TempDir(), Deps{}, browserReq(map[string]any{
+		"action": "click", "index": "t_stub_1", "by_role": "button", "name": "Next",
+		"by_text": "Publish", "by_label": "Title", "by_name": "video", "by_alt": "Thumb",
+		"selector": "input[type=file]", "path": "/tmp/clip.mp4", "y": 600, "block": "end",
+		"timeout": 15000, "text": "hello",
+	}))
+	got := rec.last()
+	if got == nil {
+		t.Fatal("bridge never called")
+	}
+	for key, want := range map[string]any{
+		"byRole": "button", "name": "Next", "byText": "Publish", "byLabel": "Title",
+		"byName": "video", "byAltText": "Thumb", "selector": "input[type=file]",
+		"path": "/tmp/clip.mp4", "index": "t_stub_1",
+	} {
+		if got[key] != want {
+			t.Errorf("%s = %v, want %v", key, got[key], want)
+		}
+	}
+	if got["timeout"] != float64(15000) {
+		t.Errorf("timeout = %v, want 15000", got["timeout"])
+	}
+}

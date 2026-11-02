@@ -36,7 +36,7 @@ func defBrowser(workspace string, deps Deps) ToolDef {
 		Title:       "browser Controller (Firefox Bridge)",
 		Description: "Control Firefox via userChrome.js MCP Bridge. Categories: Navigation & Tabs, Interaction, Extraction & State, Execution & Waiting, Vision & AI, Storage & Misc, Recording.",
 		Schema: jsonSchema(map[string]any{
-			"action": strEnumProp("Browser action.", []string{
+			"action": strEnumProp("Browser action. The list names the common ones; any bridge action is forwarded verbatim (wait_for_selector, get_text, is_visible, click, type, scroll, upload, close_tab, …).", []string{
 				"list_containers", "active_tab", "restart", "refresh", "web_logs", "chrome_logs",
 				"read", "navigate", "web_eval", "chrome_eval", "get_content", "chat",
 				"screenshot", "request",
@@ -44,6 +44,21 @@ func defBrowser(workspace string, deps Deps) ToolDef {
 			"url":             strProp("[nav/new_tab/cookie/search] URL"),
 			"index":           strProp("[-i] TabRegistry id from navigate/active_tab (\"t_…\") to address that tab in any window, or a positional tab index; omit for the active tab"),
 			"keep_tab":        boolProp("[read/search with url] Leave the opened tab open; by default it is closed once the content is extracted"),
+			"container":       strProp("[navigate/new_tab/chat/cookie] Firefox container name or id that selects the identity; an explicit value always beats the per-domain default. Applied only when the call creates a tab"),
+			"new_tab":         boolProp("[navigate/new_tab] Open in a new foreground (selected) tab"),
+			"back_tab":        boolProp("[navigate/new_tab] Open in a new background tab; needs no focus and is addressable by the returned id"),
+			"timeout":         intProp("[any action] This call's wait budget in ms; passed to the bridge untouched. Omit for the bridge's per-action default"),
+			"text":            strProp("[type/trusted_paste] Text to enter"),
+			"path":            strProp("[upload] Absolute path of the local file to attach"),
+			"y":               numProp("[scroll] Pixel scroll offset"),
+			"block":           strEnumProp("[scroll] Vertical alignment of a scrolled element.", []string{"start", "center", "end"}),
+			"selector":        strProp("[locator] CSS selector, auto-scrolled into view"),
+			"by_text":         strProp("[locator] Partial case-insensitive text match"),
+			"by_role":         strProp("[locator] ARIA role; narrow it with 'name'"),
+			"name":            strProp("[locator] Accessible name, used with by_role"),
+			"by_label":        strProp("[locator] Associated <label> text"),
+			"by_name":         strProp("[locator] HTML name attribute"),
+			"by_alt":          strProp("[locator] Image alt attribute"),
 			"upload_files":    arrayStringProp("[chat] File path(s); string or array"),
 			"code":            strProp("[web_eval/chrome_eval] JS; must \"return\""),
 			"method":          strProp("[request] HTTP method"),
@@ -531,6 +546,12 @@ func sanitizeBrowserParams(args map[string]any) map[string]any {
 		default:
 			out[k] = v
 		}
+	}
+	// `by_name` doubles as `name` (the bridge reads either). That alias must never
+	// shadow an explicit `name`, which is how a byRole+name locator is spelled —
+	// map iteration order would otherwise decide which one wins.
+	if v, ok := args["name"]; ok {
+		out["name"] = v
 	}
 	return out
 }
