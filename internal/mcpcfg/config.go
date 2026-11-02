@@ -116,6 +116,45 @@ type BridgeConfig struct {
 	TabParallel *bool `json:"tabParallel,omitempty"`
 }
 
+// YoutubeConfig is the identity-and-policy block of the youtube tool. The YouTube
+// capability is a set of real page visits through the Firefox bridge, so the
+// config carries what a human must decide once and an agent must never override:
+// which container (i.e. which channel identity) the work happens in, the upload
+// cadence, and whether OS-level interaction is permitted at all.
+type YoutubeConfig struct {
+	// Container is the Firefox contextual identity name; it selects the channel.
+	Container string `json:"container"`
+	// ContainerID is the numeric id of Container, asserted against the bridge's
+	// navigate reply so a mis-typed name can never act as another identity.
+	ContainerID int `json:"containerId"`
+	// MaxUploadsPerDay is the journal-enforced upload cadence.
+	MaxUploadsPerDay int `json:"maxUploadsPerDay"`
+	// DefaultVisibility applies when an upload names none.
+	DefaultVisibility string `json:"defaultVisibility"`
+	// Timezone names the zone a schedule resolves against, echoed for human
+	// confirmation. Empty means the system zone.
+	Timezone string `json:"timezone"`
+	// MaxComments caps a comment read; 0 means read everything.
+	MaxComments int `json:"maxComments"`
+	// MaxScrolls is a runaway guard on the lazy-load scroll loop, not a feature
+	// limit: hitting it returns partial results with truncated:true and a cursor.
+	MaxScrolls int `json:"maxScrolls"`
+	// AllowFocusBoundActions is the human-set escape hatch for OS-level actions
+	// (trusted_*/native_*/coordinate clicks), which steal the cursor and take the
+	// global bridge turn. Off by default: DOM-level interaction is the only route.
+	AllowFocusBoundActions bool `json:"allowFocusBoundActions"`
+	// PageTimeoutMs bounds a single wait on a page.
+	PageTimeoutMs int `json:"pageTimeoutMs"`
+	// WizardTimeoutMs bounds the upload wizard walk.
+	WizardTimeoutMs int `json:"wizardTimeoutMs"`
+	// ProcessTimeoutMs bounds processing of an uploaded video.
+	ProcessTimeoutMs int `json:"processTimeoutMs"`
+	// MaxUploadBytes rejects a file the wizard would only fail on later.
+	MaxUploadBytes int64 `json:"maxUploadBytes"`
+	// MaxDiagBytes caps the page markdown captured into a diagnosis bundle.
+	MaxDiagBytes int `json:"maxDiagBytes"`
+}
+
 type ZenConfig struct {
 	DaemonPort                   int                        `json:"daemonPort"`
 	McpPort                      int                        `json:"mcpPort"`
@@ -123,6 +162,7 @@ type ZenConfig struct {
 	ProxyPort                    int                        `json:"proxyPort"`
 	FirefoxBridgePort            int                        `json:"firefoxBridgePort"`
 	Bridge                       BridgeConfig               `json:"bridge"`
+	Youtube                      YoutubeConfig              `json:"youtube"`
 	ZenCapPort                   int                        `json:"zenCapPort"`
 	CdpPort                      int                        `json:"cdpPort"`
 	WhiteboardPort               int                        `json:"whiteboardPort"`
@@ -187,6 +227,23 @@ func defaultConfig() ZenConfig {
 			QueueTimeoutMs:    120000,
 			QueueAgentActions: boolPtr(false),
 			TabParallel:       boolPtr(true),
+		},
+		Youtube: YoutubeConfig{
+			// No default identity: with no container configured the youtube tool must
+			// refuse rather than act as whoever the browser happens to be logged in as.
+			Container:              "",
+			ContainerID:            0,
+			MaxUploadsPerDay:       1,
+			DefaultVisibility:      "private",
+			Timezone:               "",
+			MaxComments:            0,
+			MaxScrolls:             40,
+			AllowFocusBoundActions: false,
+			PageTimeoutMs:          45000,
+			WizardTimeoutMs:        900000,
+			ProcessTimeoutMs:       1800000,
+			MaxUploadBytes:         8 << 30,
+			MaxDiagBytes:           8192,
 		},
 		ZenCapPort:         4444,
 		CdpPort:            9222,
@@ -426,7 +483,7 @@ func mergeConfig(def ZenConfig, user map[string]any) (ZenConfig, error) {
 	for k, v := range user {
 		merged[k] = v
 	}
-	for _, key := range []string{"token_optimization", "sandbox", "toolConfigs", "toolTimeouts", "pooling", "bridge", "prompt_features", "prompt_memory_context", "enabled_tools"} {
+	for _, key := range []string{"token_optimization", "sandbox", "toolConfigs", "toolTimeouts", "pooling", "bridge", "youtube", "prompt_features", "prompt_memory_context", "enabled_tools"} {
 		if uv, ok := user[key].(map[string]any); ok {
 			dv, _ := defMap[key].(map[string]any)
 			merged[key] = mergeNested(dv, uv)

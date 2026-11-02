@@ -1,0 +1,40 @@
+{
+  "count": 94,
+  "insideDialog": [
+    {
+      "id": "dialog",
+      "path": "html > body#html-body > ytcp-uploads-dialog > tp-yt-paper-dialog#dialog",
+      "role": "dialog",
+      "tag": "tp-yt-paper-dialog",
+      "text": "Upload videos Drag and drop video files to upload "
+    },
+    {
+      "label": "Close",
+      "path": "div > div > div > div > ytcp-button#ytcp-uploads-dialog-close-button > div > ytcp-button-shape > button",
+      "tag": "button",
+      "text": ""
+    },
+    {
+      "label": "Select files",
+      "path": "tp-yt-paper-dialog#dialog > div > ytcp-uploads-file-picker#ytcp-uploads-dialog-file-picker > div#content > ytcp-button#select-files-button > div > ytcp-button-shape > button",
+      "tag": "button",
+      "text": "Select files"
+    },
+    {
+      "path": "body#html-body > ytcp-uploads-dialog > tp-yt-paper-dialog#dialog > div > ytcp-uploads-file-picker#ytcp-uploads-dialog-file-picker > div#content > p#disclaimer-html > a",
+      "tag": "a",
+      "text": "Terms of Service"
+    },
+    {
+      "path": "body#html-body > ytcp-uploads-dialog > tp-yt-paper-dialog#dialog > div > ytcp-uploads-file-picker#ytcp-uploads-dialog-file-picker > div#content > p#disclaimer-html > a",
+      "tag": "a",
+      "text": "Community Guidelines"
+    },
+    {
+      "path": "body#html-body > ytcp-uploads-dialog > tp-yt-paper-dialog#dialog > div > ytcp-uploads-file-picker#ytcp-uploads-dialog-file-picker > div#content > p > a",
+      "tag": "a",
+      "text": "Learn more"
+    }
+  ],
+  "outside": 88
+}

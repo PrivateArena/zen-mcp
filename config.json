@@ -53,6 +53,21 @@
     "queueAgentActions": false,
     "tabParallel": true
   },
+  "youtube": {
+    "container": "pachoigame",
+    "containerId": 20,
+    "maxUploadsPerDay": 1,
+    "defaultVisibility": "private",
+    "timezone": "Asia/Bangkok",
+    "maxComments": 0,
+    "maxScrolls": 40,
+    "allowFocusBoundActions": false,
+    "pageTimeoutMs": 45000,
+    "wizardTimeoutMs": 900000,
+    "processTimeoutMs": 1800000,
+    "maxUploadBytes": 8589934592,
+    "maxDiagBytes": 8192
+  },
   "codegraph_watcher_debounce_ms": 300000,
   "codegraph_skip_embeddings": true,
   "codegraph_markdown_files": true,
@@ -156,6 +171,10 @@
   "toolConfigs": {
     "browser": {
       "timeout": 2400000,
+      "format": "raw"
+    },
+    "youtube": {
+      "timeout": 900000,
       "format": "raw"
     },
     "colab": {

@@ -524,3 +524,42 @@ func TestBridgeConfigFullOverride(t *testing.T) {
 		t.Errorf("queueAgentActions = %v, want true", b.QueueAgentActions)
 	}
 }
+
+// The youtube tool's whole safety model rests on this block: the identity is
+// config-supplied (never a code default, never an agent argument), and the wait
+// budgets are data the page flows read instead of literals.
+func TestYoutubeBlockMergesOverDefaults(t *testing.T) {
+	withConfig(t, `{
+	  "youtube": {"container":"pachoigame","containerId":20,"maxUploadsPerDay":2},
+	  "toolConfigs": {"youtube": {"timeout":900000,"format":"raw"}}
+	}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	y := Get().Youtube
+	if y.Container != "pachoigame" || y.ContainerID != 20 || y.MaxUploadsPerDay != 2 {
+		t.Errorf("user values not merged: %+v", y)
+	}
+	if y.MaxScrolls != 40 || y.PageTimeoutMs != 45000 || y.WizardTimeoutMs != 900000 {
+		t.Errorf("absent keys lost their defaults: %+v", y)
+	}
+	if y.MaxUploadBytes != 8<<30 {
+		t.Errorf("maxUploadBytes = %d, want 8 GiB", y.MaxUploadBytes)
+	}
+	if y.AllowFocusBoundActions {
+		t.Error("allowFocusBoundActions must default to false: OS-level clicks are opt-in only")
+	}
+	if got := GetToolConfig("youtube").Timeout; got != 900000 {
+		t.Errorf("youtube tool timeout = %d, want 900000", got)
+	}
+}
+
+func TestYoutubeHasNoDefaultIdentity(t *testing.T) {
+	withConfig(t, `{}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if y := Get().Youtube; y.Container != "" || y.ContainerID != 0 {
+		t.Errorf("an unconfigured identity must stay empty, got %+v", y)
+	}
+}

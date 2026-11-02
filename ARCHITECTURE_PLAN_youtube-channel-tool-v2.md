@@ -382,6 +382,7 @@ func defYoutube(workspace string, deps Deps) ToolDef   // Name "youtube"
 //          | videos | edit | delete            (last four land in Stages 3–4)
 // params:  video_id, text, file, title, description, tags[], category, thumbnail,
 //          visibility(private|unlisted|public|schedule), publish_at(RFC3339+offset),
+//          made_for_kids(true|false) — REQUIRED for an upload: the COPPA question blocks Next (§Stage 1),
 //          filter(published|scheduled|private|all), max, dry_run, keep_tab
 ```
 **No `container`, no `confirm`, no `force`** — identity comes from config (E1 shows a container arg
@@ -399,7 +400,8 @@ Register: `defYoutube(workspace, deps),` after `defBrowser` in `AllDefs` (`inter
 > Stage budgets are hard: exactly **one** upload across the whole plan (Stage 1), and comment writes
 > only against our own fixture video.
 
-### Stage 0 — Prerequisites (no YouTube writes)
+### Stage 0 — Prerequisites (no YouTube writes) — **ACCEPTED 2026-11-02**
+
 
 1. `browser` tool schema: it declares only `action,url,index,keep_tab,upload_files,code,method,
    headers,body,provider,message,take_screenshot` (`internal/tools/browser.go:46-56`), so the params a
@@ -420,7 +422,66 @@ Register: `defYoutube(workspace, deps),` after `defBrowser` in `AllDefs` (`inter
    returns `containerId:20` and that tab is the selected one; `zyoutube` does not exist yet and the
    server restarts clean.
 
-### Stage 1 — `zyoutube -a upload` (the flagship; 1 live upload in this stage)
+> Done, with the live evidence in [`docs/youtube-pages/README.md`](docs/youtube-pages/README.md).
+>
+> * **0.1 done** — `internal/tools/browser.go` schema now declares `container`, `new_tab`, `back_tab`,
+>   `path`, `text`, `timeout`, `y`, `block` and the locator set (`selector`, `by_text`, `by_role`,
+>   `name`, `by_label`, `by_name`, `by_alt`); `sanitizeBrowserParams` already mapped the `by_*` forms.
+>   Two defects found and fixed while proving it: an explicit `name` (the `byRole`+`name` locator) was
+>   being overwritten by the `by_name` alias, non-deterministically with map iteration order; and the
+>   wrapper generator folded every param's enum into `ACTION VALUES`, so `scroll`'s `block` values were
+>   advertised as actions. `containerForURL` defers to an explicit `container` — unit-tested
+>   (`TestBrowserExplicitContainerBeatsTheDomainDefault`) **and** confirmed live: `--container pachoigame`
+>   on a `youtube.com` URL opened in `containerId 20`, not `Personal`.
+> * **0.2 done** — `YoutubeConfig` in `internal/mcpcfg/config.go` + the `config.json` block +
+>   `toolConfigs.youtube`. Go ships **no default identity** (`container: ""`, `containerId: 0`), so an
+>   unconfigured machine refuses instead of acting as whoever the browser is logged in as. This needed
+>   `youtube` added to `mergeConfig`'s deep-merge allow-list — without it a partial user block silently
+>   zeroed every default (§4.1's knobs are useless if a one-key edit wipes them).
+> * **0.3 done** — `list_containers` ⇒ `pachoigame` = **20**; written into `config.json`, asserted from
+>   every `navigate` reply by `Page.Open`.
+> * **0.4 skipped by instruction** — the bridge-side `res.data = interactiveMap;` fix was not attempted
+>   (bridge internals are out of scope this session). `get_interactive_map` therefore stays out of every
+>   flow and out of the skill text; `Page.Find` (the R4 shadow walker) is the probe channel.
+> * **0.5 done** — `docs/youtube-pages/` with the R4 template, the conventions, and the four page notes
+>   (wizard / watch / content list / details) carrying the observed facts and empty selector tables.
+> * **Accept** — `{navigate, youtube.com/, container pachoigame, new_tab}` ⇒ `containerId:20` and `active_tab`
+>   reports that same tab; `zyoutube` does not exist; the server restarted clean on every edit and answers
+>   the new schema over `tools/list`.
+>
+> **Next gate (locked decision 4):** Stage 1's one live upload needs a **user-supplied video file**. The
+> implementing session asks for the path, validates it, and does not attach anything without it.
+
+### Stage 1 — `zyoutube -a upload` (the flagship; 1 live upload in this stage) — **PROBED 2026-11-02, code pending**
+
+> The single planned upload is spent. One live run (`output.mp4`, 295 KB) produced video **`BeCRc-x5B6E`**,
+> scheduled public **Nov 9, 2026 12:00 AM**, every step verified by read-back and screenshot:
+> [`docs/youtube-pages/upload-wizard-run.md`](docs/youtube-pages/upload-wizard-run.md) (commands +
+> quoted replies + 9 images) and the frozen table in
+> [`docs/youtube-pages/upload-wizard.md`](docs/youtube-pages/upload-wizard.md).
+>
+> Three findings change the §Stage 1 design:
+>
+> 1. **`madeForKids` is a required parameter.** The COPPA question blocks `#next-button` with only an
+>    inline `You need to answer this question` — no dialog, no error reply. A flow that does not answer it
+>    just looks stuck.
+> 2. **The Visibility date and time text inputs do not commit** (`.value`, native setter + `input`/`change`,
+>    synthesized Enter, `form.requestSubmit()`, and `key_combo` all revert on close — the typed time
+>    `10:00 AM` even rendered in the screenshot while the model kept `12:00 AM`, which the share dialog
+>    exposed). Commit through the **calendar** instead: click `#datepicker-trigger`, resolve
+>    `span.calendar-day` by day number *within the right month group* (112 cells are rendered across three
+>    months), skip `.disabled`, DOM-click it — that worked with no focus steal. Until the time list is
+>    probed, `publish_at` may set the date and must report the time as `unverified`.
+> 3. **Contenteditable title/description ignore `type`** (it focuses and writes nothing).
+>    `selectNodeContents` + `document.execCommand("insertText")` lands in Studio's own model — confirmed by
+>    `All changes saved.`, not just by the DOM. That replaces R5's open question for Studio's composer
+>    surfaces, and every value is still read back before the next click.
+>
+> Also corrected: this dialog ships **no `data-test-id` attributes** (ids and `aria-label`s are the stable
+> handles), and the attach itself is the mutation — Studio mints the video id and saves it as private the
+> moment the file lands, which is what makes the journal claim-before-attach rule load-bearing.
+>
+> Still unprobed: the share dialog's `Close`, the `Time zone` control, and the time picker's option list.
 
 Probe (already partly done — E1–E7 are the first page notes):
 `www.youtube.com/upload` → Studio wizard → **attach** (file input, E5) → **Details** (title,
