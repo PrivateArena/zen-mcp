@@ -141,6 +141,8 @@
   },
   "bypassTools": [
     "context",
+    "fetch",
+    "search",
     "browser",
     "codegraph",
     "session",
