@@ -49,7 +49,10 @@ func defBrowser(workspace string, deps Deps) ToolDef {
 			"back_tab":        boolProp("[navigate/new_tab] Open in a new background tab; needs no focus and is addressable by the returned id"),
 			"timeout":         intProp("[any action] This call's wait budget in ms; passed to the bridge untouched. Omit for the bridge's per-action default"),
 			"text":            strProp("[type/trusted_paste] Text to enter"),
-			"path":            strProp("[upload] Absolute path of the local file to attach"),
+			"path":            strProp("[upload] Absolute path of the local file to attach; [screenshot] output PNG path (default: /tmp/firefox_bridge_ss_<ts>.png)"),
+			"full_page":       boolProp("[screenshot] Capture the whole document (scrolls to the top for the shot, then restores the page position)"),
+			"preload":         boolProp("[screenshot full_page] Walk the page first so lazy-loaded images decode (default true); set false to shoot immediately"),
+			"scale":           numProp("[screenshot] Output pixels per CSS pixel. 1 = CSS size (default); the window's devicePixelRatio (~1.25-2) gives native display resolution"),
 			"y":               numProp("[scroll] Pixel scroll offset"),
 			"block":           strEnumProp("[scroll] Vertical alignment of a scrolled element.", []string{"start", "center", "end"}),
 			"selector":        strProp("[locator] CSS selector, auto-scrolled into view"),
@@ -266,6 +269,25 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 			return toolresponse.WrapErrorWithContext(ctx, "browser", err, start)
 		}
 		return toolresponse.WrapSuccess(ctx, "browser", res, start)
+
+	case "screenshot":
+		// The bridge answers with geometry metadata next to the path. Forwarding it as a
+		// plain string would hide which region and scale were actually captured, which is
+		// exactly what a caller needs to know when a shot looks wrong.
+		res, err = bridge.CallBridge(ctx, "screenshot", bridgeParams)
+		if err != nil {
+			return toolresponse.WrapErrorWithContext(ctx, "browser", err, start)
+		}
+		out := map[string]any{}
+		for _, k := range []string{"data", "path", "mode", "width", "height", "scale", "zoom", "rect", "scroll", "preScrollPasses", "viewport", "content", "id", "url"} {
+			if v, ok := res[k]; ok && v != nil {
+				out[k] = v
+			}
+		}
+		if len(out) == 0 {
+			out = res
+		}
+		return toolresponse.WrapSuccess(ctx, "browser", out, start)
 
 	case "list_tabs":
 		listParams := map[string]any{
