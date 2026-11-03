@@ -17,6 +17,12 @@ var (
 	ErrWizardStuck    = errors.New("youtube: wizard stuck")
 	ErrUploadTooLarge = errors.New("youtube: file too large to attach")
 	ErrBusy           = errors.New("youtube: another long upload holds the slot")
+	// ErrTransient is the verdict on a mutation the page would not confirm: it may or may not have landed,
+	// so the caller must not resend (watch.md §5.5, watch-run.md §8.5) and must not assume it is clean.
+	ErrTransient = errors.New("youtube: the mutation may have landed; pressing submit again is forbidden")
+	// ErrUsage is a request this tool refuses to attempt at all: the row a reply addresses is not among the
+	// rows the page shows, or a parameter names behaviour that was never probed. Nothing was mutated.
+	ErrUsage = errors.New("youtube: refused, nothing was changed")
 )
 
 type ErrNotDone struct{ VideoID string }

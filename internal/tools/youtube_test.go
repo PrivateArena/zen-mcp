@@ -34,7 +34,7 @@ func TestYoutubeSchemaDeclaresTheSafetyParams(t *testing.T) {
 			t.Fatal("the youtube tool exposes code, which would bypass the identity check")
 		}
 	}
-	for _, want := range []string{"action", "file", "made_for_kids", "visibility", "publish_at", "dry_run", "explain", "video_id"} {
+	for _, want := range []string{"action", "file", "made_for_kids", "visibility", "publish_at", "dry_run", "explain", "video_id", "text", "comment_id", "max", "order", "page_token"} {
 		if _, ok := def.Schema["properties"].(map[string]any)[want]; !ok {
 			t.Errorf("schema does not declare %q", want)
 		}
@@ -75,6 +75,24 @@ func TestYoutubeActionValidation(t *testing.T) {
 		{map[string]any{"action": "upload", "file": "/tmp/x.mp4", "made_for_kids": false, "visibility": "secret"}, "visibility must be one of"},
 		{map[string]any{"action": "upload_status"}, "video_id is required"},
 		{map[string]any{"action": "upload_status", "video_id": "abc", "file": "/tmp/x.mp4"}, "does not apply"},
+		// Stage 2: all three watch actions address a video, and no write is accepted without its text.
+		{map[string]any{"action": "read"}, "video_id is required"},
+		{map[string]any{"action": "read", "video_id": "YSNFGgh0aAs"}, ""},
+		{map[string]any{"action": "comment", "video_id": "YSNFGgh0aAs"}, "text is required"},
+		{map[string]any{"action": "comment", "text": "hello"}, "video_id is required"},
+		{map[string]any{"action": "comment", "video_id": "YSNFGgh0aAs", "text": "hello"}, ""},
+		{map[string]any{"action": "reply", "video_id": "YSNFGgh0aAs", "text": "hello"}, "comment_id is required"},
+		{map[string]any{"action": "reply", "video_id": "YSNFGgh0aAs", "comment_id": "UgwEFzl5ZWYy-wHKInF4AaABAg"}, "text is required"},
+		{map[string]any{"action": "reply", "video_id": "YSNFGgh0aAs", "comment_id": "UgwEFzl5ZWYy-wHKInF4AaABAg", "text": "hi"}, ""},
+		// publish_at and the file belong to the wizard alone; a comment cannot smuggle an upload's parameters.
+		{map[string]any{"action": "comment", "video_id": "YSNFGgh0aAs", "text": "hi", "file": "/tmp/x.mp4"}, "does not apply"},
+		{map[string]any{"action": "comment", "video_id": "YSNFGgh0aAs", "text": "hi", "publish_at": "2026-11-09T10:00:00+07:00"}, "does not apply"},
+		{map[string]any{"action": "reply", "video_id": "YSNFGgh0aAs", "comment_id": "UgwEFzl5ZWYy-wHKInF4AaABAg", "text": "hi", "publish_at": "2026-11-09T10:00:00+07:00"}, "does not apply"},
+		{map[string]any{"action": "read", "video_id": "YSNFGgh0aAs", "text": "hi"}, "does not apply"},
+		{map[string]any{"action": "comment", "video_id": "YSNFGgh0aAs", "text": "hi", "comment_id": "abc"}, "does not apply"},
+		// Sorting and paging need controls the probe never recorded, so they are refused, not ignored.
+		{map[string]any{"action": "read", "video_id": "YSNFGgh0aAs", "order": "newest"}, "not supported yet"},
+		{map[string]any{"action": "read", "video_id": "YSNFGgh0aAs", "page_token": "next"}, "not supported yet"},
 	}
 	for _, c := range cases {
 		action, _ := c.args["action"].(string)
@@ -177,7 +195,7 @@ func TestYoutubeActionSpecsMatchTheSchema(t *testing.T) {
 	def := youtubeDef(t)
 	props := def.Schema["properties"].(map[string]any)
 	seen := map[string]bool{}
-	for _, action := range []string{"upload", "upload_status"} {
+	for _, action := range []string{"upload", "upload_status", "read", "comment", "reply"} {
 		spec, ok := youtubeActionSpecs[action]
 		if !ok {
 			t.Fatalf("%s has no spec", action)
@@ -199,13 +217,70 @@ func TestYoutubeActionSpecsMatchTheSchema(t *testing.T) {
 	}
 }
 
-// Stage 1 ships two actions; anything else is a future stage and must not be advertised early.
+// Stage 2 builds the watch page comment flow; the rest are future stages and must not be advertised early.
 func TestYoutubeDoesNotAdvertiseUnbuiltActions(t *testing.T) {
 	def := youtubeDef(t)
-	for _, banned := range []string{"comment", "reply", "edit_video", "delete_video", "read_comments", "analytics"} {
+	for _, banned := range []string{"edit_details", "list_videos", "top_comment", "delete_video", "get_video", "edit_video", "analytics", "read_comments"} {
 		if enumHas(def, banned) {
 			t.Errorf("%s is advertised before its stage is built — the tool would promise a page flow that does not exist", banned)
 		}
+	}
+	// The mirror of that: the three watch page actions are built, so an agent must be able to find them.
+	for _, built := range []string{"read", "comment", "reply"} {
+		if !enumHas(def, built) {
+			t.Errorf("%s is built but not advertised", built)
+		}
+	}
+}
+
+// A video is named by its id, and the id arrives either as itself or inside a URL a human pasted — the
+// watch URL the probe used, or the youtu.be link this tool's own upload reply returns.
+func TestParseVideoID(t *testing.T) {
+	for _, c := range map[string]string{
+		"YSNFGgh0aAs":     "YSNFGgh0aAs",
+		"  YSNFGgh0aAs  ": "YSNFGgh0aAs",
+		"https://www.youtube.com/watch?app=desktop&v=YSNFGgh0aAs": "YSNFGgh0aAs",
+		"https://www.youtube.com/watch?v=YSNFGgh0aAs&t=42":        "YSNFGgh0aAs",
+		"https://youtu.be/YSNFGgh0aAs?si=Z9":                      "YSNFGgh0aAs",
+	} {
+		got, err := parseVideoID(c)
+		if err != nil {
+			t.Errorf("%q: %v", c, err)
+			continue
+		}
+		if got != "YSNFGgh0aAs" {
+			t.Errorf("%q parsed as %q", c, got)
+		}
+	}
+	for _, bad := range []string{"", "   ", "watch?v=short", "https://www.youtube.com/watch", "YSNFGgh0aAsXX", "https://example.com/v=YSNFGgh0aA"} {
+		if got, err := parseVideoID(bad); err == nil {
+			t.Errorf("%q was accepted as %q; an id that is not 11 characters is not a video", bad, got)
+		}
+	}
+}
+
+// A read capped below what the page rendered reports the cap and says so, and the page-internal row address is
+// not part of what a caller gets back.
+func TestCapCommentRows(t *testing.T) {
+	raw := json.RawMessage(`{"count":2,"rows":[{"id":"a","author":"@x","text":"one","path":"body > div"},{"id":"b","text":"two","path":"body > div"}]}`)
+	rows, kept, total, err := capCommentRows(raw, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kept != 1 || total != 2 {
+		t.Fatalf("kept %d of %d", kept, total)
+	}
+	if strings.Contains(string(rows), "path") {
+		t.Errorf("the page address leaked into the reply: %s", rows)
+	}
+	if !strings.Contains(string(rows), `"id":"a"`) {
+		t.Errorf("rows = %s", rows)
+	}
+	if rows, kept, total, err := capCommentRows(raw, 0); err != nil || kept != 2 || total != 2 || !strings.Contains(string(rows), `"id":"b"`) {
+		t.Errorf("max 0 must mean every row: kept=%d total=%d err=%v", kept, total, err)
+	}
+	if _, _, _, err := capCommentRows(json.RawMessage(`{"rows":`), 5); err == nil {
+		t.Error("a malformed read was accepted")
 	}
 }
 

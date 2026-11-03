@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -25,7 +26,11 @@ type Settings struct {
 	ProcessTimeout    time.Duration
 	MaxUploadBytes    int64
 	MaxDiagBytes      int
-	EvidenceDir       string
+	MaxComments       int
+	// MaxScrolls is the runaway guard on a lazy-render scroll loop (youtube.maxScrolls); the flow falls back
+	// to its own floor when it is unset.
+	MaxScrolls  int
+	EvidenceDir string
 }
 
 // Service owns everything a flow must not see: the bridge, the journal, the diagnostics, the clock. A tool
@@ -192,6 +197,54 @@ func (s *Service) Upload(ctx context.Context, in Upload, flow func(context.Conte
 			}
 		}
 	}
+	return out, page.Tab(), err
+}
+
+// Watch runs one watch-page action. Unlike Upload it claims no journal slot here: an upload's mutation is its
+// very first step, the attach, so the claim belongs outside the flow — while a comment's mutation is one deep
+// press, so §4.6's claim-before-mutate order puts the claim inside the flow, next to that press. The ledger is
+// still owned here: the flow is handed the journal and nothing else, and a dry run is handed none at all.
+func (s *Service) Watch(ctx context.Context, in WatchInput, flow func(context.Context, *Page, WatchInput, Timings) (Outcome, error)) (Outcome, Tab, error) {
+	if err := s.CheckIdentity(); err != nil {
+		return Outcome{}, Tab{}, err
+	}
+	if in.VideoID == "" {
+		return Outcome{}, Tab{}, fmt.Errorf("%w: a watch page action needs a video_id", ErrUsage)
+	}
+	switch in.Action {
+	case "read", "comment", "reply":
+	default:
+		return Outcome{}, Tab{}, fmt.Errorf(`%w: watch action %q is not read, comment or reply`, ErrUsage, in.Action)
+	}
+	if in.Action != "read" {
+		if strings.TrimSpace(in.Text) == "" {
+			return Outcome{}, Tab{}, fmt.Errorf("%w: %s needs text", ErrUsage, in.Action)
+		}
+		if in.Action == "reply" && strings.TrimSpace(in.CommentID) == "" {
+			return Outcome{}, Tab{}, fmt.Errorf("%w: reply needs comment_id, the lc id a read returned", ErrUsage)
+		}
+	}
+
+	// A read is a look, so it stays in a background tab; a write needs the section to really render, and a
+	// background tab is where a lazy section is least reliable — foreground, subject to allowFocusBoundActions.
+	// Every watch action needs a visible tab, dry runs included: measured 2026-11-03, the same URL gave 23
+	// characters of body and no ytd-comments while the document was hidden, and the section with its rows while
+	// visible. A background tab is therefore not a slower option here, it is a page that never arrives — so the
+	// flow asks for a foreground tab unconditionally and Service.Tab still downgrades it unless
+	// allowFocusBoundActions permits that, in which case the run fails fast naming that switch.
+	foreground := true
+	page, err := s.Tab(ctx, "about:blank", foreground)
+	if err != nil {
+		return Outcome{}, Tab{}, err
+	}
+	page.RequireIdentity(s.set.ContainerID, s.channelHint())
+	if dir := s.EvidenceDirFor(in.Action); dir != "" {
+		in.Evidence = dir
+	}
+	if in.Action != "read" && !in.DryRun {
+		in.Journal = s.journal
+	}
+	out, err := flow(ctx, page, in, Timings{Action: s.pageTimeout(), Wizard: s.wizardTimeout(), MaxScrolls: s.set.MaxScrolls})
 	return out, page.Tab(), err
 }
 

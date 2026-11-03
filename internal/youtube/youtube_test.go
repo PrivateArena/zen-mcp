@@ -269,6 +269,31 @@ func TestServiceRefusesWithoutAnIdentity(t *testing.T) {
 	}
 }
 
+// Stage 2: a watch action that cannot be right is refused before a tab opens, because the cheap half of the
+// contract is argument-shaped and needs no page to check.
+func TestServiceWatchRefusesABadRequestBeforeOpeningATab(t *testing.T) {
+	br := newFakeBrowser(youtube.Tab{ID: "t_w", ContainerID: 20})
+	svc := youtube.NewService(br, youtube.Settings{Container: "pachoigame", ContainerID: 20}, mustJournal(t), nil)
+	for _, in := range []youtube.WatchInput{
+		{Action: "read"},
+		{VideoID: "YSNFGgh0aAs", Action: "top_comment"},
+		{VideoID: "YSNFGgh0aAs", Action: "comment"},
+		{VideoID: "YSNFGgh0aAs", Action: "reply", Text: "hi"},
+	} {
+		_, _, err := svc.Watch(context.Background(), in, func(context.Context, *youtube.Page, youtube.WatchInput, youtube.Timings) (youtube.Outcome, error) {
+			return youtube.Outcome{}, errors.New("the flow ran for a request that should have been refused")
+		})
+		if !errors.Is(err, youtube.ErrUsage) {
+			t.Errorf("%+v = %v, want the usage refusal", in, err)
+		}
+	}
+	for _, c := range br.calls {
+		if c == "navigate" {
+			t.Fatal("a refused watch request still opened a tab")
+		}
+	}
+}
+
 // §6: the wizard must never commit a date it did not ask for. The service claims before the flow runs, and
 // binds the id the *page* reported afterwards.
 func TestServiceClaimsTheSlotBeforeTheFlowRuns(t *testing.T) {

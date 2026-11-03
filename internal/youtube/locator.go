@@ -76,14 +76,18 @@ type Finding struct {
 	Blocked bool   `json:"blocked,omitempty"` // a shadow root refused to be queried
 	Count   int    `json:"count,omitempty"`
 
-	Tag   string       `json:"tag,omitempty"`
-	ID    string       `json:"id,omitempty"`
-	Role  string       `json:"role,omitempty"`
-	Name  string       `json:"name,omitempty"`
-	CSS   string       `json:"css,omitempty"` // the page-proven path, usable as a later selector
-	Text  string       `json:"text,omitempty"`
-	Rect  [4]float64   `json:"rect,omitempty"`
-	State ElementState `json:"state"`
+	Tag  string     `json:"tag,omitempty"`
+	ID   string     `json:"id,omitempty"`
+	Role string     `json:"role,omitempty"`
+	Name string     `json:"name,omitempty"`
+	CSS  string     `json:"css,omitempty"` // the page-proven path, usable as a later selector
+	Text string     `json:"text,omitempty"`
+	Rect [4]float64 `json:"rect,omitempty"`
+	// Disabled is the button-level form of the same fact State.Disabled carries: for a control whose
+	// readiness is the whole question (a submit button that stays disabled until the page has accepted a
+	// write) it is read straight off the finding rather than through the nested state.
+	Disabled bool         `json:"disabled,omitempty"`
+	State    ElementState `json:"state"`
 
 	// AX and Native are the other two R4 channels, read from the bridge's own action reply rather than
 	// from the DOM, so a locator that only works one way is visible in the record.

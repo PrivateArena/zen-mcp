@@ -104,6 +104,9 @@ return {
   css: node.id ? "#" + esc(node.id) : path(node),
   text: (node.innerText || node.textContent || "").trim().replace(/\s+/g, " ").slice(0, maxText),
   rect: [Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height)],
+  // Reported beside the label so a flow gating on "the page accepted my write" (watch-run.md §4: the submit
+  // button flipping disabled true → false) reads the same fact the record shows under --explain.
+  disabled: !!node.disabled || (node.getAttribute && node.getAttribute("aria-disabled") === "true"),
   state: state(node),
   inShadow: !!(node.getRootNode && node.getRootNode().host),
 };

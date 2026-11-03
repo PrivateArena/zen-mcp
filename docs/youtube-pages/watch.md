@@ -75,8 +75,12 @@ likewise `disabled` until text lands:
 5. **A synthetic press did not close a box.** Pressing `#cancel-button` through the page channel (and through
    the bridge's locator click) left both boxes open — YouTube listens for its own host-level handler. Harmless
    for the flow (cancel is not a step we need), but do not rely on it to clean up: close the tab instead.
-6. **Comments are lazy-rendered.** Nothing under `#comments` exists until the section has been scrolled into
-   view; `read` must scroll and wait, exactly like the Studio list.
+6. **Comments are lazy-rendered — and laziness is gated on visibility.** Measured side by side on the same URL:
+   a `back_tab` reported `document.hidden: true`, **23 characters** of body text and no `ytd-comments` element at
+   all, while a visible tab reported the section rendered. So the section is not merely below the fold, it is
+   *not built* while the tab is backgrounded, and no scroll (script or bridge wheel) produces it. `read`,
+   `comment`, `reply` and their dry runs all need a foreground tab; `Service.Watch` asks for one and the run
+   fails fast naming `youtube.allowFocusBoundActions` when the config will not allow it.
 7. *Unverified:* the appearance of the posted comment, its ordering under `Sort by: Top`, and the "comment
    posted" acknowledgement. The flow therefore confirms a post by **re-reading the thread for the new text or
    id**, and reports `pageVerified: false` if the read-back does not find it.

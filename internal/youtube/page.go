@@ -196,6 +196,20 @@ func (p *Page) EvalInto(ctx context.Context, program string, args any, out any) 
 	return json.Unmarshal(raw, out)
 }
 
+// Hidden reports whether this tab is backgrounded. It is not a curiosity: YouTube's watch page defers the
+// comment section entirely while the document is hidden, so a flow that does not ask the question burns its
+// whole scroll budget on a page that was never going to render.
+func (p *Page) Hidden(ctx context.Context) (bool, int, error) {
+	var v struct {
+		Hidden bool    `json:"hidden"`
+		Chars  float64 `json:"chars"`
+	}
+	if err := p.Run(ctx, "hidden.js", nil, &v); err != nil {
+		return false, 0, p.fail("hidden", "document.visibilityState", err)
+	}
+	return v.Hidden, int(v.Chars), nil
+}
+
 // BodyText is the cheap verification channel: a phrase the page must contain for a step to have
 // really happened ("All changes saved", "No issues found", "is scheduled").
 func (p *Page) BodyText(ctx context.Context) (string, error) {

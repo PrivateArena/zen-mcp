@@ -35,9 +35,13 @@ type Journal struct {
 
 // JournalSlot is one claimed or completed mutation.
 type JournalSlot struct {
-	SlotID    string    `json:"slotId"`
-	Kind      string    `json:"kind"` // upload | comment | edit | delete
+	SlotID string `json:"slotId"`
+	Kind   string `json:"kind"` // upload | comment | edit | delete
+	// VideoID and CommentID are bound by Complete/Abandon once the page reveals the identifier its row
+	// carries, and which field is used follows the slot's kind — so a lookup for a video can never be
+	// answered with a comment id and back. Empty plus Failed means an unrecorded draft (plan §4.6).
 	VideoID   string    `json:"videoId,omitempty"`
+	CommentID string    `json:"commentId,omitempty"`
 	Status    string    `json:"status"` // claimed | completed | abandoned
 	Detail    string    `json:"detail,omitempty"`
 	ClaimedAt time.Time `json:"claimedAt"`
@@ -125,13 +129,25 @@ func (j *Journal) Claim(kind string) (JournalSlot, error) {
 
 // Complete records the video id the page reported, which is the only trustworthy binding between a slot
 // and a real upload — the caller never supplies it.
-func (j *Journal) Complete(slotID, videoID string) error {
+// bindID stores the identifier the page revealed in the field its kind owns.
+func bindID(s *JournalSlot, pageID string) {
+	if pageID == "" {
+		return
+	}
+	if s.Kind == "" || s.Kind == "upload" {
+		s.VideoID = pageID
+		return
+	}
+	s.CommentID = pageID
+}
+
+func (j *Journal) Complete(slotID, pageID string) error {
 	for i := range j.Slots {
 		if j.Slots[i].SlotID != slotID {
 			continue
 		}
 		j.Slots[i].Status = "completed"
-		j.Slots[i].VideoID = videoID
+		bindID(&j.Slots[i], pageID)
 		return j.Save()
 	}
 	return fmt.Errorf("journal: no slot %s to complete", slotID)
@@ -140,15 +156,13 @@ func (j *Journal) Complete(slotID, videoID string) error {
 // Abandon marks a claimed slot as finished-without-success, keeping its video id when the page revealed
 // one. It stays charged against the daily cap: the draft exists on the channel whether or not we
 // completed the wizard.
-func (j *Journal) Abandon(slotID, videoID, reason string) error {
+func (j *Journal) Abandon(slotID, pageID, reason string) error {
 	for i := range j.Slots {
 		if j.Slots[i].SlotID != slotID {
 			continue
 		}
 		j.Slots[i].Status = "abandoned"
-		if videoID != "" {
-			j.Slots[i].VideoID = videoID
-		}
+		bindID(&j.Slots[i], pageID)
 		j.Slots[i].Detail = reason
 		j.Events = append(j.Events, JournalEvent{At: j.now(), Kind: "slot_abandoned", VideoID: j.Slots[i].VideoID, Detail: reason})
 		return j.Save()
