@@ -24,8 +24,10 @@ import (
 )
 
 const (
-	ServerName    = "zen-tools"
-	ServerVersion = "2.4.1"
+	ServerName = "zen-tools"
+	// Bumped for the youtube tool: a page-automation surface with its own identity rules and a
+	// 15-minute floor, not a tweak to an existing one.
+	ServerVersion = "2.5.0"
 )
 
 type RouteDeps struct {

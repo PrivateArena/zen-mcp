@@ -56,7 +56,7 @@ func testDeps() (RouteDeps, *http.ServeMux) {
 	start := time.Date(2026, 8, 5, 2, 22, 34, 570000000, time.UTC)
 	deps := RouteDeps{
 		CreateMCPServer: func(id string) *mcpserver.MCPServer {
-			s := mcpserver.NewMCPServer("zen-tools", "2.4.1",
+			s := mcpserver.NewMCPServer("zen-tools", ServerVersion,
 				mcpserver.WithToolCapabilities(true),
 				mcpserver.WithResourceCapabilities(false, false),
 				mcpserver.WithPromptCapabilities(false),
@@ -96,7 +96,7 @@ func TestHealthRoute(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body["status"] != "ok" || body["server"] != "zen-tools" || body["version"] != "2.4.1" {
+	if body["status"] != "ok" || body["server"] != "zen-tools" || body["version"] != ServerVersion {
 		t.Errorf("health body wrong: %v", body)
 	}
 	if body["transport"] != "unknown" {
@@ -119,7 +119,7 @@ func TestMcpStatusRoute(t *testing.T) {
 	var body map[string]any
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
 	info, ok := body["serverInfo"].(map[string]any)
-	if !ok || info["name"] != "zen-tools" || info["version"] != "2.4.1" {
+	if !ok || info["name"] != "zen-tools" || info["version"] != ServerVersion {
 		t.Errorf("serverInfo wrong: %v", body)
 	}
 	if body["status"] != "ok" {
@@ -217,7 +217,7 @@ func TestClientDisconnectReachesWrappedHandler(t *testing.T) {
 
 	deps := RouteDeps{
 		CreateMCPServer: func(id string) *mcpserver.MCPServer {
-			s := mcpserver.NewMCPServer("zen-tools", "2.4.1",
+			s := mcpserver.NewMCPServer("zen-tools", ServerVersion,
 				mcpserver.WithToolCapabilities(true),
 				mcpserver.WithResourceCapabilities(false, false),
 				mcpserver.WithPromptCapabilities(false),
@@ -308,7 +308,7 @@ func TestClientAbortTelemetryFaithful(t *testing.T) {
 
 	deps := RouteDeps{
 		CreateMCPServer: func(id string) *mcpserver.MCPServer {
-			s := mcpserver.NewMCPServer("zen-tools", "2.4.1",
+			s := mcpserver.NewMCPServer("zen-tools", ServerVersion,
 				mcpserver.WithToolCapabilities(true),
 				mcpserver.WithResourceCapabilities(false, false),
 				mcpserver.WithPromptCapabilities(false),
@@ -427,7 +427,7 @@ func TestToolCallRecordsActionTelemetry(t *testing.T) {
 
 	depsRoute := RouteDeps{
 		CreateMCPServer: func(id string) *mcpserver.MCPServer {
-			s := mcpserver.NewMCPServer("zen-tools", "2.4.1",
+			s := mcpserver.NewMCPServer("zen-tools", ServerVersion,
 				mcpserver.WithToolCapabilities(true),
 				mcpserver.WithResourceCapabilities(false, false),
 				mcpserver.WithPromptCapabilities(false),
@@ -630,7 +630,7 @@ func TestPostMCPRequestAbortLogged(t *testing.T) {
 	release := make(chan struct{})
 	deps := RouteDeps{
 		CreateMCPServer: func(id string) *mcpserver.MCPServer {
-			s := mcpserver.NewMCPServer("zen-tools", "2.4.1",
+			s := mcpserver.NewMCPServer("zen-tools", ServerVersion,
 				mcpserver.WithToolCapabilities(true),
 				mcpserver.WithResourceCapabilities(false, false),
 				mcpserver.WithPromptCapabilities(false),
@@ -727,7 +727,7 @@ func TestMCPInitializeHandshake(t *testing.T) {
 		t.Fatalf("no result: %v", msg)
 	}
 	info, ok := result["serverInfo"].(map[string]any)
-	if !ok || info["name"] != "zen-tools" || info["version"] != "2.4.1" {
+	if !ok || info["name"] != "zen-tools" || info["version"] != ServerVersion {
 		t.Errorf("serverInfo wrong: %v", result)
 	}
 	if _, ok := result["protocolVersion"].(string); !ok {
@@ -948,7 +948,7 @@ func TestPostMCPLongRunningRequestDoesNotBlockNewRequests(t *testing.T) {
 
 	deps := RouteDeps{
 		CreateMCPServer: func(id string) *mcpserver.MCPServer {
-			s := mcpserver.NewMCPServer("zen-tools", "2.4.1",
+			s := mcpserver.NewMCPServer("zen-tools", ServerVersion,
 				mcpserver.WithToolCapabilities(true),
 				mcpserver.WithResourceCapabilities(false, false),
 				mcpserver.WithPromptCapabilities(false),
@@ -1099,7 +1099,7 @@ func TestPostMCPExtremeConcurrency200Clients(t *testing.T) {
 	deps := RouteDeps{
 		CreateMCPServer: func(id string) *mcpserver.MCPServer {
 			factoryCalls++
-			s := mcpserver.NewMCPServer("zen-tools", "2.4.1",
+			s := mcpserver.NewMCPServer("zen-tools", ServerVersion,
 				mcpserver.WithToolCapabilities(true),
 				mcpserver.WithResourceCapabilities(false, false),
 				mcpserver.WithPromptCapabilities(false),
@@ -1165,7 +1165,7 @@ func TestPostMCP500ConcurrentToolsList(t *testing.T) {
 	deps := RouteDeps{
 		CreateMCPServer: func(id string) *mcpserver.MCPServer {
 			factoryCalls++
-			return mcpserver.NewMCPServer("zen-tools", "2.4.1",
+			return mcpserver.NewMCPServer("zen-tools", ServerVersion,
 				mcpserver.WithToolCapabilities(true),
 				mcpserver.WithResourceCapabilities(false, false),
 				mcpserver.WithPromptCapabilities(false),
@@ -1220,7 +1220,7 @@ func TestPostMCPLongCallWith200ConcurrentClients(t *testing.T) {
 	deps := RouteDeps{
 		CreateMCPServer: func(id string) *mcpserver.MCPServer {
 			factoryCalls++
-			s := mcpserver.NewMCPServer("zen-tools", "2.4.1",
+			s := mcpserver.NewMCPServer("zen-tools", ServerVersion,
 				mcpserver.WithToolCapabilities(true),
 				mcpserver.WithResourceCapabilities(false, false),
 				mcpserver.WithPromptCapabilities(false),
@@ -1443,7 +1443,7 @@ func TestPostMCPWorkspaceFollowUpSequence(t *testing.T) {
 	deps := RouteDeps{
 		CreateMCPServer: func(id string) *mcpserver.MCPServer {
 			factoryCalls++
-			return mcpserver.NewMCPServer("zen-tools", "2.4.1",
+			return mcpserver.NewMCPServer("zen-tools", ServerVersion,
 				mcpserver.WithToolCapabilities(true),
 				mcpserver.WithResourceCapabilities(false, false),
 				mcpserver.WithPromptCapabilities(false),

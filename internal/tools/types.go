@@ -35,6 +35,10 @@ type ToolDef struct {
 	Description string
 	Schema      map[string]any
 	Handler     toolregistry.Handler
+	// LongRunning marks a tool whose work is measured in minutes. The server raises its context
+	// timeout to a floor instead of the 30 s default, because a mid-flow cancellation is not a benign
+	// failure: an upload cut off after the attach leaves a real draft on the channel.
+	LongRunning bool
 }
 
 // AllDefs returns the M4 + M5 + M6 tool subset in TS registration order.
@@ -60,6 +64,7 @@ func AllDefs(workspace string, deps Deps) []ToolDef {
 		defSkills(workspace, deps),
 		defCodegraph(workspace, deps),
 		defExportCLI(workspace, deps),
+		defYoutube(workspace, deps),
 	}
 }
 

@@ -483,6 +483,23 @@ Register: `defYoutube(workspace, deps),` after `defBrowser` in `AllDefs` (`inter
 >
 > Still unprobed: the share dialog's `Close`, the `Time zone` control, and the time picker's option list.
 
+**Code landed 2026-11-03** (`internal/youtube/` + `internal/youtube/pages/` + `internal/tools/youtube.go`,
+registered in `AllDefs`, `zyoutube` wrapper exported, `ServerVersion` 2.5.0):
+`page.go`(Page + payload reconciliation + one-shot Attach) · `locator.go`(Locator/Finding + the deep-query
+probe) · `actions.go`(Find/Click/DomClick/Type/WaitText/WaitAny/WaitState/Poll) · `errors.go`(Classify + the
+sentinels, each `Unwrap`-able) · `journal.go`(claim/complete/abandon/**release**, atomic save, cap survives a
+restart) · `diagnose.go`(bounded ring, `Reqs` headroom) · `service.go`(Settings, Tab identity assertion,
+claim→flow→bind state machine) · `scripts/{lookup,fill,click,body_text,calendar,wizard_state}.js`.
+`internal/tools/youtube.go` declares only `upload` and `upload_status`; tags/category/thumbnail are refused
+because they were never probed.
+Tests: 22 in `internal/youtube`, 8 in `internal/youtube/pages`, 7 in `internal/youtube`+tools, plus
+`internal/server` and `internal/tools` regression. `go vet ./...` clean; `internal/terminal` has two
+pre-existing failures unrelated to this work (verified against HEAD in a clean worktree).
+Verified live: `upload --dry_run=true` → identity asserted (containerId 20), attach target located through the
+deep query, evidence screenshot written, tab closed, **no slot consumed**.
+Still to verify live: one real scheduled upload end to end (the DOM-click fallback for the COPPA radios needs
+a run), and `upload_status` against the channel content page (Stage 3's probe).
+
 Probe (already partly done — E1–E7 are the first page notes):
 `www.youtube.com/upload` → Studio wizard → **attach** (file input, E5) → **Details** (title,
 description, thumbnail, category, more-options, made-for-kids, "Show more") → **Video checks** →

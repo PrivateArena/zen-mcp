@@ -147,6 +147,8 @@ zbrowser -a click -i t_mvzexmnt_6g5 --by_text "No, it's not made for kids"
 A page flow must treat this as a required field, not an error: **every** upload needs an answer, and
 `madeForKids` therefore belongs in the tool's parameters.
 
+> From user: This step can also be safeguarded by going to Studio, go to Settings > Channel > Advanced settings. It's the first option that appears under "Audience" Then click Save. I've set this to default of all Youtube channels that will use internal/tools/youtube.go.
+
 ## Step 6 — Video elements → Checks → Visibility
 
 `#next-button button` again (the id is the same on every panel). Verified by the tab state, which is
@@ -262,3 +264,27 @@ The `Close` control was **not** probed (per instruction); the tab was left as-is
   instead of assuming.
 * `key_combo` is OS-level: it needs the real cursor, so it is useless on a background tab.
 * `get_interactive_map` still replies `data:null`; the R4 walker in `web_eval` is the probe channel.
+
+---
+
+## Live run of the *flow code* (2026-11-03) — three facts the probe could not teach
+
+Running `zyoutube -a upload … --dry_run=true` against the real browser, after the wizard was written in Go,
+turned up three things the hand probe never showed. All three are now handled in code.
+
+1. **`bridge.CallBridge` returns the payload unwrapped on success** (`{"id":"t_…","containerId":20,…}`) and the
+   full `{success,data,error}` envelope only on failure. Reading `reply["data"]` for a navigate reply therefore
+   yields nothing, and the flow died with "expected a tab id from navigate, the tab reports empty reply" while
+   the same call from `zbrowser` succeeded. Every read in `page.go` now goes through `payload()`.
+2. **A boolean parameter can arrive as a string.** The generated CLI wrapper sends `"dry_run": "true"`, and the
+   first version read only the typed form — so `--dry_run=true` became a **real upload**, creating
+   `9Qx9-YDRKUU` as a private draft. `dryRun()` now fails to the safe side: any value that is not an explicit
+   false is a dry run. An attach cannot be taken back, so a misread flag must never be able to cause one.
+3. **The bridge's own locator does not reach every control the page probe can.** The COPPA radios answered
+   `500 {"error":"Error: Not found: undefined"}` to `click --by_text`, although `lookup.js` had just resolved
+   them through the shadow tree. `Page.Click` now falls through to the page channel when the bridge reports
+   *not found* — a refusal that proves nothing was pressed — and refuses to fall through for any other error,
+   because repeating a press whose outcome is unknown is how a mutation gets applied twice.
+
+The draft from fact (2) is recorded in the journal as abandoned and charged against that day's quota, which
+is the rule working as intended: the video exists on the channel whether or not the wizard finished.
