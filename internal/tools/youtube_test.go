@@ -1,13 +1,18 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/youtube"
+
+	mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
 func youtubeDef(t *testing.T) ToolDef {
@@ -34,7 +39,7 @@ func TestYoutubeSchemaDeclaresTheSafetyParams(t *testing.T) {
 			t.Fatal("the youtube tool exposes code, which would bypass the identity check")
 		}
 	}
-	for _, want := range []string{"action", "file", "made_for_kids", "visibility", "publish_at", "dry_run", "explain", "video_id", "text", "comment_id", "max", "order", "page_token", "yes_i_understand"} {
+	for _, want := range []string{"action", "file", "made_for_kids", "visibility", "publish_at", "dry_run", "explain", "video_id", "text", "comment_id", "max", "order", "page_token", "yes_i_understand", "container"} {
 		if _, ok := def.Schema["properties"].(map[string]any)[want]; !ok {
 			t.Errorf("schema does not declare %q", want)
 		}
@@ -51,10 +56,17 @@ func TestYoutubeSchemaDeclaresTheSafetyParams(t *testing.T) {
 			t.Errorf("schema is missing %s", want)
 		}
 	}
-	// The container is not an agent-editable parameter at all: it comes from config, so a request cannot
-	// name a different identity.
-	if _, ok := def.Schema["properties"].(map[string]any)["container"]; ok {
-		t.Error("the schema lets the caller choose a container; the identity must come from config only")
+	// container is caller-selectable so one server can drive several channels, but it selects a NAME from the
+	// declared set only: there is no containerId parameter, so a caller cannot name an arbitrary identity and
+	// resolveChannel refuses anything config does not declare.
+	if _, ok := def.Schema["properties"].(map[string]any)["container"]; !ok {
+		t.Error("the schema offers no container, so a second channel could not be acted on")
+	}
+	if _, ok := def.Schema["properties"].(map[string]any)["container_id"]; ok {
+		t.Error("the schema lets the caller choose a numeric containerId; ids are declared in config, never passed in")
+	}
+	if !strings.Contains(string(raw), "youtube.containers") {
+		t.Error("the container parameter does not say it is limited to the declared channels")
 	}
 	if !strings.Contains(def.Description, "config") {
 		t.Error("the description does not say where the channel identity comes from")
@@ -405,5 +417,96 @@ func TestYoutubeSettingsComeFromConfig(t *testing.T) {
 	}
 	if !slices.Contains([]string{"private", "unlisted", "public", "schedule"}, cfg.DefaultVisibility) {
 		t.Errorf("defaultVisibility %q is not a mode the wizard has", cfg.DefaultVisibility)
+	}
+}
+
+// One server, several channels: the caller names one, and only a name config declared is honoured.
+func TestResolveChannelSelectsADeclaredChannel(t *testing.T) {
+	cfg := mcpcfg.YoutubeConfig{
+		Container: "pachoigame", ContainerID: 20,
+		Containers: map[string]int{"second": 31, "broken": 0},
+	}
+	for _, tc := range []struct {
+		name    string
+		want    string
+		wantID  int
+		wantErr string
+	}{
+		{name: "", want: "pachoigame", wantID: 20},
+		{name: "pachoigame", want: "pachoigame", wantID: 20},
+		{name: " second ", want: "second", wantID: 31},
+		{name: "typo", wantErr: `container "typo" is not a declared channel`},
+		{name: "broken", wantErr: "containerId 0 is the browser's default identity"},
+	} {
+		got, id, err := resolveChannel(cfg, tc.name)
+		switch {
+		case tc.wantErr != "":
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("container %q: err = %v, want it to say %q", tc.name, err, tc.wantErr)
+			}
+			if got != "" || id != 0 {
+				t.Errorf("container %q: refused request still yielded (%q, %d)", tc.name, got, id)
+			}
+			if !errors.Is(err, youtube.ErrUsage) {
+				t.Errorf("container %q: err = %v, want a usage error the caller can fix", tc.name, err)
+			}
+		case err != nil:
+			t.Errorf("container %q: %v", tc.name, err)
+		case got != tc.want || id != tc.wantID:
+			t.Errorf("container %q = (%q, %d), want (%q, %d)", tc.name, got, id, tc.want, tc.wantID)
+		}
+	}
+	// The refusal names what IS declared, so the caller does not have to guess the spelling.
+	_, _, err := resolveChannel(cfg, "pachoigam")
+	if err == nil || !strings.Contains(err.Error(), "pachoigame, second") {
+		t.Errorf("err = %v, want it to list the declared channels", err)
+	}
+	// No default and no name: a refusal, not a silent fallthrough to the browser's own identity.
+	if _, _, err := resolveChannel(mcpcfg.YoutubeConfig{}, ""); err == nil || !strings.Contains(err.Error(), "no channel to act as") {
+		t.Errorf("err = %v, want the empty-config case refused", err)
+	}
+}
+
+// An unknown channel must be refused before the browser is touched: a request that reaches the page has
+// already picked an identity, and that is the one thing this tool cannot take back.
+type countingBrowser struct{ calls []string }
+
+func (c *countingBrowser) Call(ctx context.Context, action string, params map[string]any) (map[string]any, error) {
+	c.calls = append(c.calls, action)
+	return map[string]any{"success": true, "data": map[string]any{}}, nil
+}
+
+func TestUndeclaredChannelNeverReachesTheBrowser(t *testing.T) {
+	t.Setenv("ZEN_YOUTUBE_JOURNAL", t.TempDir()+"/journal.json")
+	cfg := mcpcfg.Get()
+	saved := cfg.Youtube
+	defer func() { cfg.Youtube = saved }()
+	cfg.Youtube = mcpcfg.YoutubeConfig{Container: "pachoigame", ContainerID: 20, Containers: map[string]int{"second": 31},
+		MaxUploadsPerDay: 1, PageTimeoutMs: 1000, MaxDiagBytes: 100}
+
+	fake := &countingBrowser{}
+	savedBrowser := youtubeBrowser
+	defer func() { youtubeBrowser = savedBrowser }()
+	youtubeBrowser = fake
+
+	res := HandleYoutube(context.Background(), t.TempDir(), Deps{}, mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Name: "youtube", Arguments: map[string]any{
+			"action": "read", "video_id": "YSNFGgh0aAs", "container": "ghost",
+		}},
+	})
+	text := ""
+	for _, c := range res.Content {
+		switch tc := c.(type) {
+		case mcp.TextContent:
+			text += tc.Text
+		case *mcp.TextContent:
+			text += tc.Text
+		}
+	}
+	if !strings.Contains(text, "is not a declared channel") {
+		t.Fatalf("an undeclared channel was accepted; reply was:\n%s", text)
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("bridge calls after a refusal: %v", fake.calls)
 	}
 }

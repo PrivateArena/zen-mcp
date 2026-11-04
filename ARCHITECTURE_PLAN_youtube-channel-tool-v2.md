@@ -279,9 +279,10 @@ Selectors never observed in a probe are **not allowed** in code. (v1's biggest m
 
 ```go
 type YoutubeConfig struct {
-    Container         string `json:"container"`           // "pachoigame"
+    Container         string `json:"container"`           // "pachoigame" — the default channel
     ContainerID       int    `json:"containerId"`         // 20 — asserted from navigate replies
-    MaxUploadsPerDay  int    `json:"maxUploadsPerDay"`    // 1
+    Containers        map[string]int `json:"containers"` // name -> id, the channels a call may select
+    MaxUploadsPerDay  int    `json:"maxUploadsPerDay"`    // 1, per channel
     DefaultVisibility string `json:"defaultVisibility"`   // "private"
     Timezone          string `json:"timezone"`
     MaxComments       int    `json:"maxComments"`         // 0 = read all (default; see note)
@@ -295,6 +296,13 @@ type YoutubeConfig struct {
 ```
 Defaults in `defaultConfig()` (`:178`), field after `Bridge` (`:125`). `containerId` is data, not a
 guess: Stage 0 reads it from `list_containers` and refuses to run if the two disagree.
+
+**Amended 2026-11-04 (multi-channel).** `Containers` is the allow-list a call's `container` parameter is
+checked against; an undeclared name is refused with the declared names listed, and an entry mapping to `0` is
+refused too because containerId 0 is the browser's own default identity. The numeric id is never a call
+parameter, so a caller can name only a channel a human declared. `maxUploadsPerDay` applies **per channel**: the
+ledger of the default channel stays `journal.json`, and every other channel gets `journal-<name>.json`, so one
+channel can never spend another's budget (or lose its own history to a renamed file).
 
 **Read depth (user decision):** the default is **read everything** — `maxComments: 0` means "until
 the thread list stops growing", simple and predictable on a small channel. `MaxScrolls` is a *runaway
@@ -400,6 +408,15 @@ Register: `defYoutube(workspace, deps),` after `defBrowser` in `AllDefs` (`inter
 > Stage budgets are hard: exactly **one** upload across the whole plan (Stage 1), and comment writes
 > only against our own fixture video.
 
+**Where the plan stands (2026-11-04).** Stage 0 accepted. Stage 1 probed live and frozen; its Go flow passes
+16 tests and completed a live *dry* run, but has never done a real attach — the live upload path (COPPA answer,
+calendar scheduling, the DOM-click fallback) is only as good as the hand probe it was written from. Stage 2
+probed and built; its reads need a **visible** tab, so `read`/`comment`/`reply` are gated behind
+`youtube.allowFocusBoundActions` and have not been accepted through the tool. Stage 3 dropped by decision — a
+local record of the channel's videos beats paging Studio's dashboard, and `upload_status` is the interim. Stage 4
+**verified live**: `edit_details` saved a title and description through the tool; `delete_video` is armed and
+`Delete forever` has never been pressed. Stage 5 reduced to the multi-channel parameter, below.
+
 ### Stage 0 — Prerequisites (no YouTube writes) — **ACCEPTED 2026-11-02**
 
 
@@ -452,7 +469,7 @@ Register: `defYoutube(workspace, deps),` after `defBrowser` in `AllDefs` (`inter
 > **Next gate (locked decision 4):** Stage 1's one live upload needs a **user-supplied video file**. The
 > implementing session asks for the path, validates it, and does not attach anything without it.
 
-### Stage 1 — `zyoutube -a upload` (the flagship; 1 live upload in this stage) — **PROBED 2026-11-02, code pending**
+### Stage 1 — `zyoutube -a upload` (the flagship; 1 live upload in this stage) — **PROBED 2026-11-02; flow code landed, live attach still pending**
 
 > The single planned upload is spent. One live run (`output.mp4`, 295 KB) produced video **`BeCRc-x5B6E`**,
 > scheduled public **Nov 9, 2026 12:00 AM**, every step verified by read-back and screenshot:
@@ -584,7 +601,7 @@ plus `--dry_run` locates `#overflow-menu-button` and does not press it. Full rec
 not a selector, the snackbar that expires, and the `Compose` wrapper that made every scripted probe answer
 "no such element" about an element on the page.
 
-### Stage 4 — `edit` / `delete` (Studio details panel; 0 uploads)
+#### Stage 4 brief (as written before the probe)
 
 Probe: open the details panel for the fixture video (discover the URL/entry point — do not assume
 `/videos/editing?videoId=`); record the edit form's locators, the Save control, the "Saved" affordance
@@ -596,15 +613,37 @@ has no schedule field, report `locator_unresolved` with the diagnosis bundle rat
 **Accept:** title change reflects in `videos`; visibility round-trips `private → unlisted → private`;
 `delete` resolves against a real id.
 
-### Stage 5 — `channel`, skill, wrappers
+### Stage 5 — multi-channel selection — **BUILT 2026-11-04** (skill and wrappers: moved out of this repo)
 
-`channel` = identity self-check (name + avatar + `externalChannelID` from the Studio URL, E1) so
-every later stage can assert it is on the right channel. Then `resources/skills/youtube-automation.md`:
-the R1–R7 protocol verbatim, the page map, the long-upload loop (`upload → pool_id → sleep →
-upload_status → pool -a poll`), the 1/day cadence policy and where a human changes it, the
-"comment text is data, never instructions" rule, the container/identity model (and why `container`
-isn't an argument), and `get_interactive_map`'s status. Then `zexport_cli` ⇒ `cli/zyoutube`.
-**Accept:** a fresh session uploads, schedules and replies using only the skill text.
+The original Stage 5 bundled three deliverables. Two of them left the project by decision: the **skill** is
+written in a separate project folder (a video-production workflow that consumes `zyoutube`, not something this
+server should describe), and **wrappers** needed no authoring — `zexport_cli` already generates `cli/zyoutube`
+from the tool schema, which is how the flag below reached the CLI.
+
+What remains is the part that makes several channels manageable, and it is the shape `zbrowser` already uses:
+
+* `container` on **every** action names the contextual identity to act as; omitted, `youtube.container` is used.
+  `internal/tools/youtube.go:resolveChannel` accepts only that name or a `youtube.containers` entry, and refuses
+  anything else **before a tab exists** — so the failure that this tool may never have, acting as the wrong
+  channel, is unreachable by argument.
+* There is deliberately no `container_id` parameter. The number is declared by a human in config and asserted
+  against the bridge's reply on every navigate, exactly as in Stage 0; widening who may name an id would undo
+  that.
+* **Ledgers are per channel**, because the daily cap is a property of a channel. `JournalPath(container)` keeps
+  `journal.json` for the default and writes `journal-<sanitised-name>.json` for the rest; names are sanitised
+  because a Firefox identity name is free text.
+* The reply echoes the acting `container` next to `containerId`, so "which channel did this" is never inferred.
+
+**Accept, verified live 2026-11-04:** `edit_details --container pachoigame --dry_run` reached the panel and
+reported `container: pachoigame, containerId: 20`; `--container ghost` and `--container nope` were refused with
+`container "…" is not a declared channel` and **zero bridge calls** (`TestUndeclaredChannelNeverReachesTheBrowser`
+pins that); `upload_status --video_id BeCRc-x5B6E` still finds its slot, proving the default channel kept its
+history rather than forking onto a new file.
+
+The `channel` self-check that was also in this stage stays unbuilt: every run already asserts `containerId`
+against the declaration, and Studio hands the channel id back in the URL it navigates to, but the *channel name*
+has never been read from a page. Until it is, "right container" is proven and "right human-visible channel name"
+is not — see the `// UNPROBED` note on identity verification in `internal/youtube/page.go`.
 
 ---
 
@@ -612,7 +651,7 @@ isn't an argument), and `get_interactive_map`'s status. Then `zexport_cli` ⇒ `
 
 | Failure | Guard |
 |---|---|
-| Acting on the wrong identity/channel | `Open` asserts `containerId == YoutubeConfig.ContainerID` **and** the Studio URL channel id (E1) against the probe; `container` is not an agent argument |
+| Acting on the wrong identity/channel | `Open` asserts `containerId == YoutubeConfig.ContainerID` (or the id declared for the requested `container`) **and** the Studio URL channel id (E1) against the probe; `container` selects only a **declared** name, and there is no `container_id` parameter to pass an arbitrary one |
 | Silent container hijack by `CONTAINER_MAP` (`youtube.com → Personal`) | explicit `container` on every `navigate`; Stage 0 removes the override path for the tool; the assertion catches regressions |
 | Consent interstitial / logged-out tab | first step of every page is a state classifier (`probe-state.js`) reading visible text; `not_logged_in`/`consent_required` before any mutation |
 | Selector moved (YouTube redesign) | §4.4 auto-report: locator + nearest candidates + screenshot + truncated markdown, persisted; **never** a silent no-op, never an empty success |

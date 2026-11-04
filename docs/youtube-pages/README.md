@@ -103,3 +103,12 @@ evidence rather than against a guess:
 
 | Step | Locator (bridge params) | Probe that produced it | Verified by (text/state) |
 |---|---|---|---|
+
+## Which channel a run acts as
+
+Every action takes `container` — a Firefox contextual-identity name, the same idea as `zbrowser -a navigate
+--container`. Omit it and `youtube.container` is used. Only names declared in `youtube.containers`
+(`name -> containerId` in `config.json`) are accepted; anything else is refused before a tab exists, because an
+id discovered from the live browser is how a typo becomes another channel. Each channel keeps its own ledger
+(`journal.json` for the default, `journal-<name>.json` for the rest), so the daily upload cap is per channel.
+The probe videos in these pages live in `pachoigame`, containerId 20.

@@ -563,3 +563,33 @@ func TestYoutubeHasNoDefaultIdentity(t *testing.T) {
 		t.Errorf("an unconfigured identity must stay empty, got %+v", y)
 	}
 }
+
+// Several channels: the map is the allow-list a call's container parameter is checked against, so it has to
+// survive the merge alongside the default pair.
+func TestYoutubeDeclaresExtraChannels(t *testing.T) {
+	withConfig(t, `{
+	  "youtube": {"container":"pachoigame","containerId":20,
+	              "containers":{"pachoigame":20,"second":31,"broken":0}}
+	}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	y := Get().Youtube
+	if y.ContainerID != 20 || len(y.Containers) != 3 {
+		t.Fatalf("containers not merged: %+v", y)
+	}
+	if y.Containers["second"] != 31 {
+		t.Errorf("containers[second] = %d, want 31", y.Containers["second"])
+	}
+	if y.MaxScrolls != 40 {
+		t.Errorf("a partial block lost the defaults: %+v", y)
+	}
+	// A single-channel config declares nothing, and that is not an error: the default pair stands alone.
+	withConfig(t, `{"youtube": {"container":"only","containerId":7}}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := Get().Youtube.Containers; len(got) != 0 {
+		t.Errorf("containers = %v, want none declared", got)
+	}
+}

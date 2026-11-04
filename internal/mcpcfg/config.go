@@ -126,7 +126,14 @@ type YoutubeConfig struct {
 	Container string `json:"container"`
 	// ContainerID is the numeric id of Container, asserted against the bridge's
 	// navigate reply so a mis-typed name can never act as another identity.
-	ContainerID int `json:"containerId"`
+	// Containers declares the other channels this machine may act as, as contextual
+	// identity name to numeric id. A call's container param selects one; a name that
+	// is not declared here (and is not Container) is refused rather than looked up,
+	// because discovering an id from the live browser is how a typo becomes another
+	// channel. Container/ContainerID stays the default pair, so a single-channel
+	// config needs no map.
+	Containers  map[string]int `json:"containers"`
+	ContainerID int            `json:"containerId"`
 	// MaxUploadsPerDay is the journal-enforced upload cadence.
 	MaxUploadsPerDay int `json:"maxUploadsPerDay"`
 	// DefaultVisibility applies when an upload names none.

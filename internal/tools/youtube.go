@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -114,7 +117,9 @@ func defYoutube(workspace string, deps Deps) ToolDef {
 		Name:  "youtube",
 		Title: "YouTube channel tool (page automation)",
 		Description: "Act on one configured YouTube channel by driving Firefox through the firefox-bridge — every capability is a real page visit, " +
-			"so what this tool reports is exactly what a human would see. The identity comes from youtube.container in config.json and is verified on every run. " +
+			"so what this tool reports is exactly what a human would see. The channel is a Firefox contextual identity: youtube.container is the default and " +
+			"container selects another declared in youtube.containers, so one server drives several channels; the containerId the bridge reports is asserted " +
+			"against that declaration on every run and an undeclared name is refused. " +
 			"Actions: upload (the Studio wizard: attach, details, checks, visibility, schedule), upload_status (what this machine recorded today), " +
 			"read (the comments a watch page renders), comment and reply (write one, confirmed by re-reading the thread), " +
 			"edit_details (change the title and/or description and commit them with one Save press), delete_video " +
@@ -127,6 +132,7 @@ func defYoutube(workspace string, deps Deps) ToolDef {
 			"description":      strProp("[upload] Description text. [edit_details](required unless title is given) The description to save, written the same way and read back before Save is pressed"),
 			"visibility":       strEnumProp("[upload] How the video is published. schedule needs publish_at and commits through the calendar. [edit_details delete_video] Not supported: the panel's visibility card was never probed as an editable control", []string{"private", "unlisted", "public", "schedule"}),
 			"publish_at":       strProp(`[upload schedule] When to publish, RFC3339 with an explicit offset, e.g. "2026-11-09T10:00:00+07:00". Upload only`),
+			"container":        strProp("Which channel to act as: a Firefox contextual-identity name declared in youtube.containers. Omit it to use youtube.container. An undeclared name is refused before anything opens, because an id looked up from the live browser is how a typo becomes another channel"),
 			"video_id":         strProp("[read comment reply edit_details delete_video](required) The video to act on: an 11-character id, or any watch/youtu.be URL to take it from"),
 			"text":             strProp("[comment reply](required) The comment text to post, at most 10000 characters. One submit press per run, never retried"),
 			"comment_id":       strProp(`[reply](required) The lc id of the row to answer, exactly as read returned it, e.g. "UgwEFzl5ZWYy-wHKInF4AaABAg"`),
@@ -169,7 +175,7 @@ func HandleYoutube(ctx context.Context, workspace string, deps Deps, req mcp.Cal
 		return toolresponse.WrapErrorWithContext(ctx, "youtube", err, start)
 	}
 
-	svc, err := newYoutubeService()
+	svc, err := newYoutubeService(argString(args, "container"))
 	if err != nil {
 		return toolresponse.WrapErrorWithContext(ctx, "youtube", err, start)
 	}
@@ -260,15 +266,18 @@ func containsString(list []string, s string) bool {
 // youtubeReply is what the tool prints: the flow's outcome, the identity it ran as, the bounded diagnostics,
 // and the journal state that charged the slot.
 type youtubeReply struct {
-	VideoID      string          `json:"videoId,omitempty"`
-	URL          string          `json:"url,omitempty"`
-	Visibility   string          `json:"visibility,omitempty"`
-	ScheduledFor string          `json:"scheduledFor,omitempty"`
-	Checks       string          `json:"checks,omitempty"`
-	Panel        string          `json:"panel,omitempty"`
-	DryRun       bool            `json:"dryRun,omitempty"`
-	TabID        string          `json:"tab,omitempty"`
-	ContainerID  int             `json:"containerId,omitempty"`
+	VideoID      string `json:"videoId,omitempty"`
+	URL          string `json:"url,omitempty"`
+	Visibility   string `json:"visibility,omitempty"`
+	ScheduledFor string `json:"scheduledFor,omitempty"`
+	Checks       string `json:"checks,omitempty"`
+	Panel        string `json:"panel,omitempty"`
+	DryRun       bool   `json:"dryRun,omitempty"`
+	TabID        string `json:"tab,omitempty"`
+	ContainerID  int    `json:"containerId,omitempty"`
+	// Container names the channel the run acted as. The reply has to say it: the same action can be aimed at
+	// a different channel on every call, so "which account did this" is never left to be inferred.
+	Container    string          `json:"container,omitempty"`
 	Steps        []string        `json:"steps,omitempty"`
 	Warnings     []string        `json:"warnings,omitempty"`
 	Findings     json.RawMessage `json:"findings,omitempty"`
@@ -344,7 +353,7 @@ func youtubeWatch(ctx context.Context, svc *youtube.Service, args map[string]any
 
 	reply := youtubeReply{
 		VideoID: out.VideoID, URL: out.URL, CommentID: out.CommentID, DryRun: dryRun(args),
-		TabID: tab.ID, ContainerID: tab.ContainerID,
+		TabID: tab.ID, ContainerID: tab.ContainerID, Container: svc.Settings().Container,
 	}
 	if action != "read" {
 		// A write that returns without error has re-read the thread and found its own post in it.
@@ -452,7 +461,7 @@ func youtubeDetails(ctx context.Context, svc *youtube.Service, args map[string]a
 
 	reply := youtubeReply{
 		VideoID: out.VideoID, URL: out.URL, DryRun: dry,
-		TabID: tab.ID, ContainerID: tab.ContainerID,
+		TabID: tab.ID, ContainerID: tab.ContainerID, Container: svc.Settings().Container,
 	}
 	if !dry {
 		// A run that returns without error has watched the page confirm the change — the `Changes saved` snackbar
@@ -527,7 +536,7 @@ func youtubeUpload(ctx context.Context, svc *youtube.Service, args map[string]an
 	reply := youtubeReply{
 		VideoID: out.VideoID, URL: out.URL, Visibility: out.Visibility, ScheduledFor: out.ScheduledFor,
 		Checks: out.Checks, Panel: out.Panel, DryRun: in.DryRun,
-		TabID: tab.ID, ContainerID: tab.ContainerID, Steps: out.Steps, Warnings: out.Warnings,
+		TabID: tab.ID, ContainerID: tab.ContainerID, Container: svc.Settings().Container, Steps: out.Steps, Warnings: out.Warnings,
 		UploadsToday: svc.TodayUploads(), Limit: svc.UploadLimit(),
 	}
 	for _, e := range svc.Trail(12) {
@@ -550,11 +559,12 @@ func youtubeUploadStatus(ctx context.Context, svc *youtube.Service, args map[str
 	slot, found := svc.SlotForVideo(id)
 	if !found {
 		return toolresponse.WrapErrorWithContext(ctx, "youtube",
-			fmt.Errorf("no upload for video %q is recorded in this machine's journal (today: %d upload slot(s)). This action reports what this tool did — it does not browse the channel on request",
-				id, svc.TodayUploads()), start)
+			fmt.Errorf("no upload for video %q is recorded in the journal of channel %q (today: %d upload slot(s)). This action reports what this tool did — it does not browse the channel on request, and every channel keeps its own ledger, so an upload made as another container does not appear here",
+				id, svc.Settings().Container, svc.TodayUploads()), start)
 	}
 	return toolresponse.WrapSuccess(ctx, "youtube", map[string]any{
 		"videoId":      id,
+		"container":    svc.Settings().Container,
 		"slotId":       slot.SlotID,
 		"status":       slot.Status,
 		"claimedAt":    slot.ClaimedAt.Format(time.RFC3339),
@@ -636,9 +646,49 @@ func trimID(s string) string {
 	return s
 }
 
-func newYoutubeService() (*youtube.Service, error) {
+// resolveChannel picks the channel a call acts as: the configured default, or a pair declared in
+// youtube.containers. Anything else is refused - resolving an unknown name against the live browser would let
+// a typo act as whichever channel happens to answer, which is the failure this tool may never have.
+func resolveChannel(cfg mcpcfg.YoutubeConfig, requested string) (string, int, error) {
+	name := strings.TrimSpace(requested)
+	if name == "" || name == cfg.Container {
+		if cfg.Container == "" {
+			return "", 0, fmt.Errorf("youtube: no channel to act as - set youtube.container in config.json, or declare one in youtube.containers and pass container")
+		}
+		return cfg.Container, cfg.ContainerID, nil
+	}
+	id, ok := cfg.Containers[name]
+	if !ok {
+		declared := make([]string, 0, len(cfg.Containers)+1)
+		seen := map[string]bool{}
+		for _, k := range append([]string{cfg.Container}, slices.Collect(maps.Keys(cfg.Containers))...) {
+			if k != "" && !seen[k] {
+				seen[k] = true
+				declared = append(declared, k)
+			}
+		}
+		sort.Strings(declared)
+		return "", 0, fmt.Errorf("%w: container %q is not a declared channel; declare it in youtube.containers (declared: %s)", youtube.ErrUsage, name, strings.Join(declared, ", "))
+	}
+	if id <= 0 {
+		return "", 0, fmt.Errorf("%w: youtube.containers maps %q to %d, and containerId 0 is the browser's default identity, which this tool will not act as", youtube.ErrUsage, name, id)
+	}
+	return name, id, nil
+}
+
+func newYoutubeService(requestedContainer string) (*youtube.Service, error) {
 	cfg := mcpcfg.Get().Youtube
-	path, err := youtube.JournalPath()
+	container, containerID, err := resolveChannel(cfg, requestedContainer)
+	if err != nil {
+		return nil, err
+	}
+	// The default channel keeps the original journal.json - forking its history onto a new file would reset
+	// the cap it has already spent. Only a channel selected over the default gets its own ledger.
+	ledger := container
+	if ledger == cfg.Container {
+		ledger = ""
+	}
+	path, err := youtube.JournalPath(ledger)
 	if err != nil {
 		return nil, err
 	}
@@ -651,8 +701,8 @@ func newYoutubeService() (*youtube.Service, error) {
 		return nil, err
 	}
 	return youtube.NewService(youtubeBrowser, youtube.Settings{
-		Container:         cfg.Container,
-		ContainerID:       cfg.ContainerID,
+		Container:         container,
+		ContainerID:       containerID,
 		MaxUploadsPerDay:  cfg.MaxUploadsPerDay,
 		DefaultVisibility: cfg.DefaultVisibility,
 		Timezone:          cfg.Timezone,

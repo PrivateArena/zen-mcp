@@ -654,3 +654,62 @@ func (f *fakeBrowser) Call(ctx context.Context, action string, params map[string
 	}
 	return map[string]any{"success": true, "data": nil}, nil
 }
+
+// The daily cap is a property of a channel, so a second channel must not read or spend the first one's ledger.
+func TestJournalIsPerChannel(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ZEN_YOUTUBE_JOURNAL", dir+"/journal.json")
+
+	def, err := youtube.JournalPath("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := youtube.JournalPath("second channel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if def != dir+"/journal.json" {
+		t.Errorf("default ledger = %q, want the historic path so an existing journal is not orphaned", def)
+	}
+	if other == def {
+		t.Fatal("a named channel shares the default ledger")
+	}
+	if filepath.Base(other) != "journal-second-channel.json" {
+		t.Errorf("named ledger = %q, want a sanitized per-channel file", other)
+	}
+
+	// Two journals, two budgets: spending one leaves the other untouched.
+	a, err := youtube.OpenJournal(def, 1, time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := youtube.OpenJournal(other, 1, time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Claim("upload"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Claim("upload"); !errors.Is(err, youtube.ErrDailyLimit) {
+		t.Errorf("second claim on the spent channel = %v, want the daily limit", err)
+	}
+	if _, err := b.Claim("upload"); err != nil {
+		t.Errorf("the other channel was charged for it: %v", err)
+	}
+}
+
+// A contextual-identity name is free text and ends up in a file name, so nothing may traverse out of the state
+// directory.
+func TestSanitizeContainerCannotEscapeTheStateDir(t *testing.T) {
+	for in, want := range map[string]string{
+		"pachoigame":       "pachoigame",
+		"../../etc/passwd": "etc-passwd",
+		"work mail":        "work-mail",
+		"":                 "",
+		"...":              "",
+	} {
+		if got := youtube.SanitizeContainer(in); got != want {
+			t.Errorf("youtube.SanitizeContainer(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

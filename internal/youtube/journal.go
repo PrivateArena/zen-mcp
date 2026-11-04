@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -256,20 +257,47 @@ func (j *Journal) Save() error {
 	return os.Rename(tmp, j.path)
 }
 
+// SanitizeContainer turns a contextual-identity name into a file-name fragment. Firefox names are free text,
+// and a path must never be assembled from characters that can escape a directory.
+func SanitizeContainer(s string) string {
+	out := make([]rune, 0, len(s))
+	for _, r := range strings.TrimSpace(s) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '_':
+			out = append(out, r)
+		default:
+			out = append(out, '-')
+		}
+	}
+	return strings.Trim(string(out), "-.")
+}
+
 // DefaultEvidenceDir is where a run writes its screenshots — the plan requires an evidence path in every
 // mutation reply, so the location is fixed rather than asked for.
 func DefaultEvidenceDir() string {
-	base, err := JournalPath()
+	base, err := JournalPath("")
 	if err != nil {
 		return ""
 	}
 	return filepath.Join(filepath.Dir(base), "evidence")
 }
 
-// JournalPath is the default location, honouring XDG_STATE_HOME (§4.6).
-func JournalPath() (string, error) {
+// JournalPath is the ledger of ONE channel, honouring XDG_STATE_HOME (§4.6). The default container keeps the
+// original journal.json; every other container gets its own file, because the daily upload cap is a property
+// of a channel: a shared ledger would let a second channel spend the first one's budget.
+func JournalPath(container string) (string, error) {
+	name := "journal"
+	if c := SanitizeContainer(container); c != "" {
+		name += "-" + c
+	}
 	if custom := os.Getenv("ZEN_YOUTUBE_JOURNAL"); custom != "" {
-		return custom, nil
+		// The override names the DEFAULT ledger, so a per-channel run derives its file from the same base
+		// rather than colliding with it — which matters because tests point this variable at a temp file.
+		if name == "journal" {
+			return custom, nil
+		}
+		ext := filepath.Ext(custom)
+		return strings.TrimSuffix(custom, ext) + "-" + strings.TrimPrefix(name, "journal-") + ext, nil
 	}
 	base := os.Getenv("XDG_STATE_HOME")
 	if base == "" {
@@ -279,5 +307,5 @@ func JournalPath() (string, error) {
 		}
 		base = filepath.Join(home, ".local", "state")
 	}
-	return filepath.Join(base, "zen-mcp", "youtube", "journal.json"), nil
+	return filepath.Join(base, "zen-mcp", "youtube", name+".json"), nil
 }

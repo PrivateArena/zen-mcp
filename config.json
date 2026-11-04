@@ -42,7 +42,9 @@
   ],
   "pooling": {
     "enabled": true,
-    "tools": ["browser"],
+    "tools": [
+      "browser"
+    ],
     "elapsedMs": 120000,
     "ttlMinutes": 60,
     "maxJobs": 256
@@ -66,7 +68,10 @@
     "wizardTimeoutMs": 900000,
     "processTimeoutMs": 1800000,
     "maxUploadBytes": 8589934592,
-    "maxDiagBytes": 8192
+    "maxDiagBytes": 8192,
+    "containers": {
+      "pachoigame": 20
+    }
   },
   "codegraph_watcher_debounce_ms": 300000,
   "codegraph_skip_embeddings": true,
