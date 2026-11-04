@@ -248,6 +248,52 @@ func (s *Service) Watch(ctx context.Context, in WatchInput, flow func(context.Co
 	return out, page.Tab(), err
 }
 
+// Details runs one Studio details-panel action. Like Watch it claims no slot here: the mutation is one press
+// deep inside the flow (Save, or Delete forever), so §4.6's claim-before-mutate order puts the claim next to
+// that press, inside the flow. The ledger is still owned here — the flow is handed the journal and nothing
+// else, and a dry run is handed none at all, because it presses nothing and must consume nothing.
+func (s *Service) Details(ctx context.Context, in DetailsInput, flow func(context.Context, *Page, DetailsInput, Timings) (Outcome, error)) (Outcome, Tab, error) {
+	if err := s.CheckIdentity(); err != nil {
+		return Outcome{}, Tab{}, err
+	}
+	if in.VideoID == "" {
+		return Outcome{}, Tab{}, fmt.Errorf("%w: a details panel action needs a video_id", ErrUsage)
+	}
+	switch in.Action {
+	case "edit":
+		if strings.TrimSpace(in.Title) == "" && strings.TrimSpace(in.Description) == "" {
+			return Outcome{}, Tab{}, fmt.Errorf("%w: edit_details needs title and/or description — there would be nothing for the page to save", ErrUsage)
+		}
+	case "delete":
+		// Checked here as well as in the flow so the refusal happens before a tab is created at all: a request
+		// without the confirmation parameter must not so much as open the page whose menu holds the delete.
+		if !in.Confirmed {
+			return Outcome{}, Tab{}, fmt.Errorf("%w: delete_video needs yes_i_understand=true — deleting a video is permanent, and nothing was opened or pressed", ErrUsage)
+		}
+	default:
+		return Outcome{}, Tab{}, fmt.Errorf(`%w: details action %q is not edit or delete`, ErrUsage, in.Action)
+	}
+
+	// Foreground, on the reasoning Service.Watch records (watch.md trap 6: a hidden document is where YouTube
+	// defers work rather than merely delaying it) — and this flow both writes into a contenteditable and presses
+	// a Lit checkbox, both of which need the page to be live. Service.Tab still downgrades this to a background
+	// tab unless youtube.allowFocusBoundActions allows a foreground one, so the focus policy is unchanged.
+	// UNPROBED: whether the details panel renders its fields in a hidden tab; studio-details.md never asked.
+	page, err := s.Tab(ctx, "about:blank", true)
+	if err != nil {
+		return Outcome{}, Tab{}, err
+	}
+	page.RequireIdentity(s.set.ContainerID, s.channelHint())
+	if dir := s.EvidenceDirFor(in.Action); dir != "" {
+		in.Evidence = dir
+	}
+	if !in.DryRun {
+		in.Journal = s.journal
+	}
+	out, err := flow(ctx, page, in, Timings{Action: s.pageTimeout(), Wizard: s.wizardTimeout(), MaxScrolls: s.set.MaxScrolls})
+	return out, page.Tab(), err
+}
+
 // TodayUploads is how much of the daily cap the journal says is spent, including abandoned slots.
 func (s *Service) TodayUploads() int { return s.journal.TodayUploads() }
 

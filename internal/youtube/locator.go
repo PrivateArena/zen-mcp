@@ -15,7 +15,13 @@ func Compose(program string, args any) string {
 	if strings.TrimSpace(string(enc)) == "null" {
 		enc = []byte("{}")
 	}
-	return "(async()=>{let args=" + string(enc) + ";\n" + program + "\n})()"
+	// A statement list, never an IIFE. The bridge wraps the program in its own async function and returns what
+	// that function returns, so a `return` nested inside (async()=>{…})() is invisible to it: the call comes
+	// back success with no result at all, and the caller decodes a zero Finding that reads "no such element"
+	// about an element the page is showing. Measured 2026-11-04: the same script and args returned nothing
+	// wrapped and {ok:true,count:1} unwrapped. Keeping `args` as a leading let also satisfies the bridge's rule
+	// that the first token is a statement keyword, which is why every program here starts with a comment.
+	return "let args = " + string(enc) + ";\n" + program
 }
 
 // Locator is one page element addressed five ways at once — R4. A flow names what it wants; the

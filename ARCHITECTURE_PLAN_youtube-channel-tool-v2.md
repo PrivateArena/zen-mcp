@@ -575,6 +575,15 @@ reading rendered rows. **Accept:** the Stage 1 video appears under `filter=sched
 date, and the fixture (`whiteboard`) appears with `visibility: unlisted` — which also proves the
 visibility chip is read rather than assumed.
 
+### Stage 4 — `edit` / `delete` — **PROBED LIVE 2026-11-04; edit verified through the tool, delete armed but never fired**
+
+`edit_details` ran live end to end: both fields written, `Save` pressed once, the journal holding
+`kind=edit status=completed`. `delete_video` refuses without `yes_i_understand` before a tab exists, and with it
+plus `--dry_run` locates `#overflow-menu-button` and does not press it. Full record:
+`docs/youtube-pages/studio-details.md`, including its "Run of the flow code" section — the Save address that is
+not a selector, the snackbar that expires, and the `Compose` wrapper that made every scripted probe answer
+"no such element" about an element on the page.
+
 ### Stage 4 — `edit` / `delete` (Studio details panel; 0 uploads)
 
 Probe: open the details panel for the fixture video (discover the URL/entry point — do not assume

@@ -166,6 +166,14 @@ func (p *Page) Eval(ctx context.Context, program string, args any) (json.RawMess
 	if err != nil {
 		return nil, p.fail("web_eval", trim(program), err)
 	}
+	// A reply that carries success but no result decodes into a zero Finding, and a zero Finding says "the page
+	// has no such element" — which is a lie, and the kind of lie that makes a flow hunt for an element the page
+	// is showing. Say what actually came back instead.
+	if s := strings.TrimSpace(string(raw)); s == "" || s == "null" {
+		note := "reply carried no result: " + trim(fmt.Sprintf("%v", reply))
+		p.diag.Note("web_eval", trim(program), note)
+		return nil, p.fail("web_eval", trim(program), fmt.Errorf("%s", note))
+	}
 	p.diag.Note("web_eval", trim(program), "ok")
 	return raw, nil
 }
@@ -347,14 +355,14 @@ func (p *Page) fail(action, subj string, err error) error {
 	return c
 }
 
+// pick reads one key out of a reply body. Falling back to the whole map when the key is absent would hand the
+// caller the envelope where it expected the program's value, and a JSON object decodes into any struct: the
+// result was a zero Finding that claimed an on-page element did not exist. Absent now stays absent.
 func pick(m map[string]any, k string) any {
 	if m == nil {
 		return nil
 	}
-	if v, ok := m[k]; ok {
-		return v
-	}
-	return m
+	return m[k]
 }
 
 // bridgeError extracts the bridge's own failure text. A reply with success:false is *not* an action

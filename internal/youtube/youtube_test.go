@@ -120,18 +120,23 @@ func TestEveryYoutubeScriptIsEmbeddedAndParseable(t *testing.T) {
 func TestComposeKeepsTheProgramCallable(t *testing.T) {
 	for _, first := range []string{"return 1;", "var x = 1;", "let y = 2;", "const z = 3;", "x = 4; return x;"} {
 		got := youtube.Compose(first, map[string]any{"a": 1})
-		if !strings.HasPrefix(got, "(async()=>{") || !strings.HasSuffix(got, "})()") {
-			t.Fatalf("%q did not become an async IIFE: %s", first, got)
+		// The bridge returns what the program's own top-level return yields, so the program must stay at the
+		// top level: wrapping it in (async()=>{…})() buries the return and the call comes back with no result.
+		if strings.Contains(got, "async") || strings.HasPrefix(strings.TrimSpace(got), "(") {
+			t.Fatalf("%q was wrapped, which hides its return from the bridge: %s", first, got)
 		}
-		if !strings.Contains(got, "let args=") {
+		if !strings.HasPrefix(got, "let args = ") {
 			t.Fatalf("%q lost the args prelude: %s", first, got)
 		}
-		if strings.Contains(got, "let args;") {
-			t.Fatalf("%q got the empty-args form, which makes args undefined: %s", first, got)
+		if !strings.HasSuffix(got, first) {
+			t.Fatalf("%q is not the program, preceded only by the prelude: %s", first, got)
+		}
+		if strings.Contains(got, "let args;") || strings.Contains(got, "args = ;") {
+			t.Fatalf("%q got an empty-args form, which makes args undefined: %s", first, got)
 		}
 	}
-	if !strings.Contains(youtube.Compose("return 1;", nil), "let args={}") {
-		t.Fatal("a nil payload must still define args")
+	if got := youtube.Compose("return 1;", nil); !strings.Contains(got, "args = {}") {
+		t.Fatalf("a nil payload must still define args, got %s", got)
 	}
 }
 
@@ -484,6 +489,29 @@ func TestClickFallsThroughToThePageChannel(t *testing.T) {
 	}
 }
 
+// A bridge reply can say success while carrying no result. Decoded quietly, that is a zero Finding, which
+// tells the caller "the page has no such element" about an element it is showing — the failure mode that made
+// a rendered Studio panel look like a missing one. It must be an error, and it must say what came back.
+func TestEvalRefusesAReplyThatCarriesNoResult(t *testing.T) {
+	br := newFakeBrowser(youtube.Tab{ID: "t_nr", ContainerID: 20})
+	br.silent = true
+	diag, _ := youtube.NewDiag("pachoigame", 4096, "")
+	p := youtube.NewPage(br, youtube.Tab{ID: "t_nr", ContainerID: 20}, diag)
+	_, err := p.Eval(context.Background(), "return {ok:true}", nil)
+	if err == nil {
+		t.Fatal("a result-less reply reported success")
+	}
+	if !strings.Contains(err.Error(), "no result") {
+		t.Fatalf("error = %v, want it to say the reply carried no result", err)
+	}
+	// And the composed program is a statement list, so the bridge sees our return as its own.
+	if got := youtube.Compose("return 1", map[string]any{"a": 1}); strings.Contains(got, "async") || strings.HasPrefix(got, "(") {
+		t.Fatalf("composed program is wrapped, which the bridge cannot return from: %q", got)
+	} else if !strings.HasPrefix(got, "let args = ") {
+		t.Fatalf("composed program must open with a statement the bridge accepts, got %q", got)
+	}
+}
+
 func TestPageScrollsByNumericOffsetNotAScript(t *testing.T) {
 	br := newFakeBrowser(youtube.Tab{ID: "t_sc", ContainerID: 20})
 	diag, _ := youtube.NewDiag("pachoigame", 4096, "")
@@ -563,6 +591,7 @@ type fakeBrowser struct {
 	scrollParams []map[string]any
 	callsJSON    []string
 	clickFails   string // the error text a click reply carries, "" for success
+	silent       bool   // answer web_eval with success and no result at all
 	domClicks    int    // page-channel presses, which must never follow an ambiguous bridge press
 }
 
@@ -598,6 +627,9 @@ func (f *fakeBrowser) Call(ctx context.Context, action string, params map[string
 	case "screenshot":
 		return map[string]any{"success": true, "data": nil}, nil
 	case "web_eval":
+		if f.silent {
+			return map[string]any{"success": true, "data": map[string]any{"logs": []any{}}}, nil
+		}
 		code, _ := params["code"].(string)
 		var result any
 		switch {

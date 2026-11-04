@@ -34,7 +34,7 @@ func TestYoutubeSchemaDeclaresTheSafetyParams(t *testing.T) {
 			t.Fatal("the youtube tool exposes code, which would bypass the identity check")
 		}
 	}
-	for _, want := range []string{"action", "file", "made_for_kids", "visibility", "publish_at", "dry_run", "explain", "video_id", "text", "comment_id", "max", "order", "page_token"} {
+	for _, want := range []string{"action", "file", "made_for_kids", "visibility", "publish_at", "dry_run", "explain", "video_id", "text", "comment_id", "max", "order", "page_token", "yes_i_understand"} {
 		if _, ok := def.Schema["properties"].(map[string]any)[want]; !ok {
 			t.Errorf("schema does not declare %q", want)
 		}
@@ -69,7 +69,6 @@ func TestYoutubeActionValidation(t *testing.T) {
 		want string
 	}{
 		{map[string]any{}, "action is required"},
-		{map[string]any{"action": "delete_video"}, ""},
 		{map[string]any{"action": "upload", "made_for_kids": false}, "file is required"},
 		{map[string]any{"action": "upload", "file": "/tmp/x.mp4"}, "made_for_kids is required"},
 		{map[string]any{"action": "upload", "file": "/tmp/x.mp4", "made_for_kids": false, "visibility": "secret"}, "visibility must be one of"},
@@ -93,15 +92,55 @@ func TestYoutubeActionValidation(t *testing.T) {
 		// Sorting and paging need controls the probe never recorded, so they are refused, not ignored.
 		{map[string]any{"action": "read", "video_id": "YSNFGgh0aAs", "order": "newest"}, "not supported yet"},
 		{map[string]any{"action": "read", "video_id": "YSNFGgh0aAs", "page_token": "next"}, "not supported yet"},
+		// Stage 4: every details-panel action addresses a video, an edit needs a field to write, and a delete is
+		// refused until the confirmation parameter says true — as a boolean or as the string a shell wrapper sends,
+		// but not as anything this tool cannot read.
+		{map[string]any{"action": "edit_details"}, "video_id is required"},
+		{map[string]any{"action": "edit_details", "video_id": "YSNFGgh0aAs"}, "at least one of title, description is required"},
+		{map[string]any{"action": "edit_details", "video_id": "YSNFGgh0aAs", "title": "  "}, "at least one of title, description is required"},
+		{map[string]any{"action": "edit_details", "video_id": "YSNFGgh0aAs", "title": "New title"}, ""},
+		{map[string]any{"action": "edit_details", "video_id": "YSNFGgh0aAs", "description": "New description"}, ""},
+		{map[string]any{"action": "edit_details", "video_id": "YSNFGgh0aAs", "title": "T", "description": "D"}, ""},
+		{map[string]any{"action": "edit_details", "video_id": "YSNFGgh0aAs", "title": "T", "dry_run": true}, ""},
+		// The wizard's and the watch page's parameters do not ride along, and the delete's confirmation belongs to
+		// the delete alone — no other action can set it, so nothing can be talked into believing it was confirmed.
+		{map[string]any{"action": "edit_details", "video_id": "YSNFGgh0aAs", "title": "T", "file": "/tmp/x.mp4"}, "does not apply"},
+		{map[string]any{"action": "edit_details", "video_id": "YSNFGgh0aAs", "title": "T", "publish_at": "2026-11-09T10:00:00+07:00"}, "does not apply"},
+		{map[string]any{"action": "edit_details", "video_id": "YSNFGgh0aAs", "title": "T", "text": "hi"}, "does not apply"},
+		{map[string]any{"action": "edit_details", "video_id": "YSNFGgh0aAs", "title": "T", "comment_id": "UgwEFzl5ZWYy-wHKInF4AaABAg"}, "does not apply"},
+		{map[string]any{"action": "edit_details", "video_id": "YSNFGgh0aAs", "title": "T", "made_for_kids": false}, "does not apply"},
+		{map[string]any{"action": "edit_details", "video_id": "YSNFGgh0aAs", "title": "T", "yes_i_understand": true}, "does not apply"},
+		// The panel shows them but they were never probed as editable, so they are refused rather than ignored.
+		{map[string]any{"action": "edit_details", "video_id": "YSNFGgh0aAs", "title": "T", "visibility": "private"}, "not supported yet"},
+		{map[string]any{"action": "edit_details", "video_id": "YSNFGgh0aAs", "title": "T", "tags": []any{"a"}}, "not supported yet"},
+		{map[string]any{"action": "delete_video"}, "video_id is required"},
+		{map[string]any{"action": "delete_video", "video_id": "YSNFGgh0aAs"}, "yes_i_understand must be true"},
+		{map[string]any{"action": "delete_video", "video_id": "YSNFGgh0aAs", "yes_i_understand": false}, "yes_i_understand must be true"},
+		{map[string]any{"action": "delete_video", "video_id": "YSNFGgh0aAs", "yes_i_understand": "false"}, "yes_i_understand must be true"},
+		{map[string]any{"action": "delete_video", "video_id": "YSNFGgh0aAs", "yes_i_understand": "maybe"}, "yes_i_understand must be true"},
+		{map[string]any{"action": "delete_video", "video_id": "YSNFGgh0aAs", "yes_i_understand": 1}, "yes_i_understand must be true"},
+		{map[string]any{"action": "delete_video", "video_id": "YSNFGgh0aAs", "yes_i_understand": true}, ""},
+		{map[string]any{"action": "delete_video", "video_id": "YSNFGgh0aAs", "yes_i_understand": "true"}, ""},
+		{map[string]any{"action": "delete_video", "video_id": "YSNFGgh0aAs", "yes_i_understand": "yes"}, ""},
+		{map[string]any{"action": "delete_video", "video_id": "YSNFGgh0aAs", "yes_i_understand": true, "dry_run": true}, ""},
+		{map[string]any{"action": "delete_video", "video_id": "YSNFGgh0aAs", "yes_i_understand": true, "title": "T"}, "does not apply"},
+		{map[string]any{"action": "delete_video", "video_id": "YSNFGgh0aAs", "yes_i_understand": true, "description": "D"}, "does not apply"},
+		{map[string]any{"action": "delete_video", "video_id": "YSNFGgh0aAs", "yes_i_understand": true, "text": "hi"}, "does not apply"},
+		{map[string]any{"action": "delete_video", "video_id": "YSNFGgh0aAs", "yes_i_understand": true, "file": "/tmp/x.mp4"}, "does not apply"},
+		{map[string]any{"action": "delete_video", "video_id": "YSNFGgh0aAs", "yes_i_understand": true, "made_for_kids": false}, "does not apply"},
+		{map[string]any{"action": "delete_video", "video_id": "YSNFGgh0aAs", "yes_i_understand": true, "category": "Science & Technology"}, "not supported yet"},
+		// ...and no other action accepts the delete's confirmation.
+		{map[string]any{"action": "upload", "file": "/tmp/x.mp4", "made_for_kids": false, "yes_i_understand": true}, "does not apply"},
+		{map[string]any{"action": "upload_status", "video_id": "abc", "yes_i_understand": true}, "does not apply"},
+		{map[string]any{"action": "read", "video_id": "YSNFGgh0aAs", "yes_i_understand": true}, "does not apply"},
+		{map[string]any{"action": "comment", "video_id": "YSNFGgh0aAs", "text": "hi", "yes_i_understand": true}, "does not apply"},
+		{map[string]any{"action": "reply", "video_id": "YSNFGgh0aAs", "comment_id": "UgwEFzl5ZWYy-wHKInF4AaABAg", "text": "hi", "yes_i_understand": true}, "does not apply"},
 	}
 	for _, c := range cases {
 		action, _ := c.args["action"].(string)
 		spec, ok := youtubeActionSpecs[action]
 		if action != "" && !ok {
-			if !strings.Contains(action, "delete") {
-				t.Fatalf("action %q is not declared", action)
-			}
-			continue
+			t.Fatalf("action %q is not declared", action)
 		}
 		if action == "" {
 			if !strings.Contains(c.want, "action") {
@@ -119,9 +158,78 @@ func TestYoutubeActionValidation(t *testing.T) {
 			}
 			continue
 		}
-		if c.want != "" && !strings.Contains(err.Error(), c.want) {
+		if c.want == "" {
+			// A case that lists no want is a case the validator must accept: an unexpected refusal is exactly the
+			// bug this matrix exists to catch.
+			t.Errorf("%v: want no error, got %q", c.args, err.Error())
+			continue
+		}
+		if !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%v: want %q, got %q", c.args, c.want, err.Error())
 		}
+	}
+	// An action with no spec — Stage 3's list_videos, still unbuilt — is refused as unknown by the dispatcher
+	// before this validator runs, which is why it is not a row above.
+	if _, declared := youtubeActionSpecs["list_videos"]; declared {
+		t.Error("list_videos has a spec but no flow: an unbuilt action must not be validated as though it worked")
+	}
+}
+
+// trueArg is the reader behind every confirmation: the CLI wrapper can only send a string, and a value this tool
+// cannot read must never authorise a press that cannot be undone.
+// The generated CLI wrapper can only send strings, and made_for_kids is a legal declaration rather than a
+// preference: the string form must be honoured, and an unreadable value refused instead of defaulted.
+func TestStrictBoolReadsTheStringFormAndRefusesGarbage(t *testing.T) {
+	yes := []any{true, "true", "TRUE", "yes", "y", "1", float64(1)}
+	no := []any{false, "false", "0", "no", "n", float64(0), nil, ""}
+	for _, v := range yes {
+		got, err := strictBool(map[string]any{"made_for_kids": v}, "made_for_kids")
+		if err != nil || !got {
+			t.Fatalf("%#v read as %v (%v), want true and no error", v, got, err)
+		}
+	}
+	for _, v := range no {
+		got, err := strictBool(map[string]any{"made_for_kids": v}, "made_for_kids")
+		if err != nil || got {
+			t.Fatalf("%#v read as %v (%v), want false and no error", v, got, err)
+		}
+	}
+	// Absent is not an error here; presence is validated separately, and dry_run relies on this reading false.
+	if got, err := strictBool(map[string]any{}, "dry_run"); err != nil || got {
+		t.Fatalf("absent value read as %v (%v), want false and no error", got, err)
+	}
+	for _, v := range []any{"maybe", "sure", float64(7), []any{"true"}} {
+		got, err := strictBool(map[string]any{"made_for_kids": v}, "made_for_kids")
+		if err == nil {
+			t.Fatalf("%#v accepted as %v, want a refusal", v, got)
+		}
+		if !strings.Contains(err.Error(), "made_for_kids") || !strings.Contains(err.Error(), "true or false") {
+			t.Fatalf("error = %v, want it to name the parameter and the accepted values", err)
+		}
+		if !strings.Contains(err.Error(), "guess") {
+			t.Fatalf("error = %v, want it to say the tool will not guess", err)
+		}
+	}
+}
+
+func TestTrueArgReadsOnlyYes(t *testing.T) {
+	for _, c := range map[string]any{
+		"true": true, "TRUE": true, "True": true, "true ": true, "1": true, "yes": true, "on": true,
+	} {
+		if !trueArg(map[string]any{"p": c}, "p") {
+			t.Errorf("%v was read as no", c)
+		}
+	}
+	for _, c := range []any{"false", "0", "no", "", "maybe", nil, 0, 2, "1.0", []any{"true"}} {
+		if trueArg(map[string]any{"p": c}, "p") {
+			t.Errorf("%#v was read as a confirmation", c)
+		}
+	}
+	if trueArg(map[string]any{}, "p") {
+		t.Error("an absent parameter was read as a confirmation")
+	}
+	if !trueArg(map[string]any{"p": true}, "p") {
+		t.Error("a real JSON true was not read as a confirmation")
 	}
 }
 
@@ -195,7 +303,7 @@ func TestYoutubeActionSpecsMatchTheSchema(t *testing.T) {
 	def := youtubeDef(t)
 	props := def.Schema["properties"].(map[string]any)
 	seen := map[string]bool{}
-	for _, action := range []string{"upload", "upload_status", "read", "comment", "reply"} {
+	for _, action := range []string{"upload", "upload_status", "read", "comment", "reply", "edit_details", "delete_video"} {
 		spec, ok := youtubeActionSpecs[action]
 		if !ok {
 			t.Fatalf("%s has no spec", action)
@@ -217,16 +325,18 @@ func TestYoutubeActionSpecsMatchTheSchema(t *testing.T) {
 	}
 }
 
-// Stage 2 builds the watch page comment flow; the rest are future stages and must not be advertised early.
+// Stage 2 builds the watch page comment flow and Stage 4 the Studio details panel; the rest are future stages and
+// must not be advertised early.
 func TestYoutubeDoesNotAdvertiseUnbuiltActions(t *testing.T) {
 	def := youtubeDef(t)
-	for _, banned := range []string{"edit_details", "list_videos", "top_comment", "delete_video", "get_video", "edit_video", "analytics", "read_comments"} {
+	for _, banned := range []string{"list_videos", "top_comment", "get_video", "edit_video", "analytics", "read_comments"} {
 		if enumHas(def, banned) {
 			t.Errorf("%s is advertised before its stage is built — the tool would promise a page flow that does not exist", banned)
 		}
 	}
-	// The mirror of that: the three watch page actions are built, so an agent must be able to find them.
-	for _, built := range []string{"read", "comment", "reply"} {
+	// The mirror of that: the built actions must be findable by an agent — including Stage 4's two, whose page
+	// flow is written and whose refusals are wired.
+	for _, built := range []string{"read", "comment", "reply", "edit_details", "delete_video"} {
 		if !enumHas(def, built) {
 			t.Errorf("%s is built but not advertised", built)
 		}

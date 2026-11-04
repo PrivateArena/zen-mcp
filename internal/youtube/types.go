@@ -54,6 +54,28 @@ type WatchInput struct {
 	Journal *Journal
 }
 
+// DetailsInput is one Studio details-panel action: edit the title and/or description and save them, or delete
+// the video. It is the page recorded in docs/youtube-pages/studio-details.md — the entry URL takes the video id,
+// so no content list has to be scraped to find a video to act on. VideoID is resolved to a bare id by the tool
+// layer, exactly as WatchInput's is; a flow is never handed a URL it would have to trust.
+type DetailsInput struct {
+	VideoID     string
+	Action      string // edit | delete
+	Title       string
+	Description string
+	DryRun      bool
+	// Confirmed is the caller's explicit go-ahead for a delete, and nothing else opens the overflow menu
+	// without it (§5.4). It maps to the tool's yes_i_understand and to nothing else, so no other action can
+	// set it by accident and no read or edit can be talked into carrying it.
+	Confirmed bool
+	// Journal records the mutation. The claim is taken inside the flow, at the press that performs it — the
+	// Save press or the Delete-forever press — because that, not the page load, is where the channel changes
+	// (§4.6). Nil for a dry run, which presses nothing.
+	Journal *Journal
+	// Evidence is the directory this run's screenshots go to, set by the service.
+	Evidence string
+}
+
 // Finding is one probed element, paired with the role it played in a flow, for --explain.
 type RoleFinding struct {
 	Role    string  `json:"role"`

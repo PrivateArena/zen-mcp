@@ -95,3 +95,42 @@ Write method is the Stage 1 lesson unchanged: `focus()` → `selectNodeContents`
 5. Read dialogs and menus with `offsetWidth > 0`.
 6. `--dry_run` stops after reading the fields and the menu structure: it must not press `Save`, must not open
    the delete dialog.
+
+---
+
+## Run of the *flow code* (2026-11-04) — what only the Go path could show
+
+`zyoutube -a edit_details --video_id BeCRc-x5B6E --title … --description …` completed live: wrote both fields,
+pressed `Save` once, and the journal recorded it (`slotId s_20261104T100046_7, kind edit, status completed`).
+Three things came out of running the code that the hand probe could not show.
+
+1. **`#save`'s display path is not a selector.** §2 records the path as
+   `ytcp-button#save > div > ytcp-button-shape > button`. Measured against the live page: every `>`-chain form
+   gave **0 hits**, `ytcp-button#save button` gave **1**, and `ytcp-button#save` has **no shadow root** — its
+   children are a `dom-if` and a `div`, so the shape is not a child of the host at all. The flow now carries the
+   shortest measured-resolving form (§4 trap 8). This is the general lesson: a path a probe prints is a
+   description of where a node lives, and only the *scoped* or *descendant* form of it is queryable.
+2. **The state probe was being handed the display string as an address**, so it answered "buttons: none" while a
+   visible Save button sat there — which turned a save that had really landed into an `ErrTransient`. The probe
+   and the press must be given the *same* address, and the summary must say "0 of 4 dialogs shown" rather than
+   silently omitting what it could not resolve.
+3. **The snackbar is decoration; the flip is the signal.** `Changes saved` lived entirely inside the gap between
+   two polls, so requiring both signals reported a successful edit as an unconfirmed commit — the worst possible
+   outcome for a flow whose whole job is to say whether the change landed. `#save button` going
+   `disabled: false → true` alone now confirms, with the missed snackbar stated as a warning.
+
+### And one bug underneath every page read
+
+`Compose` wrapped each program in `(async () => { … })()` to introduce `args`. The bridge returns what the
+program's **own top-level `return`** yields, so that wrapper buried it: every scripted probe came back
+`{"success":true,"data":{"logs":[]}}` — no `result` — and `pick`'s "fall back to the whole map" then decoded into
+a zero `Finding`, which means *"the page has no such element"* about an element the page is showing. Reproduced
+side by side with the same script and the same args: wrapped → no result, statement list →
+`{ok:true,count:1,css:"#textbox"}`.
+
+Fixed in two places, because the silent version is the dangerous one:
+`Compose` now emits `let args = …;` + the program (no wrapper, first token still a statement keyword), and
+`Eval` refuses a reply that carries success but no result instead of handing back an empty Finding.
+
+`Delete forever` has still not been pressed: `delete_video` refuses without `yes_i_understand` before opening a
+tab, and with it and `--dry_run` it locates `#overflow-menu-button` and does not press it.

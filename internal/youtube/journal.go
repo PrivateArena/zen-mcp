@@ -134,7 +134,11 @@ func bindID(s *JournalSlot, pageID string) {
 	if pageID == "" {
 		return
 	}
-	if s.Kind == "" || s.Kind == "upload" {
+	// upload/edit/delete are all named by a video id — for an edit or a delete the id is the one the details
+	// URL carries (studio-details.md §1), which the flow read off the page it acted on. Putting it in VideoID is
+	// what lets SlotForVideo answer a lookup for that video; a comment id must never be returned for one.
+	switch s.Kind {
+	case "", "upload", "edit", "delete":
 		s.VideoID = pageID
 		return
 	}

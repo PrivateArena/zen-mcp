@@ -434,11 +434,16 @@ func order(t *testing.T, clicks []string, first, second string) error {
 }
 
 func payload(code string) []byte {
-	start := strings.Index(code, "let args=")
+	// Locate the prelude by its keyword, not its spacing: Compose owns that formatting, and a helper that
+	// silently answers with empty args when the spacing changes would hide a real defect from itself.
+	start := strings.Index(code, "args")
 	if start < 0 {
 		return []byte("{}")
 	}
-	rest := code[start+len("let args="):]
+	rest := code[start:]
+	if brace := strings.IndexByte(rest, '{'); brace > 0 {
+		rest = rest[brace:]
+	}
 	depth, end := 0, 0
 	for i, r := range rest {
 		switch r {
