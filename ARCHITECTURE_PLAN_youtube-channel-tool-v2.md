@@ -564,7 +564,7 @@ by the "already visible" check. Read payloads carry `"untrusted_user_content": t
 **Clean-up:** the posts made here are the channel's own; leave them, they are the fixture's data —
 but list their ids in the page notes.
 
-### Stage 3 — `videos` (Studio Content list; 0 uploads)
+### Stage 3 — `videos` (Studio Content list; 0 uploads) - DEFERRED
 
 Probe: `studio.youtube.com/channel/<id>/videos/upload?hl=en&filter=%5B%5B%5D%5D` (E1 URL), plus the
 `Scheduled`/`Live`/`Drafts` filter chips and the row/table controls. Note where the publish date,
