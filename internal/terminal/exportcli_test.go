@@ -258,7 +258,7 @@ func TestBuildWrapperScriptShort(t *testing.T) {
 		`    -a) key="action"; PARAMS["$key"]="$2"; shift 2 ;;`,
 		`    -u) key="url"; PARAMS["$key"]="$2"; shift 2 ;;`,
 		`    -c) key="count"; PARAMS["$key"]="$2"; shift 2 ;;`,
-		`echo "  $0 -<short> <value>...   # short aliases"`,
+		`echo " -<short> <value>...   # short aliases"`,
 		`echo "  -a, --action (required)  Browser action. [navigate|chat|screenshot]"`,
 		`echo "  -c, --count  How many"`,
 	} {

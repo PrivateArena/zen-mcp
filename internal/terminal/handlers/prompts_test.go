@@ -193,8 +193,8 @@ func TestGeneratePiPromptsWritesFiles(t *testing.T) {
 	}
 	content := string(data)
 
-	if !strings.Contains(content, "description: Multi argument prompt") {
-		t.Errorf("missing description in frontmatter:\n%s", content)
+	if !strings.Contains(content, "description: \"Multi argument prompt\"") {
+		t.Errorf("missing quoted description in frontmatter:\n%s", content)
 	}
 	if !strings.Contains(content, "argument-hint: <i> [o]") {
 		t.Errorf("argument-hint must mark required <i> and optional [o]:\n%s", content)
