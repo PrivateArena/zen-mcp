@@ -74,9 +74,11 @@ func HandleWorkspaceAction(ctx context.Context, path, workspace string, deps Dep
 	toolsChanged := []string{}
 	resolvedNewRoot := actualNewRoot
 	if resolvedNewRoot != prevPath && deps.Reg != nil {
-		result := toolstate.ApplyToolStates(resolvedNewRoot, deps.Reg)
-		if result.Changed != nil {
-			toolsChanged = result.Changed
+		// Reported only: the MCP server instance for the new root applies its own
+		// tool states when it is built, so this call cannot mis-flag whichever
+		// workspace the request happened to arrive on.
+		if changed := toolstate.DiffToolStates(resolvedNewRoot, deps.Reg); changed != nil {
+			toolsChanged = changed
 		}
 	}
 

@@ -31,8 +31,13 @@ const (
 )
 
 type RouteDeps struct {
-	CreateMCPServer       func(id string) *mcpserver.MCPServer
-	Registry              *toolregistry.ToolRegistry
+	CreateMCPServer func(id string) *mcpserver.MCPServer
+	Registry        *toolregistry.ToolRegistry
+	// RefreshWorkspace re-applies one workspace's tool states to the server that
+	// is already cached for it. A cached server was built from the config as it was
+	// then, so without this an edit to config.json or to a project tier only takes
+	// effect once the cache happens to evict that workspace.
+	RefreshWorkspace      func(id string)
 	Shared                *shared.Store
 	PendingCollaborations *tools.CollaborationRegistry
 	StartTime             time.Time
@@ -70,27 +75,34 @@ func newServerCache() *serverCache {
 	return c
 }
 
-func (c *serverCache) getOrCreate(logicalID string, factory func(string) *mcpserver.MCPServer, registry *toolregistry.ToolRegistry) *mcpserver.MCPServer {
+func (c *serverCache) getOrCreate(logicalID string, factory func(string) *mcpserver.MCPServer, refresh func(string)) *mcpserver.MCPServer {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.initLocked()
-	if srv, ok := c.servers[logicalID]; ok {
+	srv, cached := c.servers[logicalID]
+	if cached {
 		c.lastUsed[logicalID] = time.Now()
-		return srv
+	} else {
+		srv = factory(logicalID)
+		c.servers[logicalID] = srv
+		c.lastUsed[logicalID] = time.Now()
+		// F6/F13: construct the stateless streamable HTTP handler exactly once per
+		// cached server instead of per request, so future StreamableHTTPOption
+		// configuration cannot silently no-op.
+		c.handlers[logicalID] = mcpserver.NewStreamableHTTPServer(srv, mcpserver.WithStateLess(true))
+		c.evictLocked()
 	}
-	srv := factory(logicalID)
-	c.servers[logicalID] = srv
-	c.lastUsed[logicalID] = time.Now()
-	// F6/F13: construct the stateless streamable HTTP handler exactly once per
-	// cached server instead of per request, so future StreamableHTTPOption
-	// configuration cannot silently no-op.
-	c.handlers[logicalID] = mcpserver.NewStreamableHTTPServer(srv, mcpserver.WithStateLess(true))
-	c.evictLocked()
+	c.mu.Unlock()
+	if cached && refresh != nil {
+		// The server outlives the config it was built from; re-apply its own
+		// workspace's state so an edited config.json or project tier lands without
+		// waiting for eviction. Outside the lock: it touches no cache state.
+		refresh(logicalID)
+	}
 	return srv
 }
 
-func (c *serverCache) getOrCreateHandler(logicalID string, factory func(string) *mcpserver.MCPServer, registry *toolregistry.ToolRegistry) *mcpserver.StreamableHTTPServer {
-	c.getOrCreate(logicalID, factory, registry)
+func (c *serverCache) getOrCreateHandler(logicalID string, factory func(string) *mcpserver.MCPServer, refresh func(string)) *mcpserver.StreamableHTTPServer {
+	c.getOrCreate(logicalID, factory, refresh)
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.handlers[logicalID]
@@ -277,7 +289,7 @@ func (d RouteDeps) postMCP(w http.ResponseWriter, r *http.Request) {
 		logicalID = "default"
 	}
 
-	handler := d.ServerCache.getOrCreateHandler(logicalID, d.CreateMCPServer, d.Registry)
+	handler := d.ServerCache.getOrCreateHandler(logicalID, d.CreateMCPServer, d.RefreshWorkspace)
 	if msg.Method == "tools/list" {
 		bw := toolsListRewriter(w)
 		serveWithAbortLog(r, msg, handler, bw)
@@ -381,18 +393,23 @@ func detectWorkspace(msg rpcMessage, r *http.Request, st *shared.Store) string {
 		}
 	}
 
-	if projectPath == "" {
-		if v, ok := st.Get("workspace-root"); ok {
-			projectPath = v
-		}
-	}
-
+	// An explicit hint on THIS request - a header or a query param - outranks the
+	// process-wide store. The store is a single key shared by every client, so
+	// whichever session set the workspace last would otherwise decide which
+	// project a CLI call from another folder is served as, and with it which
+	// .zenmcp/config.json tier applies.
 	if projectPath == "" {
 		for _, header := range []string{"X-Project-Path", "X-Workspace-Root", "Mcp-Project-Path", "Project-Path"} {
 			if v := r.Header.Get(header); v != "" {
 				projectPath = v
 				break
 			}
+		}
+	}
+
+	if projectPath == "" {
+		if v, ok := st.Get("workspace-root"); ok && v != "" {
+			projectPath = v
 		}
 	}
 

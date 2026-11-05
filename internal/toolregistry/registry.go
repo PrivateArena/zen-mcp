@@ -63,6 +63,21 @@ func (r *ToolRegistry) ListTools() []*ToolRegistration {
 	return out
 }
 
+// Definitions returns value copies of every registration, so a caller can read a
+// consistent snapshot - including the enabled flag - without holding the registry.
+// Handlers are dropped: they are bound to the workspace that registered them.
+func (r *ToolRegistry) Definitions() []ToolRegistration {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]ToolRegistration, 0, len(r.tools))
+	for _, entry := range r.tools {
+		cp := *entry
+		cp.Handler = nil
+		out = append(out, cp)
+	}
+	return out
+}
+
 func (r *ToolRegistry) SetToolEnabled(name string, enabled bool) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()

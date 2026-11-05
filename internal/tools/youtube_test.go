@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -508,5 +510,75 @@ func TestUndeclaredChannelNeverReachesTheBrowser(t *testing.T) {
 	}
 	if len(fake.calls) != 0 {
 		t.Fatalf("bridge calls after a refusal: %v", fake.calls)
+	}
+}
+
+// withYoutubeTier writes a project config tier that re-declares only the channel.
+func withYoutubeTier(t *testing.T, body string) string {
+	t.Helper()
+	ws := t.TempDir()
+	dir := filepath.Join(ws, ".zenmcp")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return ws
+}
+
+// A project folder may declare its own channel, the way it already declares its
+// own tool states: the same server, called for that workspace, acts as that
+// channel. The per-call container param still outranks both tiers.
+func TestYoutubeUsesTheWorkspaceChannel(t *testing.T) {
+	t.Setenv("ZEN_YOUTUBE_JOURNAL", t.TempDir()+"/journal.json")
+	cfg := mcpcfg.Get()
+	saved := cfg.Youtube
+	defer func() { cfg.Youtube = saved }()
+	cfg.Youtube = mcpcfg.YoutubeConfig{
+		Container: "pachoigame", ContainerID: 20, Containers: map[string]int{"pachoigame": 20},
+		MaxUploadsPerDay: 2, MaxComments: 40, PageTimeoutMs: 1000, MaxDiagBytes: 100,
+	}
+	// Written in place, so anything cached against the previous base is stale.
+	mcpcfg.ResetWorkspaceTiers()
+
+	ws := withYoutubeTier(t, `{"youtube":{"container":"chan-b","containerId":31,"containers":{"chan-b":31}}}`)
+
+	svc, err := newYoutubeService(ws, "")
+	if err != nil {
+		t.Fatalf("workspace channel refused: %v", err)
+	}
+	got := svc.Settings()
+	if got.Container != "chan-b" || got.ContainerID != 31 {
+		t.Errorf("workspace identity = (%q, %d), want (chan-b, 31)", got.Container, got.ContainerID)
+	}
+	if got.MaxComments != 40 || got.MaxUploadsPerDay != 2 {
+		t.Errorf("un-named youtube values not inherited from the global tier: %+v", got)
+	}
+
+	// A workspace without a tier keeps the machine-wide channel.
+	plain, err := newYoutubeService(t.TempDir(), "")
+	if err != nil {
+		t.Fatalf("global channel refused: %v", err)
+	}
+	if got := plain.Settings(); got.Container != "pachoigame" || got.ContainerID != 20 {
+		t.Errorf("global identity = (%q, %d), want (pachoigame, 20)", got.Container, got.ContainerID)
+	}
+
+	// The tier deep-merges, so the global channel is still declared and still
+	// selectable per call.
+	named, err := newYoutubeService(ws, "pachoigame")
+	if err != nil {
+		t.Fatalf("explicit container refused: %v", err)
+	}
+	if got := named.Settings(); got.Container != "pachoigame" || got.ContainerID != 20 {
+		t.Errorf("explicit container = (%q, %d), want (pachoigame, 20)", got.Container, got.ContainerID)
+	}
+
+	// And an explicit null in the tier resets that value instead of merging into
+	// it, so a project can narrow the declared channels to its own.
+	strict := withYoutubeTier(t, `{"youtube":{"container":"chan-c","containerId":42,"containers":null}}`)
+	if _, err := newYoutubeService(strict, "pachoigame"); err == nil || !strings.Contains(err.Error(), "not a declared channel") {
+		t.Errorf("undeclared container accepted under a strict project tier: err = %v", err)
 	}
 }

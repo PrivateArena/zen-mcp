@@ -175,7 +175,7 @@ func HandleYoutube(ctx context.Context, workspace string, deps Deps, req mcp.Cal
 		return toolresponse.WrapErrorWithContext(ctx, "youtube", err, start)
 	}
 
-	svc, err := newYoutubeService(argString(args, "container"))
+	svc, err := newYoutubeService(workspace, argString(args, "container"))
 	if err != nil {
 		return toolresponse.WrapErrorWithContext(ctx, "youtube", err, start)
 	}
@@ -676,8 +676,12 @@ func resolveChannel(cfg mcpcfg.YoutubeConfig, requested string) (string, int, er
 	return name, id, nil
 }
 
-func newYoutubeService(requestedContainer string) (*youtube.Service, error) {
-	cfg := mcpcfg.Get().Youtube
+// newYoutubeService resolves the identity for one workspace: the machine-wide
+// youtube block, unless <workspace>/.zenmcp/config.json overrides it. The
+// per-call container param still wins over both - a project declares its default
+// channel, an agent may name another one it has declared.
+func newYoutubeService(workspace, requestedContainer string) (*youtube.Service, error) {
+	cfg := mcpcfg.For(workspace).Youtube
 	container, containerID, err := resolveChannel(cfg, requestedContainer)
 	if err != nil {
 		return nil, err

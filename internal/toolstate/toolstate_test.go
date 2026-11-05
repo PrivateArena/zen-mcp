@@ -114,3 +114,35 @@ func TestReadWorkspaceToolConfigInvalidJSON(t *testing.T) {
 		t.Errorf("invalid json should return nil, got %v", got)
 	}
 }
+
+// DiffToolStates is what `zworkspace` reports. It must not rewrite the registry
+// it is asked about - that registry belongs to the workspace the call arrived on,
+// not the one being switched to.
+func TestDiffToolStatesDoesNotMutate(t *testing.T) {
+	ws := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(ws, ".zenmcp"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ws, ".zenmcp", "config.json"), []byte(`{"enabled_tools":{"beta":false}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	reg := toolregistry.Create()
+	for _, name := range []string{"alpha", "beta"} {
+		reg.Track(toolregistry.ToolRegistration{Name: name, DefaultEnabled: true})
+	}
+
+	changed := DiffToolStates(ws, reg)
+	if len(changed) != 1 || changed[0] != "beta" {
+		t.Fatalf("changed = %v, want [beta]", changed)
+	}
+	if !reg.IsToolEnabled("beta") {
+		t.Error("the registry was disabled by a report-only diff")
+	}
+
+	// Applying for real, then diffing again, reports nothing left to change.
+	ApplyToolStates(ws, reg)
+	if got := DiffToolStates(ws, reg); len(got) != 0 {
+		t.Errorf("changed after apply = %v, want none", got)
+	}
+}

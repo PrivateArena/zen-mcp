@@ -1,19 +1,11 @@
 package toolstate
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"zen-mcp/internal/logfilter"
 	"zen-mcp/internal/mcpcfg"
 	"zen-mcp/internal/toolregistry"
-)
-
-const (
-	workspaceDir     = ".zenmcp"
-	workspaceCfgName = "config.json"
 )
 
 type ToolStateLayers struct {
@@ -28,18 +20,11 @@ func BuiltinDefaultEnabled(toolName string) bool {
 	return true
 }
 
+// ReadWorkspaceConfigRaw is the project tier of the config, parsed verbatim. It
+// lives in mcpcfg (ProjectConfigFilePath) so the tool-state layer and every other
+// per-workspace override read the same file.
 func ReadWorkspaceConfigRaw(workspaceRoot string) map[string]any {
-	path := filepath.Join(workspaceRoot, workspaceDir, workspaceCfgName)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
-	var parsed map[string]any
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		logfilter.Debugf("[ToolState] Failed to parse %s: %v", path, err)
-		return nil
-	}
-	return parsed
+	return mcpcfg.ReadProjectConfigRaw(workspaceRoot)
 }
 
 func ReadWorkspaceToolConfig(workspaceRoot string) map[string]bool {
@@ -106,6 +91,27 @@ func ResolveToolState(name string, workspaceRoot string, workspaceCfg map[string
 type ApplyResult struct {
 	Changed []string
 	Skipped []string
+}
+
+// DiffToolStates reports which tools a workspace tier would switch, without
+// touching reg. The workspace's own MCP server instance applies them when it is
+// built; this is only what `zworkspace` reports back to the caller, so moving
+// between projects cannot leave the previous project's registry mis-flagged.
+func DiffToolStates(workspaceRoot string, reg *toolregistry.ToolRegistry) []string {
+	if reg == nil {
+		return nil
+	}
+	var workspaceCfg map[string]bool
+	if workspaceRoot != "" {
+		workspaceCfg = ReadWorkspaceToolConfig(workspaceRoot)
+	}
+	var changed []string
+	for _, name := range reg.ListToolNames() {
+		if ResolveToolState(name, workspaceRoot, workspaceCfg, reg).Effective != reg.IsToolEnabled(name) {
+			changed = append(changed, name)
+		}
+	}
+	return changed
 }
 
 func ApplyToolStates(workspaceRoot string, reg *toolregistry.ToolRegistry) ApplyResult {

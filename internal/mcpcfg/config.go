@@ -444,9 +444,15 @@ func Load() error {
 	}
 	if err != nil {
 		Config.Store(&def)
+		globalGeneration.Add(1)
+		invalidateTiers()
 		return err
 	}
 	Config.Store(&cfg)
+	// The base tier moved, so every cached workspace overlay was derived from a
+	// config that no longer exists.
+	globalGeneration.Add(1)
+	invalidateTiers()
 	return nil
 }
 
@@ -481,47 +487,37 @@ func readJSONMap(path string) (map[string]any, error) {
 	return m, nil
 }
 
+// mergeConfig applies a user layer on top of def. The layer is deep-merged:
+// a partial block such as {"youtube":{"container":"pachoigame2"}} keeps every
+// sibling value it does not name, so a project tier only has to spell out the
+// keys it actually changes. Scalars and arrays replace wholesale, and an
+// explicit null keeps the value from the tier below.
 func mergeConfig(def ZenConfig, user map[string]any) (ZenConfig, error) {
 	defBytes, _ := json.Marshal(def)
 	var defMap map[string]any
 	_ = json.Unmarshal(defBytes, &defMap)
 
-	merged := copyMap(defMap)
+	merged := applyLayer(copyMap(defMap), user)
+	return decodeConfig(def, merged)
+}
+
+func applyLayer(merged, user map[string]any) map[string]any {
+	if merged == nil {
+		merged = map[string]any{}
+	}
 	for k, v := range user {
+		if v == nil {
+			continue
+		}
+		if dv, ok := merged[k].(map[string]any); ok {
+			if uv, ok := v.(map[string]any); ok {
+				merged[k] = mergeNested(dv, uv)
+				continue
+			}
+		}
 		merged[k] = v
 	}
-	for _, key := range []string{"token_optimization", "sandbox", "toolConfigs", "toolTimeouts", "pooling", "bridge", "youtube", "prompt_features", "prompt_memory_context", "enabled_tools"} {
-		if uv, ok := user[key].(map[string]any); ok {
-			dv, _ := defMap[key].(map[string]any)
-			merged[key] = mergeNested(dv, uv)
-		} else if uvRaw, ok := user[key]; ok && uvRaw == nil {
-			merged[key] = defMap[key]
-		}
-	}
-	if v, ok := merged["default_workspace_root"]; ok && v == nil {
-		merged["default_workspace_root"] = defMap["default_workspace_root"]
-	}
-
-	coercePorts(merged)
-
-	outBytes, err := json.Marshal(merged)
-	if err != nil {
-		return def, err
-	}
-	var out ZenConfig
-	if err := json.Unmarshal(outBytes, &out); err != nil {
-		return def, err
-	}
-	if out.ToolConfigs == nil {
-		out.ToolConfigs = def.ToolConfigs
-	}
-	if out.ToolTimeouts == nil {
-		out.ToolTimeouts = def.ToolTimeouts
-	}
-	if out.BypassTools == nil {
-		out.BypassTools = def.BypassTools
-	}
-	return out, nil
+	return merged
 }
 
 func copyMap(src map[string]any) map[string]any {

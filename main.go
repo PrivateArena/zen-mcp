@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -23,18 +24,11 @@ import (
 	"zen-mcp/internal/toolregistry"
 	"zen-mcp/internal/toolresponse"
 	"zen-mcp/internal/tools"
+	"zen-mcp/internal/toolstate"
 )
 
 func newMcpServer(id string, reg *toolregistry.ToolRegistry, deps tools.Deps) *mcpserver.MCPServer {
-	cfg := mcpcfg.Get()
-	workspace := id
-	if id == "" || id == "default" {
-		workspace = cfg.DefaultWorkspaceRoot
-		if workspace == "" {
-			cwd, _ := os.Getwd()
-			workspace = cwd
-		}
-	}
+	workspace := resolveWorkspace(id)
 
 	srv := mcpserver.NewMCPServer(server.ServerName, server.ServerVersion,
 		mcpserver.WithToolCapabilities(!deps.HideTools),
@@ -47,6 +41,104 @@ func newMcpServer(id string, reg *toolregistry.ToolRegistry, deps tools.Deps) *m
 		logfilter.Debugf("[MCP] Failed to register tools: %v", err)
 	}
 	return srv
+}
+
+// resolveWorkspace turns a server-cache id into the workspace its tools are bound
+// to. "" and "default" mean the configured root, which is what a request that
+// carried no workspace hint gets.
+func resolveWorkspace(id string) string {
+	if id != "" && id != "default" {
+		return id
+	}
+	if ws := mcpcfg.Get().DefaultWorkspaceRoot; ws != "" {
+		return ws
+	}
+	cwd, _ := os.Getwd()
+	return cwd
+}
+
+// newWorkspaceServer builds the MCP server instance of one workspace with its OWN
+// tool registry. One registry shared across the per-workspace server cache meant
+// the last workspace registered decided enabled_tools - and held the handler
+// closures - for every workspace still cached.
+//
+// catalog is the process-wide registry the terminal REPL and export_cli read; it
+// is mirrored with tool definitions only, never with a handler, which belongs to
+// the workspace that built it.
+func newWorkspaceServer(id string, catalog *toolregistry.ToolRegistry, deps tools.Deps) (*mcpserver.MCPServer, *toolregistry.ToolRegistry) {
+	reg := toolregistry.Create()
+	deps.Reg = reg
+	srv := newMcpServer(id, reg, deps)
+	if catalog != nil {
+		for _, entry := range reg.Definitions() {
+			catalog.Track(toolregistry.ToolRegistration{
+				Name:           entry.Name,
+				DefaultEnabled: entry.DefaultEnabled,
+				Description:    entry.Description,
+				Schema:         entry.Schema,
+			})
+			catalog.SetToolEnabled(entry.Name, entry.Enabled)
+		}
+	}
+	return srv, reg
+}
+
+// workspaceRegistries remembers the registry each cached workspace was built with
+// so a config edit reaches the server that already exists for it. It is bounded by
+// the server cache it shadows: a cached server that is evicted and rebuilt replaces
+// its entry through the factory.
+//
+// The bound mirrors serverCacheMaxSize in internal/server.
+type workspaceRegistries struct {
+	mu    sync.Mutex
+	limit int
+	byID  map[string]*workspaceRegistryEntry
+}
+
+type workspaceRegistryEntry struct {
+	workspace string
+	reg       *toolregistry.ToolRegistry
+	used      time.Time
+}
+
+func newWorkspaceRegistries(limit int) *workspaceRegistries {
+	return &workspaceRegistries{limit: limit, byID: map[string]*workspaceRegistryEntry{}}
+}
+
+func (w *workspaceRegistries) put(id, workspace string, reg *toolregistry.ToolRegistry) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.byID[id] = &workspaceRegistryEntry{workspace: workspace, reg: reg, used: time.Now()}
+	for len(w.byID) > w.limit {
+		oldest := ""
+		var oldestAt time.Time
+		for k, entry := range w.byID {
+			if oldest == "" || entry.used.Before(oldestAt) {
+				oldest, oldestAt = k, entry.used
+			}
+		}
+		if oldest == "" {
+			return
+		}
+		delete(w.byID, oldest)
+	}
+}
+
+// refresh is the RouteDeps.RefreshWorkspace hook, called when a request arrives
+// for an already-cached workspace. Re-applying that workspace's own tool states
+// is what makes an edited enabled_tools - global or project tier - take effect
+// without a restart or a cache eviction.
+func (w *workspaceRegistries) refresh(id string) {
+	w.mu.Lock()
+	entry, ok := w.byID[id]
+	if ok {
+		entry.used = time.Now()
+	}
+	w.mu.Unlock()
+	if !ok {
+		return
+	}
+	toolstate.ApplyToolStates(entry.workspace, entry.reg)
 }
 
 func main() {
@@ -127,6 +219,10 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 
 	filteredReg := toolregistry.Create()
 	unfilteredReg := toolregistry.Create()
+	// One registry per cached workspace, remembered per listener so a config edit
+	// can be re-applied to the server that is already cached for it.
+	filteredRegs := newWorkspaceRegistries(64)
+	unfilteredRegs := newWorkspaceRegistries(64)
 
 	gk := gatekeeper.New(store)
 	pendingCollabs := tools.NewCollaborationRegistry()
@@ -142,22 +238,24 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 
 	filteredFactory := func(id string) *mcpserver.MCPServer {
 		d := deps
-		d.Reg = filteredReg
 		// mcp2cli mode: the agent-facing MCP server exposes no tools; the CLI
 		// wrappers target the unfiltered server which keeps the full set.
 		d.HideTools = mcpcfg.Get().Mcp2Cli
-		return newMcpServer(id, filteredReg, d)
+		srv, reg := newWorkspaceServer(id, filteredReg, d)
+		filteredRegs.put(id, resolveWorkspace(id), reg)
+		return srv
 	}
 	unfilteredFactory := func(id string) *mcpserver.MCPServer {
-		d := deps
-		d.Reg = unfilteredReg
-		return newMcpServer(id, unfilteredReg, d)
+		srv, reg := newWorkspaceServer(id, unfilteredReg, deps)
+		unfilteredRegs.put(id, resolveWorkspace(id), reg)
+		return srv
 	}
 
 	mcpMux := http.NewServeMux()
 	server.SetupRoutes(mcpMux, server.RouteDeps{
 		CreateMCPServer:       filteredFactory,
 		Registry:              filteredReg,
+		RefreshWorkspace:      filteredRegs.refresh,
 		Shared:                store,
 		PendingCollaborations: pendingCollabs,
 		StartTime:             startTime,
@@ -168,6 +266,7 @@ func runHTTPServers(startTime time.Time, cfg *mcpcfg.ZenConfig, store *shared.St
 	server.SetupRoutes(cliMux, server.RouteDeps{
 		CreateMCPServer:       unfilteredFactory,
 		Registry:              unfilteredReg,
+		RefreshWorkspace:      unfilteredRegs.refresh,
 		Shared:                store,
 		PendingCollaborations: pendingCollabs,
 		StartTime:             startTime,

@@ -40,8 +40,8 @@ func setRequestAbortObserver(fn func(method string, elapsedMs int64, reason stri
 	onRequestAbort = fn
 }
 
-// autoDetectWorkspace resolves a workspace root from initialize params, query,
-// shared state, then headers — in that order, matching routes.ts.
+// autoDetectWorkspace resolves a workspace root from initialize params, then the
+// request's own hint (query, then header), then the shared store as the fallback.
 func autoDetectWorkspace(r *http.Request, st *shared.Store) string {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 50<<20))
 	r.Body = io.NopCloser(bytes.NewReader(body))
@@ -594,6 +594,28 @@ func TestAutoDetectWorkspace(t *testing.T) {
 	req.Header.Set("X-Workspace-Root", "/tmp/proj5")
 	if got := autoDetectWorkspace(req, st); got != "/tmp/proj5" {
 		t.Errorf("header detect = %q", got)
+	}
+
+	// 6. an explicit hint on this request outranks the process-wide store, or a
+	// CLI call from one project would be served as whichever project last called
+	// zworkspace - and that decides which .zenmcp/config.json tier applies.
+	st.Set("workspace-root", "/tmp/proj6-global")
+	req = httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	req.Header.Set("X-Workspace-Root", "/tmp/proj6")
+	if got := autoDetectWorkspace(req, st); got != "/tmp/proj6" {
+		t.Errorf("header vs store = %q, want the header", got)
+	}
+	req = httptest.NewRequest(http.MethodPost, "/mcp?projectPath=/tmp/proj7", nil)
+	req.Header.Set("X-Workspace-Root", "/tmp/projignored")
+	if got := autoDetectWorkspace(req, st); got != "/tmp/proj7" {
+		t.Errorf("query = %q, want the query param to win over the header", got)
+	}
+
+	// 7. with no hint at all, the store still carries the workspace to a bare
+	// follow-up request (F3).
+	req = httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	if got := autoDetectWorkspace(req, st); got != "/tmp/proj6-global" {
+		t.Errorf("store fallback = %q", got)
 	}
 }
 
@@ -1428,10 +1450,41 @@ func TestGetOrCreateDoesNotClobberToolState(t *testing.T) {
 	cache := newTestServerCache(4, time.Hour)
 	cache.getOrCreate("ws", func(id string) *mcpserver.MCPServer {
 		return mcpserver.NewMCPServer("t", "1.0")
-	}, reg)
+	}, nil)
 
 	if reg.IsToolEnabled("foo") {
 		t.Error("getOrCreate must not clobber per-workspace tool state with a global re-apply (F14)")
+	}
+}
+
+// The refresh hook is what makes a config edit land on a server that is already
+// cached: called for the workspace whose server was reused, never on the build.
+func TestGetOrCreateRefreshesCachedWorkspace(t *testing.T) {
+	cache := newTestServerCache(4, time.Hour)
+	factoryCalls := 0
+	var refreshed []string
+	refresh := func(id string) { refreshed = append(refreshed, id) }
+	factory := func(id string) *mcpserver.MCPServer {
+		factoryCalls++
+		return mcpserver.NewMCPServer("t-"+id, "1.0")
+	}
+
+	cache.getOrCreate("ws-a", factory, refresh)
+	if len(refreshed) != 0 {
+		t.Errorf("refresh called on build: %v, want the factory to have applied state", refreshed)
+	}
+	cache.getOrCreate("ws-a", factory, refresh)
+	cache.getOrCreateHandler("ws-a", factory, refresh)
+	if factoryCalls != 1 {
+		t.Errorf("factory calls = %d, want 1", factoryCalls)
+	}
+	if len(refreshed) != 2 {
+		t.Fatalf("refresh calls = %v, want one per cache hit", refreshed)
+	}
+	for _, id := range refreshed {
+		if id != "ws-a" {
+			t.Errorf("refreshed %q, want the workspace whose server was reused", id)
+		}
 	}
 }
 
