@@ -44,7 +44,7 @@ Keep the tab handle from `navigate` in `$ID` and pass `-i "$ID"` everywhere — 
 ```bash
 ID=$(zbrowser -a navigate --url <chat_url> --back_tab true | jq -r .id)
 zbrowser -a read -i "$ID"
-zbrowser -a get_interactive_map            # NOTE: maps the ACTIVE tab, -i is ignored
+zbrowser -a get_interactive_map -i "$ID"   # one row per control; selectors paste straight into click/type
 zbrowser -a screenshot -i "$ID"            # visual check; needs real visibility
 ```
 

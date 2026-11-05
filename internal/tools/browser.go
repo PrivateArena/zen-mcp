@@ -56,6 +56,10 @@ func defBrowser(workspace string, deps Deps) ToolDef {
 			"y":               numProp("[scroll] Pixel scroll offset"),
 			"block":           strEnumProp("[scroll] Vertical alignment of a scrolled element.", []string{"start", "center", "end"}),
 			"selector":        strProp("[locator] CSS selector, auto-scrolled into view"),
+			"scope":           strEnumProp("[get_interactive_map] Rows to include: 'viewport' (default, cheap) or 'all' (whole document).", []string{"viewport", "all"}),
+			"filter":          strProp("[get_interactive_map] Keep only rows whose action, selector or label contains this text"),
+			"shortest":        boolProp("[get_interactive_map] Also report the shortest unique selector variant per row"),
+			"limit":           intProp("[get_interactive_map] Max rows (default 80); [list_tabs] max tabs"),
 			"by_text":         strProp("[locator] Partial case-insensitive text match"),
 			"by_role":         strProp("[locator] ARIA role; narrow it with 'name'"),
 			"name":            strProp("[locator] Accessible name, used with by_role"),
@@ -218,50 +222,23 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 		if err != nil {
 			return toolresponse.WrapErrorWithContext(ctx, "browser", err, start)
 		}
-		dataList := res
-		var items []map[string]any
-		if d, ok := dataList["data"].([]map[string]any); ok {
-			items = d
-		} else if arr, ok := dataList["data"].([]any); ok {
-			for _, it := range arr {
-				if m, ok := it.(map[string]any); ok {
-					items = append(items, m)
+		// The frame renders the map itself: one line per control, `<n> <action> ["label"]
+		// <selector>`, where the selector is ready to paste into click/type/select_option.
+		// It goes out as plain text - wrapping a line-oriented table in JSON only adds
+		// escaping (\t, \", \u2026) on top of the information the caller needs.
+		if block, ok := res["data"].(map[string]any); ok && block != nil {
+			if text, isText := block["map"].(string); isText && text != "" {
+				if id, hasID := res["id"].(string); hasID && id != "" {
+					text += "\n# tab " + id
+					if urlStr, hasURL := res["url"].(string); hasURL && urlStr != "" {
+						text += " \u00b7 " + urlStr
+					}
 				}
+				return toolresponse.WrapSuccess(ctx, "browser", text, start)
 			}
 		}
-		lines := make([]string, 0, len(items))
-		for _, el := range items {
-			id := ""
-			if v, ok := el["id"]; ok {
-				id = fmt.Sprintf("%v", v)
-			}
-			tag := ""
-			if v, ok := el["tag"].(string); ok {
-				tag = v
-			}
-			typ := ""
-			if v, ok := el["type"].(string); ok && v != "" {
-				typ = fmt.Sprintf(` type="%s"`, v)
-			}
-			text := ""
-			if v, ok := el["text"].(string); ok {
-				text = v
-			}
-			role := ""
-			if v, ok := el["role"].(string); ok && v != "" {
-				role = fmt.Sprintf(" (role: %s)", v)
-			}
-			aria := ""
-			if v, ok := el["ariaLabel"].(string); ok && v != "" {
-				aria = fmt.Sprintf(" (aria: %s)", v)
-			}
-			lines = append(lines, fmt.Sprintf(`- [ID %s] <%s%s> "%s"%s%s`, id, tag, typ, text, role, aria))
-		}
-		return toolresponse.WrapSuccess(ctx, "browser", map[string]any{
-			"message":         "Interactive map extracted.",
-			"interactive_map": res,
-			"markdown_map":    strings.Join(lines, "\n"),
-		}, start)
+		// Stale frame script (pre-selector-engine bridge): hand back whatever it sent.
+		return toolresponse.WrapSuccess(ctx, "browser", extractData(res), start)
 
 	case "restart":
 		res, err = bridge.CallBridge(ctx, "reload", nil)

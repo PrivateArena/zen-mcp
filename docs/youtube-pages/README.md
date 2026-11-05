@@ -27,7 +27,7 @@ the tool must refuse rather than act as whoever the browser happens to be logged
 | `youtube.com/upload` | Redirects into the Studio wizard and hands over the channel id in the URL | E1 |
 | Test fixture | `https://www.youtube.com/watch?v=YSNFGgh0aAs` (`whiteboard`, unlisted, 0 comments) | E8–E11 |
 | Studio renders in shadow roots | Light-DOM `querySelectorAll("button")` finds nothing | E4 |
-| `get_interactive_map` | Unusable — replies `data:null`; not used by any flow | bridge bug, see plan E-table |
+| `get_interactive_map` | Answers with a plain-text row per control and ready-to-use selectors, shadow roots included (`host >>> inner`) | E4 |
 
 ## Conventions (identical in every note)
 
