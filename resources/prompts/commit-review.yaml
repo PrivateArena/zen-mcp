@@ -1,5 +1,5 @@
 - name: commit-review
-  description: Generate a full-context diff, save original files before changes for multiple commits, and delegate review to a web agent using browser.chat.
+  description: Generate a full-context diff, save original files before changes for multiple commits, and delegate review to a read-only `subagent` pass.
   arguments:
     - name: i
       description: The git commit SHA(s), range, or list (e.g. 'd1c98d1c', 'X Y', 'X,Y', 'X..Y') to diff
@@ -16,7 +16,7 @@
        ```bash
        c=＄(echo "__COMMIT_ID_HERE__" | tr ',' ' '); set -- ＄c; f=＄1; l=＄NF; case "＄f" in *..* ) x=＄{f%%.*}; y=＄{f##*.}; b="＄x~1"; t="＄y";; * ) b="＄f~1"; t="＄l";; esac; git diff -U999999 --find-renames "＄b" "＄t" > /tmp/commit_review.txt
        ```
-    2. **Delegate**: Call `browser({ action: 'chat', provider: 'claude', upload_files: <file1,file2,file3,...,/tmp/commit_review.txt>, message: 'Review changes in commit(s). Context: <context>. Focus on: architectural impact, logic errors, performance regressions, style issues. Tag findings by severity (Critical/Major/Minor/Nit). Be structured and actionable.' })`.
+    2. **Delegate**: Call `subagent({ role: 'review', task: 'Read these files: /tmp/commit_review.txt (the full-context diff), plus <any additional absolute source paths the diff needs for context>. Review changes in commit(s). Context: <context>. Focus on: architectural impact, logic errors, performance regressions, style issues. Tag findings by severity (Critical/Major/Minor/Nit). Be structured and actionable.' })` — name only the files the review actually needs; the subagent reads them itself, but its context is finite too.
     3. **Report**: Present findings directly.
   enabledSkills:
     - codebase-research

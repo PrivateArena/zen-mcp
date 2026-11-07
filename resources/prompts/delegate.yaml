@@ -1,5 +1,5 @@
 - name: delegate
-  description: Offload file/codebase understanding to browser.chat instead of reading files yourself. Preserves local context by delegating comprehension work to a sub-agent, gated by a constrained-ask requirement.
+  description: Offload file/codebase understanding to a `subagent` instead of reading files yourself. Preserves local context by delegating comprehension work to an isolated subagent, gated by a constrained-ask requirement.
   arguments:
     - name: i
       description: What to understand/review, and which files/project
@@ -13,10 +13,10 @@
 
     Do NOT read target file contents yourself. Use `codebase-research` (codegraph files > explain > symbol — metadata and signatures, not bodies) to locate the relevant files. If `PROJECT_OVERVIEW.md` exists in the project root, read it and skip file discovery per that skill's conditional optimization.
 
-    **BEFORE DELEGATING**: Run the message through `chat-research`'s Message-Quality Gate — Context, numbered specific question(s), files attached with a reason each, and expected output shape. If you can't fill in every field, you haven't scoped the task yet: go back to `codebase-research` rather than sending a generic ask like "explain the architecture" or "review this file." A message that would be equally valid for a different file or project fails the gate.
+    **BEFORE DELEGATING**: Run the ask through `chat-research`'s Message-Quality Gate — Context, numbered specific question(s), files named with a reason each, and expected output shape. If you can't fill in every field, you haven't scoped the task yet: go back to `codebase-research` rather than sending a generic ask like "explain the architecture" or "review this file." An ask that would be equally valid for a different file or project fails the gate.
 
     Delegate in ONE call:
 
-    `browser({ action: 'chat', provider: 'claude', upload_files: [<file1,file2,file3...,up to 9 relevant file paths>], message: <the constrained ask produced by the quality gate> })`.
+    `subagent({ role: 'explore', task: 'Read these files: <PROJECT_OVERVIEW.md if present, then the minimal set of absolute file paths, each with a one-clause reason> — <the constrained ask produced by the quality gate>' })`.
 
-    Use the returned summary to answer. Only read a file yourself if no browser tool exists, or the gap is trivial (e.g. confirming a single import line) — not as a substitute for scoping the ask properly.
+    Use the returned summary to answer. Only read a file yourself if the `subagent` tool is unavailable, or the gap is trivial (e.g. confirming a single import line) — not as a substitute for scoping the ask properly.

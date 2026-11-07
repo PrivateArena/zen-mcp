@@ -478,6 +478,57 @@ func TestCliModePrefixOrDefault(t *testing.T) {
 	}
 }
 
+// harness_tools is the config knob that keeps agent-harness tool calls out of the
+// CLI-wrapper transform (internal/prompts/climode.go), so a new harness needs no Go change.
+func TestHarnessToolsDefaults(t *testing.T) {
+	withConfig(t, `{}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := HarnessToolsOrDefault(); len(got) != len(DefaultHarnessTools) {
+		t.Errorf("default harness tools = %v, want %v", got, DefaultHarnessTools)
+	}
+	if !IsHarnessTool("subagent") {
+		t.Error("subagent must be a harness tool by default")
+	}
+	if IsHarnessTool("browser") || IsHarnessTool("") {
+		t.Error("MCP tools and empty names are never harness tools")
+	}
+}
+
+func TestHarnessToolsConfigIsAdditiveAndNormalized(t *testing.T) {
+	withConfig(t, `{"harness_tools":[" Invoke_Subagent ","subagent",""]}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := HarnessToolsOrDefault(); len(got) != 2 {
+		t.Errorf("harness tools = %v, want 2 entries (default + configured, deduped)", got)
+	}
+	if !IsHarnessTool("invoke_subagent") || !IsHarnessTool("INVOKE_SUBAGENT") {
+		t.Error("configured harness tool must match case-insensitively")
+	}
+
+	// Arrays replace wholesale in the merge layer, so the built-in default has to be
+	// unioned back in: a project tier naming its own harness tool must not re-enable
+	// rewriting of the tools zen-mcp's own prompts call.
+	withConfig(t, `{"harness_tools":["myagent"]}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !IsHarnessTool("subagent") || !IsHarnessTool("myagent") {
+		t.Errorf("harness tools = %v, want subagent and myagent", HarnessToolsOrDefault())
+	}
+
+	// An explicit null keeps the tier below, i.e. the built-in default.
+	withConfig(t, `{"harness_tools":null}`)
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !IsHarnessTool("subagent") {
+		t.Error("null harness_tools must keep the default")
+	}
+}
+
 // The bridge block is what makes CallBridge one-by-one instead of all-at-once,
 // so its defaults are a behavioural contract, not a style choice.
 func TestBridgeConfigDefaults(t *testing.T) {

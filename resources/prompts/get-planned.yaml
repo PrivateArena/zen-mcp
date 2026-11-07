@@ -1,5 +1,5 @@
 - name: get-planned
-  description: "Explore the codebase via CodeGraph to identify the exact files a task touches, upload them to an external AI agent via browser.chat, and return a detailed implementation plan. No code is written."
+  description: "Explore the codebase via CodeGraph to identify the exact files a task touches, pass those paths to a `subagent`, and return a detailed implementation plan. No code is written."
   arguments:
     - name: i
       description: The task or feature to plan
@@ -14,13 +14,13 @@
     2. **List & Map (token-efficient)**: Call `codegraph({ action: 'files' })` to get the complete, token-efficient project file tree. Then call `codegraph({ action: 'map' })` and/or `codegraph({ action: 'mermaid' })` to fully understand the project's architecture and how directories/entry points connect. Use this pass to identify which files are plausibly relevant to it.
     3. **Explain**: For the candidate files identified in step 2, call `codegraph({ action: 'explain', query: <candidate file paths, comma-separated> })` to extract function/class signatures and understand what each file actually does and the relationships/dependencies between files. Focus exclusively on these two actions here — explain for meaning and connections.
     4. **Shortlist Files**: From steps 2-3, assemble a minimal, deduplicated list of the actual file paths needed to understand and implement it — no more, no fewer than necessary. Do not read full file contents yourself; CodeGraph output (file tree, map/mermaid, explain) is the only context you gather locally.
-    5. **Delegate for Implementation Plan**: Call `browser({ action: 'chat', provider: 'claude', upload_files: <file1,file2,file3,...,list of up to 9 relevant file paths>, message: 'Here is the relevant source code for this task: it. Based on these files, produce a detailed, step-by-step implementation plan: exact files to change, functions/classes to add or modify, data flow, edge cases, and a suggested order of operations. Do not write full code, just the plan.' })`.
-    6. **Relay the Plan**: Return the implementation plan exactly as received from the web agent, organized under clear headings (Files to Change, Steps, Edge Cases, Suggested Order). Do not add your own competing plan — your role here is discovery + delegation, not authorship.
+    5. **Delegate for Implementation Plan**: Call `subagent({ role: 'explore', task: 'Read these files: <file1,file2,file3,... absolute file paths shortlisted in step 4>. Based on these files, produce a detailed, step-by-step implementation plan: exact files to change, functions/classes to add or modify, data flow, edge cases, and a suggested order of operations. Do not write full code, just the plan.' })`.
+    6. **Relay the Plan**: Return the implementation plan exactly as received from the subagent, organized under clear headings (Files to Change, Steps, Edge Cases, Suggested Order). Do not add your own competing plan — your role here is discovery + delegation, not authorship.
 
     **STRICT CONSTRAINTS**:
     1. **NO IMPLEMENTATION**: DO NOT write functional code or execute terminal commands. The only file write permitted is the final ARCHITECTURE_PLAN_*.md deliverable.
     2. **CODEGRAPH-ONLY DISCOVERY**: All local codebase exploration must go through `codegraph` actions — no raw file reads, no shell, no web search.
-    3. **MINIMAL UPLOAD SET**: Only upload files identified as directly relevant in steps 2-3. Avoid uploading the entire codebase.
+    3. **MINIMAL FILE SET**: Only name the paths identified as directly relevant in steps 2-3. The subagent reads the files itself, but its context is finite — never point it at the entire codebase.
     4. **SINGLE PARAM DISCIPLINE**: The task description it is the only free-form input — do not invent additional required arguments.
 
     **DELIVERABLE**:
@@ -30,7 +30,7 @@
     - Data flow and state management approach (with Mermaid diagram if non-trivial)
     - Failure modes and how each is handled or mitigated
     - Key decisions with alternatives considered and rejection rationale (per constraint 4)
-    - Red-team critique summary from `browser({ action: 'chat' })`, with each point marked "folded in" or "rejected: <reason>"
+    - Red-team critique summary from the `subagent` pass, with each point marked "folded in" or "rejected: <reason>"
     - Open questions / things you weren't confident about (per constraint 3)
   enabledSkills:
     - codebase-research

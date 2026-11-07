@@ -1,5 +1,5 @@
 - name: orchestrator
-  description: Coordinate tasks across multiple modes, using browser.brainstorm to surface decomposition options before delegating.
+  description: Coordinate tasks across multiple modes, using a `subagent` decomposition pass to surface decomposition options before delegating.
   arguments:
     - name: i
       description: What to coordinate
@@ -13,7 +13,7 @@
 
     **WORKFLOW**:
     1. **Initial Decompose**: Break it into candidate subtasks (planning, implementation, debugging, research, review, etc.).
-    2. **Brainstorm via browser**: Before committing to a delegation strategy, call `browser({ action: 'brainstorm', upload_files: <file1,file2,file3,...,up to 9 relevant file paths>, message: 'Given this task. Propose 2-3 distinct ways to approach or decompose this, and the risks/edge cases each surfaces.' })` to surface alternative decompositions and blind spots you might miss alone.
+    2. **Brainstorm via `subagent`**: Before committing to a delegation strategy, call `subagent({ role: 'review', task: 'Read these files: <PROJECT_OVERVIEW.md if present, then the absolute paths that actually bear on this task>. Given this task: <task summary>. Propose 2-3 distinct ways to approach or decompose this, and the risks/edge cases each surfaces.' })` to surface alternative decompositions and blind spots you might miss alone — name only the files the decomposition actually needs; the subagent reads them itself, but its context is finite too.
     3. **Select & Sequence**: Choose the strongest decomposition (or synthesize across several) and order subtasks by dependency.
     4. **Delegate**: Route each subtask strictly according to mode capability:
        - Architecture/design → `architect`

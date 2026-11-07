@@ -1,5 +1,5 @@
 - name: security
-  description: Conduct deep system security analysis, threat modeling, and vulnerability assessments via a browser.chat second opinion. No implementation code, no patch file edits.
+  description: Conduct deep system security analysis, threat modeling, and vulnerability assessments via a `subagent` second opinion. No implementation code, no patch file edits.
   arguments:
     - name: i
       description: What system, API, or architecture to security-audit
@@ -12,7 +12,7 @@
     **WORKFLOW**:
     1. **Context & Threat Modeling (read-only)**: Use available codegraph tools (files > explain > symbol) to understand the system boundaries, data entry points, and trust zones. Do not read files unless absolutely necessary. Map out potential attack surfaces.
     2. **Draft v1 (Threat & Vulnerability Report)**: Produce an initial security assessment using Markdown and Mermaid diagrams (for attack vectors) ONLY — no exploit scripts or code execution.
-    3. **Red-Team via browser**: Before finalizing, call `browser({ action: 'chat', provider: 'claude', upload_files: <file1,file2,file3,...,up to 9 relevant file paths>, message: 'Critique this security audit for: <concise audit summary>. Tell me what attack vectors, edge cases, privilege escalations, or data leaks I missed. Be highly adversarial and assume the posture of an advanced persistent threat.' })` to stress-test your threat model against an independent perspective.
+    3. **Red-Team via `subagent`**: Before finalizing, call `subagent({ role: 'review', task: 'Read these files: <PROJECT_OVERVIEW.md if present, then the absolute paths backing the audit>. Critique this security audit for: <concise audit summary>. Tell me what attack vectors, edge cases, privilege escalations, or data leaks I missed. Be highly adversarial and assume the posture of an advanced persistent threat.' })` to stress-test your threat model against an independent perspective — name only the files the critique actually needs; the subagent reads them itself, but its context is finite too.
     4. **Revise**: For each security risk or critique returned, either add it to the final threat model or explicitly dismiss it with a one-line risk-acceptance rationale. Do not silently ignore feedback.
 
     **STRICT CONSTRAINTS**:

@@ -213,6 +213,48 @@ func TestTransformUnknownToolFallsBack(t *testing.T) {
 	}
 }
 
+func TestTransformHarnessToolStaysLiteral(t *testing.T) {
+	// `subagent` is an agent-harness tool, not a zen-mcp MCP tool: no wrapper exists,
+	// so the call form must survive the CLI transform untouched.
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "rule 1 backticked functional notation",
+			in:   "4. **Red-Team via `subagent`**: Call `subagent({ role: 'review', task: 'Critique this architecture plan' })`.",
+			want: "4. **Red-Team via `subagent`**: Call `subagent({ role: 'review', task: 'Critique this architecture plan' })`.",
+		},
+		{
+			name: "rule 2 bare code-block line",
+			in:   "subagent({ role: 'explore', task: 'Read these files: /tmp/a.go' })",
+			want: "subagent({ role: 'explore', task: 'Read these files: /tmp/a.go' })",
+		},
+		{
+			name: "rule 3 object-dot notation",
+			in:   "mcp.subagent.run({ task: 'x' })",
+			want: "mcp.subagent.run({ task: 'x' })",
+		},
+		{
+			name: "mixed with a real MCP tool call",
+			in:   "Call `subagent({ role: 'review', task: 'critique' })` then `codegraph({ action: 'files' })`.",
+			want: "Call `subagent({ role: 'review', task: 'critique' })` then `zen-codegraph --action files`.",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := TransformMCPToCLI(tc.in)
+			if got != tc.want {
+				t.Errorf("TransformMCPToCLI(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+			if strings.Contains(got, CLITool("subagent")) {
+				t.Errorf("harness tool was rewritten to a non-existent wrapper: %q", got)
+			}
+		})
+	}
+}
+
 func TestTransformIdempotencyGuardSkipsAlreadyCLI(t *testing.T) {
 	in := "Use `zen-codegraph --action files` to list files."
 	got := TransformMCPToCLI(in)
@@ -467,6 +509,64 @@ func withCliPrefix(t *testing.T, prefix string) {
 	cfg := *old
 	cfg.CliModePrefix = prefix
 	mcpcfg.Config.Store(&cfg)
+}
+
+// withHarnessTools installs a harness_tools override on top of the live config.
+func withHarnessTools(t *testing.T, names []string) {
+	t.Helper()
+	old := mcpcfg.Get()
+	t.Cleanup(func() { mcpcfg.Config.Store(old) })
+	cfg := *old
+	cfg.HarnessTools = names
+	mcpcfg.Config.Store(&cfg)
+}
+
+// harness_tools is the config knob for the exclusion list, so a name added there must
+// be left alone by every tool-name rule without any Go change.
+func TestTransformHarnessToolsAreConfigurable(t *testing.T) {
+	withHarnessTools(t, []string{" invoke_subagent ", "TaskRunner", ""})
+
+	for _, in := range []string{
+		"Call `invoke_subagent({ typename: 'agent-a', prompt: 'do it' })`.",
+		"Call `taskrunner({ prompt: 'do it' })`.", // case-insensitive config match
+		"Use the MCP `invoke_subagent` for this.",
+		"Use the MCP invoke_subagent tool for this.",
+		"mcp.invoke_subagent.run({ prompt: 'do it' })",
+	} {
+		if got := TransformMCPToCLI(in); got != in {
+			t.Errorf("configured harness tool rewritten: %q -> %q", in, got)
+		}
+	}
+
+	// Built-ins stay excluded when the configured list does not name them, because the
+	// merge layer replaces arrays wholesale.
+	if got := TransformMCPToCLI("Call `subagent({ role: 'review', task: 'x' })`."); got != "Call `subagent({ role: 'review', task: 'x' })`." {
+		t.Errorf("built-in harness tool must stay excluded: %q", got)
+	}
+
+	// Unlisted tools still transform.
+	if got, want := TransformMCPToCLI("Call `codegraph({ action: 'files' })`."), "Call `"+CLITool("codegraph")+" --action files`."; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+
+	// An empty config adds nothing beyond the built-ins.
+	withHarnessTools(t, nil)
+	if got, want := TransformMCPToCLI("Use the MCP `invoke_subagent` for this."), "Use the `"+CLITool("invoke_subagent")+"` for this."; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestHarnessToolSetSnapshotIsPerCall(t *testing.T) {
+	// The transform must not cache the set across calls, or a config reload
+	// (auto-restart / watch) would keep the old exclusions alive.
+	before := TransformMCPToCLI("Call `myagent({ task: 'x' })`.")
+	if want := "Call `" + CLITool("myagent") + " --task x`."; before != want {
+		t.Fatalf("unexpected baseline: got %q, want %q", before, want)
+	}
+	withHarnessTools(t, []string{"myagent"})
+	if got := TransformMCPToCLI("Call `myagent({ task: 'x' })`."); got != "Call `myagent({ task: 'x' })`." {
+		t.Errorf("config change not picked up: %q", got)
+	}
 }
 
 func TestCLIToolCustomPrefix(t *testing.T) {

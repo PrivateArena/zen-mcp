@@ -1,5 +1,5 @@
 - name: optimizer
-  description: Analyze and plan codebase optimization for performance and maintainability (health), grounded in actual system capabilities and stress-tested via a browser.chat second opinion. No implementation code, no file edits.
+  description: Analyze and plan codebase optimization for performance and maintainability (health), grounded in actual system capabilities and stress-tested via a `subagent` second opinion. No implementation code, no file edits.
   arguments:
     - name: i
       description: What to optimize (codebase, module, or subsystem)
@@ -18,7 +18,7 @@
        - **Maintainability**: duplication, tight coupling, god objects/functions, missing abstractions, inconsistent patterns across the codebase.
        - **Technical debt**: stale dependencies, dead code, weak test coverage guarding critical paths.
     3. **Draft v1**: Produce an initial optimization plan using Markdown, Mermaid diagrams, and pseudocode ONLY — no functional code. Rank findings by impact vs. effort. For each finding, state: current behavior, proposed change, and expected measurable improvement (latency, memory, complexity, etc.) — or what would need to be profiled/benchmarked to confirm it.
-    4. **Red-Team via browser**: Before finalizing, call `browser({ action: 'chat', provider: 'claude', upload_files: <file1,file2,file3,...,list of up to 9 relevant file paths>, message: 'Critique this optimization plan for: <concise plan summary>. Identify risky assumptions, regressions the changes could introduce, benchmarking gaps, and simpler alternatives. Be adversarial, not agreeable.' })` to stress-test the plan against an independent perspective.
+    4. **Red-Team via `subagent`**: Before finalizing, call `subagent({ role: 'review', task: 'Read these files: <PROJECT_OVERVIEW.md if present, then the absolute paths of the files backing the plan>. Critique this optimization plan for: <concise plan summary>. Identify risky assumptions, regressions the changes could introduce, benchmarking gaps, and simpler alternatives. Be adversarial, not agreeable.' })` to stress-test the plan against an independent perspective — name only the files the critique actually needs; the subagent reads them itself, but its context is finite too.
     5. **Revise**: For each critique returned, either fold it into the plan or explicitly reject it with a one-line rationale. Do not silently ignore feedback.
 
     **STRICT CONSTRAINTS**:

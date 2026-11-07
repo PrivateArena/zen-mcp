@@ -1,21 +1,21 @@
 - name: get-debugged
-  description: Scan codebase for issue-related files and upload them (up to 10 files) to a web agent to debug and propose fixes.
+  description: Scan codebase for issue-related files and hand their paths to a read-only subagent to debug and propose fixes.
   arguments:
     - name: i
       description: The debugging context, error message, and/or file paths to begin investigation.
       required: true
   template: |-
-    You are Zen, a Site Reliability Engineer specializing in production incident triage. You identify blast radius, isolate the minimal failing unit, and brief the next responder with zero ambiguity. I need to debug the following issue using a web agent: '{{i}}'.
+    You are Zen, a Site Reliability Engineer specializing in production incident triage. You identify blast radius, isolate the minimal failing unit, and brief the next responder with zero ambiguity. I need to debug the following issue via a subagent: '{{i}}'.
 
-    Please execute the following High-Signal Web Agent Debugging protocol:
+    Please execute the following High-Signal Subagent Debugging protocol:
 
-    1. **Locate & Gather Context (Max 10 files)**:
+    1. **Locate & Gather Context**:
        - Identify target files mentioned in it or found in stack traces.
        - Search the codebase (via codegraph or grep) for related imports, components, or dependent files that are relevant to this issue.
-       - Gather all relevant file paths into a single list. **Do not exceed 10 files** to manage token limits effectively.
-    2. **Upload & Consult Web Agent**:
-       - Call `browser({ action: 'chat', provider: 'claude', upload_files: <file1,file2,file3,...,list of up to 10 absolute file paths>, message: 'Identify the bug, explain the root cause, and propose a minimal, concrete code change to resolve this issue: <describe issue summary>' })`.
-    3. **Propose Solutions**: Present the web agent's findings and format the exact code fixes for the user.
+       - Gather the relevant file paths into a single list — the minimal set; the subagent reads them itself, but its context is finite too.
+    2. **Consult the subagent**:
+       - Call `subagent({ role: 'explore', task: 'Read these files: <list of absolute file paths gathered in step 1>. Identify the bug, explain the root cause, and propose a minimal, concrete code change to resolve this issue: <describe issue summary>' })`.
+    3. **Propose Solutions**: Present the subagent's findings and format the exact code fixes for the user.
   enabledSkills:
     - codebase-research
     - chat-research

@@ -19,12 +19,30 @@ func CLITool(mcpName string) string {
 	return cliPrefix() + mcpName
 }
 
+// harnessToolSet snapshots the configured harness-tool set for one transform pass,
+// so the rules do not re-read the config for every regexp match. Harness tools come
+// from the agent rather than from zen-mcp and have no generated CLI wrapper, so the
+// set lives in config.json (`harness_tools`, additive on top of
+// mcpcfg.DefaultHarnessTools) instead of in Go source.
+func harnessToolSet() map[string]bool {
+	names := mcpcfg.HarnessToolsOrDefault()
+	set := make(map[string]bool, len(names))
+	for _, n := range names {
+		set[n] = true
+	}
+	return set
+}
+
 // TransformRule pairs a compiled regexp with its replacement.
 type TransformRule struct {
 	re          *regexp.Regexp
 	replacement string
 	useFunc     bool
-	replFunc    func([]string) string
+	// toolGroup is the capture group holding the referenced tool name, or 0 when the
+	// rule matches skill ids instead of tools. A name listed in harness_tools skips
+	// the rule entirely (see harnessToolSet).
+	toolGroup int
+	replFunc  func([]string) string
 }
 
 var transformRules []TransformRule
@@ -58,24 +76,27 @@ func init() {
 		},
 		// Rule 6 — MCP shell reference (specific prefix)
 		{
-			re:      regexp.MustCompile("Always use the MCP `([^`]+)`"),
-			useFunc: true,
+			re:        regexp.MustCompile("Always use the MCP `([^`]+)`"),
+			useFunc:   true,
+			toolGroup: 1,
 			replFunc: func(matches []string) string {
 				return "Always use the `" + cliPrefix() + matches[1] + "` CLI"
 			},
 		},
 		// Rule 4 — MCP tool backtick reference
 		{
-			re:      regexp.MustCompile("MCP `([a-zA-Z_][a-zA-Z0-9_-]*)`"),
-			useFunc: true,
+			re:        regexp.MustCompile("MCP `([a-zA-Z_][a-zA-Z0-9_-]*)`"),
+			useFunc:   true,
+			toolGroup: 1,
 			replFunc: func(matches []string) string {
 				return "`" + cliPrefix() + matches[1] + "`"
 			},
 		},
 		// Rule 5 — MCP tool bare reference
 		{
-			re:      regexp.MustCompile("MCP ([a-zA-Z_][a-zA-Z0-9_-]*) tool"),
-			useFunc: true,
+			re:        regexp.MustCompile("MCP ([a-zA-Z_][a-zA-Z0-9_-]*) tool"),
+			useFunc:   true,
+			toolGroup: 1,
 			replFunc: func(matches []string) string {
 				return cliPrefix() + matches[1] + " CLI"
 			},
@@ -83,22 +104,27 @@ func init() {
 		// Rule 1 — Functional notation in backticks (prompts)
 		// Inner content regex allows one level of nested {} pairs (e.g. arrays).
 		{
-			re:       regexp.MustCompile("`([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*((?:[^{}]|\\{[^{}]*\\})*)\\s*\\}\\)`"),
-			useFunc:  true,
-			replFunc: func(matches []string) string { return "`" + renderCLIFlags(matches[1], matches[2]) + "`" },
+			re:        regexp.MustCompile("`([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*((?:[^{}]|\\{[^{}]*\\})*)\\s*\\}\\)`"),
+			useFunc:   true,
+			toolGroup: 1,
+			replFunc: func(matches []string) string {
+				return "`" + renderCLIFlags(matches[1], matches[2]) + "`"
+			},
 		},
 		// Rule 2 — Functional notation without backticks (skills code blocks)
 		{
-			re:      regexp.MustCompile("(?m)^([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*((?:[^{}]|\\{[^{}]*\\})*)\\s*\\}\\)$"),
-			useFunc: true,
+			re:        regexp.MustCompile("(?m)^([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*((?:[^{}]|\\{[^{}]*\\})*)\\s*\\}\\)$"),
+			useFunc:   true,
+			toolGroup: 1,
 			replFunc: func(matches []string) string {
 				return renderCLIFlags(matches[1], matches[2])
 			},
 		},
 		// Rule 3 — Object-dot notation (skills TypeScript)
 		{
-			re:      regexp.MustCompile("mcp\\.([a-zA-Z_][a-zA-Z0-9_-]*)\\.([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*((?:[^{}]|\\{[^{}]*\\})*)\\s*\\}\\)"),
-			useFunc: true,
+			re:        regexp.MustCompile("mcp\\.([a-zA-Z_][a-zA-Z0-9_-]*)\\.([a-zA-Z_][a-zA-Z0-9_-]*)\\(\\{\\s*((?:[^{}]|\\{[^{}]*\\})*)\\s*\\}\\)"),
+			useFunc:   true,
+			toolGroup: 1,
 			replFunc: func(matches []string) string {
 				tool := matches[1]
 				method := matches[2]
@@ -146,12 +172,16 @@ func TransformMCPToCLI(text string) string {
 		return text
 	}
 
+	harness := harnessToolSet()
 	for _, rule := range transformRules {
 		if rule.useFunc {
 			text = rule.re.ReplaceAllStringFunc(text, func(match string) string {
 				matches := rule.re.FindStringSubmatch(match)
 				if matches == nil {
 					return match
+				}
+				if rule.toolGroup > 0 && rule.toolGroup < len(matches) && harness[matches[rule.toolGroup]] {
+					return match // harness tool: no wrapper exists, keep the original text
 				}
 				return rule.replFunc(matches)
 			})

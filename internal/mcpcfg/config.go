@@ -216,7 +216,13 @@ type ZenConfig struct {
 	Mcp2Cli                      bool                       `json:"mcp2cli,omitempty"`
 	CliModePrefix                string                     `json:"climode_prefix,omitempty"`
 	CliModeShort                 bool                       `json:"climode_short"`
+	HarnessTools                 []string                   `json:"harness_tools,omitempty"`
 }
+
+// DefaultHarnessTools are the agent-harness tool names referenced by zen-mcp's own
+// prompt/skill text. They have no generated CLI wrapper, so the CLI-mode transform
+// (see internal/prompts/climode.go) must leave their call form alone.
+var DefaultHarnessTools = []string{"subagent"}
 
 // DefaultCliModePrefix is the CLI wrapper script prefix applied when the
 // climode_prefix config is unset, empty, or whitespace-only.
@@ -329,6 +335,7 @@ func defaultConfig() ZenConfig {
 		Mcp2Cli:             false,
 		CliModePrefix:       DefaultCliModePrefix,
 		CliModeShort:        false,
+		HarnessTools:        DefaultHarnessTools,
 	}
 }
 
@@ -381,6 +388,45 @@ func CliModePrefixOrDefault() string {
 		}
 	}
 	return DefaultCliModePrefix
+}
+
+// HarnessToolsOrDefault returns the harness tool names the CLI-mode transform must
+// skip: DefaultHarnessTools plus the configured harness_tools, normalized to trimmed
+// lowercase and deduplicated. The list is additive on purpose — the merge layer
+// replaces arrays wholesale, so a project tier that names its own harness tools must
+// not silently re-enable rewriting of the tools zen-mcp's prompts already use.
+func HarnessToolsOrDefault() []string {
+	seen := make(map[string]bool, len(DefaultHarnessTools)+4)
+	out := make([]string, 0, len(DefaultHarnessTools)+4)
+	add := func(names []string) {
+		for _, n := range names {
+			n = strings.ToLower(strings.TrimSpace(n))
+			if n == "" || seen[n] {
+				continue
+			}
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	add(DefaultHarnessTools)
+	if c := Get(); c != nil {
+		add(c.HarnessTools)
+	}
+	return out
+}
+
+// IsHarnessTool reports whether name belongs to the configured harness-tool set.
+func IsHarnessTool(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		return false
+	}
+	for _, n := range HarnessToolsOrDefault() {
+		if n == name {
+			return true
+		}
+	}
+	return false
 }
 
 func GetToolConfig(toolName string) ToolConfig {
