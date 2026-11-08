@@ -58,10 +58,7 @@ func defChat(workspace string, deps Deps) ToolDef {
 			"screenshot":      map[string]any{"description": "[chat] Attach a screenshot instead of a file: true/\"viewport\" (active tab), \"full\" (whole page), \".selector\" (element), or a screenshot object ({\"byRole\":\"button\"}, also accepted as a JSON string). Omit it entirely for a text-only question"},
 			"container":       strProp("[chat] Firefox container name or id that selects the identity for the tab chat opens (default: the provider's own)"),
 			"index":           strProp("[chat] TabRegistry id (\"t_…\") or tab index to run the chat on; omit to let chat open its own tab. An id also gives the call its own in-progress lock key instead of the per-provider one"),
-			"download_dir":    strProp("[chat] Directory to save the artifacts the provider offers for download (chatgpt/gemini code files)"),
 			"timeout":         intProp("[chat] Polling budget for the answer in ms; a slow provider is cut off at this budget, not failed faster"),
-			"path":            arrayStringProp("[chat] The bridge's own attachment key; an explicit path wins over upload_files"),
-			"take_screenshot": boolProp("[chat] Alias of screenshot=true"),
 		}, []string{"provider", "message"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return HandleChatAction(ctx, workspace, deps, req), nil
