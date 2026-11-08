@@ -55,6 +55,7 @@ func AllDefs(workspace string, deps Deps) []ToolDef {
 		defSearch(workspace, deps),
 		defFetch(workspace, deps),
 		defRequest(workspace, deps),
+		defChat(workspace, deps),
 		defMemoryIsolate(workspace, deps),
 		defMemoryShared(workspace, deps),
 		defColab(workspace, deps),

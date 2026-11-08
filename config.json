@@ -44,7 +44,8 @@
   "pooling": {
     "enabled": true,
     "tools": [
-      "browser"
+      "browser",
+      "chat"
     ],
     "elapsedMs": 120000,
     "ttlMinutes": 60,
@@ -165,6 +166,7 @@
     "fetch",
     "search",
     "browser",
+    "chat",
     "codegraph",
     "session",
     "memory",
@@ -176,6 +178,10 @@
   ],
   "toolConfigs": {
     "browser": {
+      "timeout": 2400000,
+      "format": "raw"
+    },
+    "chat": {
       "timeout": 2400000,
       "format": "raw"
     },

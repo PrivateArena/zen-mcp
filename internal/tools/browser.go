@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -17,7 +16,6 @@ import (
 	"zen-mcp/internal/logfilter"
 	"zen-mcp/internal/mcpcfg"
 	"zen-mcp/internal/toolresponse"
-	wspkg "zen-mcp/internal/workspace"
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
 )
@@ -412,39 +410,10 @@ func wrapBridgeOutput(ctx context.Context, action string, bridgeParams map[strin
 	}
 
 	if isChatLike(action) {
-		outputStr := ""
-		if s, ok := output.(string); ok {
-			outputStr = s
-		} else {
-			b, _ := json.Marshal(output)
-			outputStr = string(b)
-		}
-		threshold := 200
-		if mcpcfg.Get().ChatFileThresholdKb > 0 {
-			threshold = mcpcfg.Get().ChatFileThresholdKb
-		}
-		maxSize := threshold * 1024
-		if len(outputStr) > maxSize {
-			chatDir := ""
-			if mcpcfg.Get().ChatOutputPath != nil && *mcpcfg.Get().ChatOutputPath != "" {
-				chatDir = *mcpcfg.Get().ChatOutputPath
-			} else {
-				ws := wspkg.ResolveWorkspace(workspace, workspace, deps.Store)
-				chatDir = filepath.Join(ws, ".zenmcp", "chat")
-			}
-			if err := os.MkdirAll(chatDir, 0755); err == nil {
-				fp := filepath.Join(chatDir, fmt.Sprintf("%s-%d.md", action, time.Now().UnixMilli()))
-				if writeErr := os.WriteFile(fp, []byte(outputStr), 0644); writeErr == nil {
-					output = fmt.Sprintf("Response saved to `%s` (%.1f KB)", fp, float64(len(outputStr))/1024.0)
-				} else {
-					maxInline := 50000
-					if len(outputStr) > maxInline {
-						output = outputStr[:maxInline] + fmt.Sprintf("\n... [TRUNCATED: file write failed, showing first 50KB of %.1f KB total]", float64(len(outputStr))/1024.0)
-					} else {
-						output = outputStr
-					}
-				}
-			}
+		// A long answer is spilled to the chat output dir instead of the context; the
+		// chat tool shares that bound, see chatReplyDocument.
+		if bounded, replaced := chatReplyDocument(action, chatPlainText(output), workspace, deps); replaced {
+			output = bounded
 		}
 	}
 
