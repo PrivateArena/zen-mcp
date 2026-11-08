@@ -1,4 +1,4 @@
-- name: skills
+- name: skill-load
   description: "Activate a skill by ID — content is injected directly into this prompt with zero tool calls. Usage: /mcp:skills <id>"
   arguments:
     - name: i
