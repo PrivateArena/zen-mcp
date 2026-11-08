@@ -463,13 +463,12 @@ func TestChatRejectsContradictoryAttachments(t *testing.T) {
 	}
 }
 
-func TestChatRequiresProviderAndMessage(t *testing.T) {
+func TestChatRequiresMessage(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		args map[string]any
 		want string
 	}{
-		{"no provider", map[string]any{"message": "hello"}, "provider is required"},
 		{"no message", map[string]any{"provider": "gemini"}, "message is required"},
 		{"blank message", map[string]any{"provider": "gemini", "message": "   "}, "at least one non-empty value"},
 		{"nested message", map[string]any{"provider": "gemini", "message": []any{map[string]any{"q": 1}}}, "plain text"},
@@ -484,6 +483,23 @@ func TestChatRequiresProviderAndMessage(t *testing.T) {
 				t.Error("an invalid call must not reach the bridge")
 			}
 		})
+	}
+}
+
+func TestChatDefaultsTheProvider(t *testing.T) {
+	// A bare `zchat -m "question"` is the common call: it must reach the bridge with
+	// the default provider instead of the bridge's "provider is required" rejection.
+	doc, stub := chatRun(t, map[string]any{"message": "What is a closure?"})
+	if got := stub.byAction("chat")["provider"]; got != chatDefaultProvider {
+		t.Errorf("provider = %v, want the default %q", got, chatDefaultProvider)
+	}
+	if !strings.Contains(doc.body, chatAnswer) {
+		t.Error("a defaulted call must still return the answer")
+	}
+
+	// Only an omitted provider defaults; a present-but-empty one is a malformed list.
+	if _, text := chatCall(t, map[string]any{"provider": "  ", "message": "hi"}, nil, nil); !strings.Contains(text, "non-empty value") {
+		t.Errorf("error = %q, want it to reject an empty provider list", probeSnippet(text))
 	}
 }
 
@@ -691,10 +707,15 @@ func TestChatDefinitionIsChatOnly(t *testing.T) {
 	if _, hasAction := def.Schema["properties"].(map[string]any)["action"]; hasAction {
 		t.Error("the chat tool must not expose an action parameter")
 	}
-	for _, required := range []string{"provider", "message"} {
+	for _, required := range []string{"message"} {
 		if !stringIn(def.Schema["required"].([]string), required) {
 			t.Errorf("%s must be required: the bridge rejects the call without it", required)
 		}
+	}
+	// provider is optional by design: it defaults to chatDefaultProvider so a bare
+	// `zchat -m "question"` works, while the bridge still rejects an empty list.
+	if stringIn(def.Schema["required"].([]string), "provider") {
+		t.Error("provider must be optional: it falls back to the default provider")
 	}
 	if !def.LongRunning {
 		t.Error("a chat is minutes of page work, so the tool must be advertised as long-running")

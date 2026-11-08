@@ -257,6 +257,32 @@ func TestBrowserChatNoUploadNoPathParam(t *testing.T) {
 	}
 }
 
+// A browser chat without `provider` must default to the same provider the chat tool
+// uses, so both entry points ask the same web AI.
+func TestBrowserChatDefaultsTheProvider(t *testing.T) {
+	rec := &bridgeRecorder{}
+	ts := httptest.NewServer(rec.handler(t))
+	defer ts.Close()
+	pointBridgeAt(t, ts.URL)
+
+	HandleBrowserAction(context.Background(), t.TempDir(), Deps{}, browserReq(map[string]any{
+		"action":  "chat",
+		"message": "hello",
+	}))
+	if got := rec.last(); got == nil || got["provider"] != chatDefaultProvider {
+		t.Fatalf("provider = %#v, want the default %q", rec.last(), chatDefaultProvider)
+	}
+
+	HandleBrowserAction(context.Background(), t.TempDir(), Deps{}, browserReq(map[string]any{
+		"action":   "chat",
+		"provider": "gemini",
+		"message":  "hello",
+	}))
+	if got := rec.last(); got == nil || got["provider"] != "gemini" {
+		t.Fatalf("provider = %#v, an explicit provider must survive", rec.last())
+	}
+}
+
 func TestBrowserChatUploadAndScreenshotConflict(t *testing.T) {
 	rec := &bridgeRecorder{}
 	ts := httptest.NewServer(rec.handler(t))

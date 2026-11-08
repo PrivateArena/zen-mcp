@@ -69,7 +69,7 @@ func defBrowser(workspace string, deps Deps) ToolDef {
 			"method":          strProp("[request] HTTP method"),
 			"headers":         map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": "[request] Headers dict"},
 			"body":            map[string]any{"description": "[request] Body (string/object)"},
-			"provider":        arrayStringProp("[chat] AI provider(s); string or array"),
+			"provider":        arrayStringProp("[chat] AI provider(s); string or array (default: claude)"),
 			"message":         arrayStringProp("[chat](required) Message(s); string or array."),
 			"take_screenshot": boolProp("[chat] Take screenshot of current tab and send to AI"),
 		}, []string{"action"}),
@@ -92,6 +92,11 @@ func HandleBrowserAction(ctx context.Context, workspace string, deps Deps, req m
 	if action == "chat" {
 		if _, ok := params["message"]; !ok {
 			return toolresponse.WrapErrorWithContext(ctx, "browser", fmt.Errorf("Parameter 'message' is required for action 'chat'."), start)
+		}
+		// Same default as the chat tool, so `browser --action chat` and `zchat` agree
+		// on who answers an unqualified question.
+		if chatBlank(params["provider"]) {
+			params["provider"] = chatDefaultProvider
 		}
 		if _, ok := params["upload_files"].([]any); ok {
 			if _, ok2 := params["take_screenshot"].(bool); ok2 {

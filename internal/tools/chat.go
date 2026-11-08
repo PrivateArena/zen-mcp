@@ -40,6 +40,10 @@ const (
 	// chatMaxQuestionChars bounds the question quoted in a batch section heading, so
 	// one long prompt cannot bloat the document the way a provenance term could.
 	chatMaxQuestionChars = 80
+	// chatDefaultProvider is the provider a call without `provider` talks to, so a
+	// bare `zchat -m "question"` works the same from the shell and from the browser
+	// tool's chat action.
+	chatDefaultProvider = "claude"
 )
 
 func defChat(workspace string, deps Deps) ToolDef {
@@ -49,17 +53,17 @@ func defChat(workspace string, deps Deps) ToolDef {
 		Description: "Ask a web AI provider through its own logged-in browser session via the Firefox bridge: the prompt is typed, the answer polled and extracted, and the whole reply returned as markdown. provider accepts one name or an array, and provider/message are paired round-robin, so a single call can query several providers in parallel. No API key: it uses the browser session.",
 		LongRunning: true,
 		Schema: jsonSchema(map[string]any{
-			"provider": arrayStringProp("[chat] AI provider(s): \"gemini\", \"claude\", \"chatgpt\", \"duckduckgo\", \"perplexity\", \"grok\", \"nvidia\", \"github\", …; one name, or a comma-separated list to query them in parallel"),
+			"provider": arrayStringProp("[chat] AI provider(s): \"gemini\", \"claude\", \"chatgpt\", \"duckduckgo\", \"perplexity\", \"grok\", \"nvidia\", \"github\", …; one name, or a comma-separated list to query them in parallel (default: claude)"),
 			// Untyped on purpose: a prompt is free text, and the CLI comma-splits every
 			// array-typed param, which would silently turn "Compare A, B" into two
 			// questions. One prompt per call from the shell; arrays go in with --json.
-			"message":         map[string]any{"description": "[chat] Prompt text; an array of prompts (send it with --json) is queried in parallel and paired with provider round-robin when the two lists differ in length"},
-			"upload_files":    arrayStringProp("[chat] Local file path(s) to attach (the provider receives them as uploads); relative paths resolve against the workspace"),
-			"screenshot":      map[string]any{"description": "[chat] Attach a screenshot instead of a file: true/\"viewport\" (active tab), \"full\" (whole page), \".selector\" (element), or a screenshot object ({\"byRole\":\"button\"}, also accepted as a JSON string). Omit it entirely for a text-only question"},
-			"container":       strProp("[chat] Firefox container name or id that selects the identity for the tab chat opens (default: the provider's own)"),
-			"index":           strProp("[chat] TabRegistry id (\"t_…\") or tab index to run the chat on; omit to let chat open its own tab. An id also gives the call its own in-progress lock key instead of the per-provider one"),
-			"timeout":         intProp("[chat] Polling budget for the answer in ms; a slow provider is cut off at this budget, not failed faster"),
-		}, []string{"provider", "message"}),
+			"message":      map[string]any{"description": "[chat] Prompt text; an array of prompts (send it with --json) is queried in parallel and paired with provider round-robin when the two lists differ in length"},
+			"upload_files": arrayStringProp("[chat] Local file path(s) to attach (the provider receives them as uploads); relative paths resolve against the workspace"),
+			"screenshot":   map[string]any{"description": "[chat] Attach a screenshot instead of a file: true/\"viewport\" (active tab), \"full\" (whole page), \".selector\" (element), or a screenshot object ({\"byRole\":\"button\"}, also accepted as a JSON string). Omit it entirely for a text-only question"},
+			"container":    strProp("[chat] Firefox container name or id that selects the identity for the tab chat opens (default: the provider's own)"),
+			"index":        strProp("[chat] TabRegistry id (\"t_…\") or tab index to run the chat on; omit to let chat open its own tab. An id also gives the call its own in-progress lock key instead of the per-provider one"),
+			"timeout":      intProp("[chat] Polling budget for the answer in ms; a slow provider is cut off at this budget, not failed faster"),
+		}, []string{"message"}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return HandleChatAction(ctx, workspace, deps, req), nil
 		},
@@ -75,7 +79,7 @@ func HandleChatAction(ctx context.Context, workspace string, deps Deps, req mcp.
 	start := time.Now()
 	args := req.GetArguments()
 
-	providers, err := chatListParam("provider", args["provider"])
+	providers, err := chatProviderParam(args["provider"])
 	if err != nil {
 		return toolresponse.WrapErrorWithContext(ctx, "chat", err, start)
 	}
@@ -153,6 +157,16 @@ func HandleChatAction(ctx context.Context, workspace string, deps Deps, req mcp.
 	logSessionEvent(workspace, "chat", fmt.Sprintf("chat: %s", chatLabel(providers)), body)
 	logfilter.Debugf("[chat] %s -> %d bytes", chatLabel(providers), len(body))
 	return toolresponse.WrapSuccess(ctx, "chat", doc, start)
+}
+
+// chatProviderParam normalizes the provider argument, defaulting an omitted one to
+// chatDefaultProvider. A present-but-empty value stays an error: it is a malformed
+// list, not a request for the default.
+func chatProviderParam(v any) ([]string, error) {
+	if v == nil {
+		return []string{chatDefaultProvider}, nil
+	}
+	return chatListParam("provider", v)
 }
 
 // chatListParam normalizes a string-or-array chat argument. An MCP client sends a
