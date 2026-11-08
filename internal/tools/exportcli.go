@@ -41,6 +41,7 @@ func defExportCLI(workspace string, deps Deps) ToolDef {
 		Description: "Regenerate the z*/zen-* CLI wrapper scripts in cli/ (and their ~/.local/bin links) for every registered MCP tool — the terminal export-cli command. Run it after adding, renaming, or re-schema-ing a tool so the matching z* command exists.",
 		Schema: jsonSchema(map[string]any{
 			"short": boolProp("Emit short -a param aliases; required when using in CLI with true as value"),
+			"clean": boolProp("Remove the generated wrappers and their PATH links instead of writing them"),
 		}, []string{}),
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return HandleExportCLIAction(ctx, workspace, deps, req), nil
