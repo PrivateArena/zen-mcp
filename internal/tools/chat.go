@@ -35,8 +35,12 @@ const (
 	// write failure can never dump an unbounded answer into the context.
 	chatMaxInlineChars = 50000
 	// chatDefaultFileThresholdKb is the built-in spill threshold used when the config
-	// leaves chat_file_threshold_kb unset (0).
+	// leaves chat_file_threshold_kb unset (0). Shared with the recorder spill: one knob for
+	// "how much text belongs in context".
 	chatDefaultFileThresholdKb = 200
+	// recorderSpillPreviewChars is how much of a spilled recorder index stays inline. A
+	// filename alone would leave the agent unable to decide what to query next.
+	recorderSpillPreviewChars = 1500
 	// chatMaxQuestionChars bounds the question quoted in a batch section heading, so
 	// one long prompt cannot bloat the document the way a provenance term could.
 	chatMaxQuestionChars = 80
@@ -721,34 +725,87 @@ func chatPlainText(v any) string {
 // path than as a context flood, and the caller can still read it on demand. A file
 // write that fails is reported as a clamped inline answer, so nothing is lost without
 // a ceiling; a directory that cannot be created at all leaves the answer untouched.
-func chatReplyDocument(action, reply, workspace string, deps Deps) (string, bool) {
+// chatSpillThresholdBytes is the size beyond which a reply goes to a file instead of context.
+func chatSpillThresholdBytes() int {
 	thresholdKb := mcpcfg.Get().ChatFileThresholdKb
 	if thresholdKb <= 0 {
 		thresholdKb = chatDefaultFileThresholdKb
 	}
-	if len(reply) <= thresholdKb*1024 {
-		return reply, false
+	return thresholdKb * 1024
+}
+
+// spillDocument writes text into dir as <name>-<millis>.md and returns the path.
+func spillDocument(dir, name, text string) (string, error) {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
 	}
-	chatDir := ""
-	if cfg := mcpcfg.Get(); cfg.ChatOutputPath != nil && *cfg.ChatOutputPath != "" {
-		chatDir = *cfg.ChatOutputPath
-	} else {
-		ws := wspkg.ResolveWorkspace(workspace, workspace, deps.Store)
-		chatDir = filepath.Join(ws, ".zenmcp", "chat")
+	fp := filepath.Join(dir, fmt.Sprintf("%s-%d.md", name, time.Now().UnixMilli()))
+	if err := os.WriteFile(fp, []byte(text), 0644); err != nil {
+		return "", err
 	}
-	if err := os.MkdirAll(chatDir, 0755); err != nil {
-		return reply, false
-	}
-	fp := filepath.Join(chatDir, fmt.Sprintf("%s-%d.md", action, time.Now().UnixMilli()))
-	if writeErr := os.WriteFile(fp, []byte(reply), 0644); writeErr != nil {
-		if len(reply) > chatMaxInlineChars {
-			cut := chatMaxInlineChars
-			for cut > 0 && !utf8.RuneStart(reply[cut]) {
-				cut--
-			}
-			return reply[:cut] + fmt.Sprintf("\n... [TRUNCATED: file write failed, showing first %d of %d chars]", chatMaxInlineChars, len(reply)), true
+	return fp, nil
+}
+
+// chatFallbackInline bounds a reply that could not be written to a file, so a failed spill
+// cannot turn into an unbounded context hit.
+func chatFallbackInline(reply string) (string, bool) {
+	if len(reply) > chatMaxInlineChars {
+		cut := chatMaxInlineChars
+		for cut > 0 && !utf8.RuneStart(reply[cut]) {
+			cut--
 		}
+		return reply[:cut] + fmt.Sprintf("\n... [TRUNCATED: file write failed, showing first %d of %d chars]", chatMaxInlineChars, len(reply)), true
+	}
+	return reply, false
+}
+
+func chatReplyDocument(action, reply, workspace string, deps Deps) (string, bool) {
+	if len(reply) <= chatSpillThresholdBytes() {
 		return reply, false
+	}
+	fp, err := spillDocument(chatOutputDir(workspace, deps), action, reply)
+	if err != nil {
+		return chatFallbackInline(reply)
 	}
 	return fmt.Sprintf("Response saved to `%s` (%.1f KB)", fp, float64(len(reply))/1024.0), true
+}
+
+// chatOutputDir resolves the directory chat transcripts are spilled to.
+func chatOutputDir(workspace string, deps Deps) string {
+	if cfg := mcpcfg.Get(); cfg.ChatOutputPath != nil && *cfg.ChatOutputPath != "" {
+		return *cfg.ChatOutputPath
+	}
+	ws := wspkg.ResolveWorkspace(workspace, workspace, deps.Store)
+	return filepath.Join(ws, ".zenmcp", "chat")
+}
+
+// recorderDir is where recorder indexes are spilled. It is deliberately separate from
+// chat_output_path: that setting exists for chat transcripts, and mixing a traffic index into
+// it would make both harder to find.
+func recorderDir(workspace string, deps Deps) string {
+	ws := wspkg.ResolveWorkspace(workspace, workspace, deps.Store)
+	return filepath.Join(ws, ".zenmcp", "recorder")
+}
+
+// recorderReplyDocument spills an oversized recorder index but keeps a short preview inline: a
+// traffic index is useless as a bare filename, and an agent needs to see the record shape to
+// decide what to query next.
+func recorderReplyDocument(action, reply, workspace string, deps Deps) (string, bool) {
+	if len(reply) <= chatSpillThresholdBytes() {
+		return reply, false
+	}
+	fp, err := spillDocument(recorderDir(workspace, deps), action, reply)
+	if err != nil {
+		return chatFallbackInline(reply)
+	}
+	preview := reply
+	if len(preview) > recorderSpillPreviewChars {
+		cut := recorderSpillPreviewChars
+		for cut > 0 && !utf8.RuneStart(preview[cut]) {
+			cut--
+		}
+		preview = preview[:cut] + "\n…"
+	}
+	return fmt.Sprintf("Recorder %s result saved to `%s` (%.1f KB).\nPreview:\n%s",
+		action, fp, float64(len(reply))/1024.0, preview), true
 }

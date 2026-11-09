@@ -466,11 +466,6 @@ func DaemonURL() string {
 	return "http://" + c.Host + ":" + strconv.Itoa(c.DaemonPort)
 }
 
-func ProxyURL() string {
-	c := Get()
-	return "http://" + c.Host + ":" + strconv.Itoa(c.ProxyPort)
-}
-
 func FirefoxBridgeURL() string {
 	c := Get()
 	return "http://" + c.Host + ":" + strconv.Itoa(c.FirefoxBridgePort)

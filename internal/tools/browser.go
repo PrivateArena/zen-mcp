@@ -2,10 +2,7 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"path/filepath"
 	"strconv"
@@ -38,6 +35,8 @@ func defBrowser(workspace string, deps Deps) ToolDef {
 				"list_containers", "active_tab", "restart", "refresh", "web_logs", "chrome_logs",
 				"read", "navigate", "web_eval", "chrome_eval", "get_content", "chat",
 				"screenshot", "request",
+				"recorder_start", "recorder_status", "recorder_stop", "recorder_list",
+				"recorder_body", "recorder_search", "recorder_clear",
 			}),
 			"url":             strProp("[nav/new_tab/cookie/search] URL"),
 			"index":           strProp("[-i] TabRegistry id from navigate/active_tab (\"t_…\") to address that tab in any window, or a positional tab index; omit for the active tab"),
@@ -422,6 +421,21 @@ func wrapBridgeOutput(ctx context.Context, action string, bridgeParams map[strin
 		}
 	}
 
+	// Recorder replies are structured metadata, not prose, so they are not clamped as if they
+	// were. Two bounds do apply: the one field that carries bytes is capped like any other
+	// fetched document, and an index that outgrew the spill threshold goes to a file with a
+	// preview. Without this, `recorder_body` would ride the unclamped passthrough and the
+	// transport would silently corrupt it above 1 MiB.
+	if strings.HasPrefix(action, "recorder_") {
+		if m, ok := data["body"].(string); ok && m != "" {
+			clamped, _ := clampBridgeContent(m, recorderBodyInlineChars)
+			data["body"] = clamped
+		}
+		if bounded, replaced := recorderReplyDocument(action, chatPlainText(output), workspace, deps); replaced {
+			output = bounded
+		}
+	}
+
 	logSessionEvent(workspace, "browser", fmt.Sprintf("browser: %s", action), fmt.Sprintf("Params: %v\n\nOutput: %v", bridgeParams, output))
 	logfilter.Info(output)
 	return output
@@ -435,36 +449,10 @@ func isChatLike(action string) bool {
 	return false
 }
 
-func postJSON(ctx context.Context, url string, body map[string]any) (map[string]any, error) {
-	data, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(string(data)))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Host", "recorder.local")
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	var result any
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return map[string]any{"statusCode": resp.StatusCode}, nil
-	}
-	if m, ok := result.(map[string]any); ok {
-		m["statusCode"] = resp.StatusCode
-		return m, nil
-	}
-	return map[string]any{"statusCode": resp.StatusCode, "body": result}, nil
-}
+// recorderBodyInlineChars bounds one response body inside a recorder_body reply. It matches the
+// bridge's own RECORDER_BODY_MAX_CHARS, so neither side is the binding constraint and a larger
+// body is paged with offset instead of being silently cut.
+const recorderBodyInlineChars = 100000
 
 // resolveUploadFiles resolves relative file paths against workspaceRoot,
 // preserving the caller's shape: a plain string stays a string, an array stays
