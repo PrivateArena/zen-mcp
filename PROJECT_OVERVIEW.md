@@ -81,7 +81,7 @@ Single-language Go project. Grouped by layer; LOC approximate.
 | internal/tools/memoryisolate.go | Whiteboard-backed isolated memory cards (load/save/scope) | ~215 | `HandleIsolateLoad/HandleIsolateSave/HandleIsolateScope(ctx, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult` |
 | internal/tools/memoryshared.go | Shared/multi-project memory via whiteboard REST | ~263 | `HandleSharedLoad(ctx, client *whiteboard.Client, ws string, args map[string]any, start time.Time) *mcp.CallToolResult`; `loadRelatedProjects() map[string][]string` |
 | internal/tools/pool.go | Pool tool: poll/cancel/status/list over pooling.Registry; reports who holds the bridge turn. Intro-Commit f1354bbfea2fc72fbb2068b047639d5e603478a4 | ~130 | `HandlePoolAction(ctx, reg *pooling.Registry, req mcp.CallToolRequest) *mcp.CallToolResult`; `statusPayload(state, id string, reg) map[string]any` |
-| internal/tools/skills.go | Skill list/get with bundled resource resolution | ~98 | `HandleSkillsAction(ctx, workspace string, deps Deps, req mcp.CallToolRequest)`; `handleSkillsList(ctx, start)`; `handleSkillsGet(ctx, id string, start)` |
+| internal/tools/skills.go | Skill list/get/outline with bundled resource resolution and markdown section filtering | ~200 | `HandleSkillsAction(ctx, workspace string, deps Deps, req mcp.CallToolRequest)`; `handleSkillsList(ctx, start)`; `handleSkillsGet(ctx, id string, sections []string, start)`; `handleSkillsOutline(ctx, id string, start)`; `loadSkill(id, action string)`, `skillFilterLine(path string, filter *skills.SectionFilterResult)` |
 | internal/tools/workspace.go | Set active workspace (resolved via shared store); conditionally reports `tools_changed` only when non-empty | ~93 | `HandleWorkspaceAction(ctx, path, workspace string, deps Deps) *mcp.CallToolResult` |
 | internal/tools/colab.go | Collaboration card exchange with gateway | ~90 | `HandleColabAction(ctx, workspace string, deps Deps, req mcp.CallToolRequest) *mcp.CallToolResult` |
 
@@ -112,6 +112,7 @@ Single-language Go project. Grouped by layer; LOC approximate.
 | internal/prompts/climode.go | Rewrites MCP RPC text into CLI wrapper syntax (idempotent) | ~243 | `TransformMCPToCLI(text string) string`; `CLITool(mcpName string) string` |
 | internal/prompts/parser.go + substitutions.go | Placeholder {{ARG}} parsing and template substitution | ~95 | `substitutePlaceholders(template string, args map[string]string, known map[string]bool) string`; `SubstituteTemplate(template string, args map[string]string, argDefs []PromptArgument) string` |
 | internal/skills/reference_resolver.go | Loads skills, resolves file references and command hints | ~317 | `LoadSkills() ([]SkillRegistryEntry, error)`; `ResolveSkillContent(content, skillBaseDir, skillID string) ResolvedSkillContent`; `ScanKnowledgeBase(skillBaseDir, skillID string) ([]ResolvedReference, error)` |
+| internal/skills/sections.go | ATX-heading parser for skill markdown: the `<idx> <level> <heading> <start:end>` outline, and filtering a skill down to the sections asked for | ~480 | `ParseSections(content string) []Section`; `(Section) Range() string`; `FilterSections(content string, selectors []string) SectionFilterResult` (Content, Blocks, Spans, Kept); `SectionOutline(sections []Section) string`; `SuggestSections(sections []Section, selectors []string, limit int) []string`; `TopSectionTitles(sections []Section) []string`; `LineCount(content string) int` |
 
 ### execution safety & shell
 
@@ -199,6 +200,7 @@ Terminal REPL ── commander.ExecuteTool ──▶ same tool handlers (MakeFak
 | Change project-memory brain schema | internal/projectmemory/timeline.go (MigrateToV3, AppendEvent), ftsindex.go (IndexActiveMemory) |
 | Adjust safety/allow-list policy | internal/gatekeeper/gatekeeper.go (ValidatePathSafety, ValidateCommandPayload), internal/tools/shell.go |
 | Adjust per-workspace config or workspace detection | internal/server/routes.go (detectWorkspace order: initialize → query → header → shared store; RouteDeps.RefreshWorkspace), internal/mcpcfg/workspace.go, main.go (newWorkspaceServer, workspaceRegistries) |
+| Fetch only part of a long skill | internal/tools/skills.go (`filter_sections`, `action=outline`), internal/skills/sections.go (ParseSections / FilterSections / SectionOutline), internal/terminal/handlers/skills.go (`sg <id> [sections…]`, `so <id>`) |
 | Edit prompt templates or CLI-mode rewriting | internal/prompts/loader.go, registration.go, resolver.go, climode.go (TransformMCPToCLI) |
 | Add a terminal CLI command | internal/terminal/commander.go (Register/dispatch), new file under internal/terminal/handlers/ with `init()` |
 | Touch the Firefox bridge protocol | internal/bridge/bridge.go (CallBridge), internal/tools/browser.go, internal/tools/chat.go, mcpcfg config `firefoxBridge` |

@@ -542,7 +542,7 @@ func buildWrapperScriptOpt(t cliTool, url string, short bool) string {
 	ln(`    set -- "$_fl" "$_vl" "${@:2}"`)
 	ln(`  fi`)
 	ln(`  if [[ $# -lt 2 && "$1" != --help && "$1" != -h && "$1" != --dry-run ]]; then`)
-	ln(`    echo "Error: missing value for $1" >&2; exit 2`)
+	ln(`    echo "Error: missing value for $1 (a value containing spaces must be quoted)" >&2; exit 2`)
 	ln(`  fi`)
 	ln(`  case "$1" in`)
 	ln(`    --json)  RAW_JSON="$2"; shift 2 ;;`)
