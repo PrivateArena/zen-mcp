@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -566,4 +567,238 @@ func TestFetchToolRegisteredInAllDefs(t *testing.T) {
 	if len(stub.actions()) != 4 {
 		t.Errorf("registered handler sequence = %v", stub.actions())
 	}
+}
+
+// Section addressing: a long page must be resumable and sliceable by the offsets the
+// tool itself reported, which is what separates a fetch that answers a question from a
+// fetch that dumps a page and cuts it off.
+
+const fetchLongPage = `# Fetch API
+
+Intro prose that sets the page up.
+
+## Concepts and usage
+
+Some prose about the concepts of the page, long enough to be worth keeping.
+
+## Browser compatibility
+
+| Feature | Chrome | Firefox |
+| --- | --- | --- |
+| fetch | 42 | 39 |
+
+## See also
+
+- Using Fetch
+`
+
+func fetchPageResponses(t *testing.T, data string) map[string]string {
+	t.Helper()
+	return map[string]string{
+		"navigate":              fetchNavResponse,
+		"wait_for_network_idle": `{"success":true,"data":{"idle":true}}`,
+		"read":                  fmt.Sprintf(`{"success":true,"data":%s}`, data),
+	}
+}
+
+func TestFetchOutlineReturnsTheSectionMap(t *testing.T) {
+	fixture := fmt.Sprintf(`{"content":%q,"extracted":"landmark","shadow_roots":2}`, fetchLongPage)
+	bridgeStubAt(t, fetchPageResponses(t, fixture))
+
+	res := HandleFetchAction(context.Background(), t.TempDir(), Deps{}, fetchReq(map[string]any{
+		"url": "https://example.com/", "outline": true,
+	}))
+	doc := docOf(t, res)
+	for _, want := range []string{"Concepts and usage", "Browser compatibility", "See also"} {
+		if !strings.Contains(doc.body, want) {
+			t.Errorf("outline is missing section %q: %q", want, probeSnippet(doc.body))
+		}
+	}
+	if strings.Contains(doc.body, "Intro prose") {
+		t.Errorf("outline mode must not return the body: %q", probeSnippet(doc.body))
+	}
+	if doc.terms["extracted"] != "landmark" || doc.terms["shadow"] != "2" {
+		t.Errorf("extraction report not surfaced in provenance: %q", probeSnippet(doc.body))
+	}
+}
+
+func TestFetchSectionSelectsOneSection(t *testing.T) {
+	bridgeStubAt(t, fetchPageResponses(t, fmt.Sprintf(`{"content":%q,"extracted":"landmark"}`, fetchLongPage)))
+
+	res := HandleFetchAction(context.Background(), t.TempDir(), Deps{}, fetchReq(map[string]any{
+		"url": "https://example.com/", "section": "compatibility",
+	}))
+	doc := docOf(t, res)
+	if !strings.HasPrefix(strings.TrimSpace(doc.body), "## Browser compatibility") {
+		t.Errorf("section payload must start at the matched heading, got %q", probeSnippet(doc.body))
+	}
+	if strings.Contains(doc.body, "See also") {
+		t.Errorf("section must stop at the next heading of the same level: %q", probeSnippet(doc.body))
+	}
+	if strings.Contains(doc.body, "Concepts and usage") {
+		t.Errorf("section must not include earlier content: %q", probeSnippet(doc.body))
+	}
+	if doc.terms["section"] != "compatibility" {
+		t.Errorf("provenance must report the selected section, got %q", doc.terms["section"])
+	}
+}
+
+func TestFetchUnknownSectionNamesTheSections(t *testing.T) {
+	bridgeStubAt(t, fetchPageResponses(t, fmt.Sprintf(`{"content":%q}`, fetchLongPage)))
+
+	res := HandleFetchAction(context.Background(), t.TempDir(), Deps{}, fetchReq(map[string]any{
+		"url": "https://example.com/", "section": "browser support matrix",
+	}))
+	text := resultText(t, res)
+	if !strings.Contains(text, "no section") {
+		t.Fatalf("want an unknown-section error, got %q", probeSnippet(text))
+	}
+	// The names of what IS there turn one wasted call into none.
+	for _, want := range []string{"Concepts and usage", "See also"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("unknown-section error must list the available sections, missing %q", want)
+		}
+	}
+}
+
+func TestFetchClampsAtSectionBoundaryAndReportsNextStart(t *testing.T) {
+	// Two sections, the second one starting inside the budget: the cut belongs there.
+	page := "# Head\n\n" + strings.Repeat("a", 1500) + "\n\n## Tail\n\n" + strings.Repeat("b", 4000)
+	bridgeStubAt(t, fetchPageResponses(t, fmt.Sprintf(`{"content":%q,"extracted":"landmark"}`, page)))
+
+	res := HandleFetchAction(context.Background(), t.TempDir(), Deps{}, fetchReq(map[string]any{
+		"url": "https://example.com/", "max_chars": 2000,
+	}))
+	doc := docOf(t, res)
+	if doc.terms["truncated"] != "true" {
+		t.Fatal("expected the truncated flag")
+	}
+	if strings.Contains(doc.body, "bbbb") {
+		t.Errorf("cut must land on the section edge, not inside the tail: %q", probeSnippet(doc.body))
+	}
+	next, ok := doc.terms["next_start"]
+	if !ok {
+		t.Fatal("a clamped payload must report where to continue")
+	}
+	offset, err := strconv.Atoi(next)
+	if err != nil {
+		t.Fatalf("next_start is not an offset: %q", next)
+	}
+	if !strings.HasPrefix(page[offset:], "## Tail") {
+		t.Errorf("next_start %d does not point at the omitted heading", offset)
+	}
+	if doc.terms["size"] != fmt.Sprint(len(page)) {
+		t.Errorf("size term = %q, want the full page length %d", doc.terms["size"], len(page))
+	}
+}
+
+func TestFetchStartIndexResumesWhereNextStartPointed(t *testing.T) {
+	page := "# Head\n\n" + strings.Repeat("a", 1500) + "\n\n## Tail\n\n" + strings.Repeat("b", 4000)
+	bridgeStubAt(t, fetchPageResponses(t, fmt.Sprintf(`{"content":%q}`, page)))
+
+	first := docOf(t, HandleFetchAction(context.Background(), t.TempDir(), Deps{}, fetchReq(map[string]any{
+		"url": "https://example.com/", "max_chars": 2000,
+	})))
+	resume, err := strconv.Atoi(first.terms["next_start"])
+	if err != nil {
+		t.Fatalf("no usable next_start in %v", first.terms)
+	}
+
+	second := docOf(t, HandleFetchAction(context.Background(), t.TempDir(), Deps{}, fetchReq(map[string]any{
+		"url": "https://example.com/", "max_chars": 2000, "start_index": resume,
+	})))
+	if !strings.HasPrefix(strings.TrimSpace(second.body), "## Tail") {
+		t.Errorf("resumed payload = %q, want it to start at the omitted section", probeSnippet(second.body))
+	}
+}
+
+func TestFetchStartIndexPastTheEndIsAnError(t *testing.T) {
+	bridgeStubAt(t, fetchPageResponses(t, fmt.Sprintf(`{"content":%q}`, fetchLongPage)))
+
+	res := HandleFetchAction(context.Background(), t.TempDir(), Deps{}, fetchReq(map[string]any{
+		"url": "https://example.com/", "start_index": 900000,
+	}))
+	if text := resultText(t, res); !strings.Contains(text, "past the end") {
+		t.Errorf("want an out-of-range error, got %q", probeSnippet(text))
+	}
+}
+
+func TestFetchReportsWholeBodyFallback(t *testing.T) {
+	// The MDN failure mode: article detection gave up and handed back the whole body.
+	// That has to be visible without reading the payload.
+	bridgeStubAt(t, fetchPageResponses(t, `{"content":"# Example Domains","extracted":"body","unhydrated":4,"extract_error":"Readability is not a constructor"}`))
+
+	doc := docOf(t, HandleFetchAction(context.Background(), t.TempDir(), Deps{}, fetchReq(map[string]any{
+		"url": "https://example.com/",
+	})))
+	if doc.terms["extracted"] != "body" {
+		t.Errorf("extracted = %q, want body", doc.terms["extracted"])
+	}
+	if doc.terms["unhydrated"] != "4" {
+		t.Errorf("unhydrated = %q, want 4", doc.terms["unhydrated"])
+	}
+	if !strings.Contains(provenanceLine(doc), "Readability is not a constructor") {
+		t.Errorf("extract_error not surfaced: %q", probeSnippet(doc.body))
+	}
+}
+
+func provenanceLine(doc bridgeDoc) string {
+	terms := make([]string, 0, len(doc.terms))
+	for k, v := range doc.terms {
+		terms = append(terms, k+":"+v)
+	}
+	return strings.Join(terms, " | ")
+}
+
+func TestBridgeHeadingsSkipsFencedCode(t *testing.T) {
+	md := "# Title\n\n```md\n## not a heading\n```\n\n## Real\n\ntext\n"
+	heads := bridgeHeadings(md)
+	if len(heads) != 2 {
+		t.Fatalf("headings = %+v, want Title and Real", heads)
+	}
+	if heads[1].title != "Real" {
+		t.Errorf("second heading = %q", heads[1].title)
+	}
+	if !strings.HasPrefix(md[heads[1].start:], "## Real") {
+		t.Errorf("offset %d does not point at the heading", heads[1].start)
+	}
+}
+
+func TestFetchSchemaDeclaresTheAddressingParams(t *testing.T) {
+	found := lookupDef(t, "fetch")
+	props, _ := found.Schema["properties"].(map[string]any)
+	for _, name := range []string{"outline", "section", "start_index"} {
+		if _, ok := props[name]; !ok {
+			t.Errorf("fetch schema missing %s property", name)
+		}
+	}
+}
+
+// lookupDef finds a registered tool definition by name, for schema assertions.
+func lookupDef(t *testing.T, name string) ToolDef {
+	t.Helper()
+	defs := AllDefs("/ws", Deps{})
+	for i := range defs {
+		if defs[i].Name == name {
+			return defs[i]
+		}
+	}
+	t.Fatalf("tool %q is not registered in AllDefs", name)
+	return ToolDef{}
+}
+
+func TestFetchReadsTextBooleansFromTheCLIWrapper(t *testing.T) {
+	// The generated z* wrappers post every value as a string, so -o true must behave
+	// exactly like outline: true. Before bridgeBool it silently returned the whole page.
+	page := "# Head\n\nprose\n\n## Tail\n\nmore\n"
+	bridgeStubAt(t, fetchPageResponses(t, fmt.Sprintf(`{"content":%q}`, page)))
+
+	res := HandleFetchAction(context.Background(), t.TempDir(), Deps{}, fetchReq(map[string]any{
+		"url": "https://example.com/", "outline": "true",
+	}))
+	doc := docOf(t, res)
+	if !strings.Contains(doc.body, "section map") {
+		t.Errorf("outline=%q must select outline mode, body = %q", "true", probeSnippet(doc.body))
+	}
+
 }

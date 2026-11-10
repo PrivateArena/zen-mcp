@@ -197,3 +197,83 @@ hygiene → shadow-piercing serializer + slot dedup → composite readiness → 
 header → visibility/chrome pruning → outline/`section`/`goal` paging → two-stage
 (trafilatura-class) extraction → SSRF/isolation → `Accept: text/markdown` pre-flight.
 Skip neural extractors and a default LLM summary pass.
+
+---
+
+## PART 5 — Built (same day)
+
+Acceptance harness first, then the changes; every step was verified against it.
+
+| Artefact | What |
+|---|---|
+| `internal/tools/testdata/fetch_shadow_fixture.html` | deterministic page with the shapes that used to fail: open shadow root two levels deep, closed shadow root, `<slot>` projection with fallback content, never-hydrated placeholder, light children that must NOT appear, table, details, ordered list, relative link, heading self-anchor, nav/footer chrome |
+| `internal/tools/fetch_fixtures_test.go` | live fixture suite (opt-in `ZFETCH_LIVE=1`): the local fixture served over loopback, plus MDN Fetch API (compat tables), MDN HTTP status (wide tables), overreacted (article path must not regress). Must-include / must-exclude snippets + byte budget |
+
+### Bridge (`/media/jang/home/PortableApp/firefox/profile/chrome/JS/`)
+
+1. **`utils/SimpleMarkdown.js`** — shadow piercing. `renderChildren()` returns the flattened
+   render order (shadow tree replaces the host's children; `<slot>` yields
+   `assignedNodes({flatten:true})`, its own children only as fallback), an empty shadow tree
+   falls back to the host's light DOM (unhydrated placeholder), closed roots read through
+   `openOrClosedShadowRoot`, plus a node budget and `{nodes, shadowRoots, slots,
+   droppedChrome}` stats. `collectDeep` makes `table.rows`/`row.cells` fall back to a
+   shadow-aware walk. Also: `<slot>`, `details`/`summary`, `h5`/`h6`, `figure`/`figcaption`,
+   `dl/dt/dd`, real `ol` numbering, `absolutize()` via `node.baseURI`, bare-fragment links
+   collapsed to their text, `dialog`/`template`/`svg` dropped, and `dropChrome` pruning
+   (`nav aside form footer`, landmark roles, `aria-hidden`, `hidden`, plus a curated
+   id/class chrome-hint list on block-level and custom elements).
+2. **`bridge/frame.js`** — `findMainContent()` (landmark candidates searched through shadow
+   roots, outermost wrapper rejected when a nested one already carries ≥50% of its text),
+   `MAIN_MIN_TEXT` floor so an SPA shell is not mistaken for content, `unhydratedHosts()`
+   (`:not(:defined)` with nothing rendered), `observeQuiet()` (MutationObserver on every
+   shadow root, quiet period then a hard cap), and the read path now reports
+   `extracted: landmark|readability|body`, `chars`, `shadow_roots`, `slots`,
+   `dropped_chrome`, `unhydrated`, `settled`, `extract_error`. Scoped `read` passes the same
+   options.
+3. **Latent bug found by the new reporting**: Readability was loaded with the content window
+   as its target, and `win.Readability` is not readable back through the Xray wrapper —
+   `new win.Readability(...)` threw "not a constructor" on *every* page, the `catch {}`
+   swallowed it, and every non-landmark page was a body dump. Now loaded into a sandbox the
+   frame script owns, with the failure reported.
+
+### zen-mcp (`internal/tools/`)
+
+4. **`fetch.go`** — provenance now carries the extraction report; new params `outline`
+   (section map with byte offsets), `section` (one section, matched against heading text,
+   error lists the available names), `start_index` (resume at an offset); clamping now stops
+   at a section edge in the last third of the budget and names what follows; `settle_ms`
+   passed to the read call.
+5. **`tabflow.go`** — `bridgeBool()`: the generated CLI wrappers post every value as a
+   string, so `--outline true` used to read as `false`. Fixes `keep_tab` in `search` and
+   `browser` the same way.
+6. CLI wrappers regenerated (`zexport_cli --clean false`).
+
+`unhydratedHosts` counts `:not(:defined)` elements *inside the subtree being serialized*:
+the browser and its extensions inject un-upgraded custom elements into every page
+(`harper-render-box`), which made every single fetch report a half-loaded page.
+
+### Measured
+
+| Page | Before | After |
+|---|---|---|
+| MDN Fetch API | 13,758 B, tables absent, 42%+24% nav/footer | 19,140 B, both compat tables, `extracted: landmark`, 12-section outline in 480 B |
+| same, `-sec api.Window.fetchLater` | n/a | 2.3 KB, one table |
+| MDN HTTP status | n/a | 26,657 B, tables intact |
+| overreacted blog | clean (accidentally) | clean, `extracted: landmark`, no regression |
+| example.com | silent body dump | `extracted: readability` |
+
+Full `go test ./...` green; `ZFETCH_LIVE=1 go test ./internal/tools -run TestFetchExtract` green.
+
+### Still open
+
+1. **Safety before shipping as a default path**: fetch runs in the user's logged-in Firefox.
+   Needs a container/private-context decision plus redirect-chain validation (private IPs,
+   `file:`/`about:`/`moz-extension:`). Not yet done.
+2. BCD cell text repeats the browser name from the column header (~2x table size); a
+   colspan-aware table writer and header-label dedup would fix it, and also the ragged
+   `|  | desktop | mobile | server |` header row of grouped headers.
+3. The BCD `<section class="bc-legend">` repeats once per table (~600 B).
+4. Cross-process iframes still answer nothing (Fission), and `read` has no
+   `win.top !== win` bail-out, so a subframe can still win the first-reply race.
+5. `PROJECT_OVERVIEW.md` in the bridge profile is stale about the read path (line counts,
+   and it never says scoped `read` skips article detection).

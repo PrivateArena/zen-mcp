@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Bridge extraction fixture</title></head>
+<body>
+  <nav id="chrome">
+    <a href="/one">NAV_JUNK_ONE</a> <a href="/two">NAV_JUNK_TWO</a> <a href="/three">NAV_JUNK_THREE</a>
+    <a href="/four">NAV_JUNK_FOUR</a> <a href="/five">NAV_JUNK_FIVE</a>
+  </nav>
+
+  <main class="layout__content">
+    <article>
+      <h1 id="install">Install<a class="heading-anchor" href="#install"># Install self anchor</a></h1>
+      <p>PROSE_MARKER_ALPHA The article body lives inside main and article.</p>
+      <p>See <a href="../other/page.html">relative link marker</a> and <a href="https://example.com/fixed">absolute link marker</a>.</p>
+      <h2 id="steps">Steps</h2>
+      <ol>
+        <li>ORDERED_ONE</li>
+        <li>ORDERED_TWO</li>
+        <li>ORDERED_THREE</li>
+      </ol>
+      <details>
+        <summary>DETAILS_SUMMARY_MARKER</summary>
+        <p>DETAILS_BODY_MARKER</p>
+      </details>
+      <table>
+        <thead><tr><th>LIGHT_TABLE_HEAD</th></tr></thead>
+        <tbody><tr><td>LIGHT_TABLE_CELL_11</td></tr></tbody>
+      </table>
+
+      <!-- The MDN case: content only ever exists inside a shadow root. The host's own
+           child is not projected anywhere, so the browser never paints it. -->
+      <shadow-table-host>
+        <p>UNASSIGNED_LIGHT_MUST_NOT_APPEAR</p>
+      </shadow-table-host>
+
+      <!-- Slot projection: the light children must appear exactly once, in the
+           shadow tree's slot position, and the shadow fallback must not. -->
+      <slot-card-host>
+        <p>SLOT_LIGHT_TEXT_77</p>
+      </slot-card-host>
+
+      <!-- Closed shadow root: reachable only through openOrClosedShadowRoot. -->
+      <closed-shadow-host></closed-shadow-host>
+
+      <!-- Never-hydrated placeholder: no shadow root at all, so the light-DOM
+           fallback is the only content and must survive. -->
+      <lazy-never-hydrated>
+        <p>FALLBACK_TEXT_55</p>
+      </lazy-never-hydrated>
+    </article>
+  </main>
+
+  <footer><p>FOOTER_JUNK_MARKER</p></footer>
+
+  <script>
+    customElements.define('shadow-table-host', class extends HTMLElement {
+      connectedCallback() {
+        const root = this.attachShadow({ mode: 'open' });
+        // Two levels deep, like MDN's <mdn-compat-table-lazy> -> <mdn-compat-table>.
+        root.innerHTML = '<p>SHADOW_OUTER_TEXT</p>' +
+          '<inner-table-host></inner-table-host>';
+      }
+    });
+    customElements.define('inner-table-host', class extends HTMLElement {
+      connectedCallback() {
+        const r = this.attachShadow({ mode: 'open' });
+        r.innerHTML = '<table><thead><tr><th>SHADOW_TABLE_HEAD</th><th>Chrome</th></tr></thead>' +
+          '<tbody><tr><td>SHADOW_ROW_LABEL</td><td>SHADOW_TABLE_CELL_42</td></tr></tbody></table>';
+      }
+    });
+    customElements.define('slot-card-host', class extends HTMLElement {
+      connectedCallback() {
+        const r = this.attachShadow({ mode: 'open' });
+        r.innerHTML = '<section><slot><p>SLOT_FALLBACK_MUST_NOT_APPEAR</p></slot></section>';
+      }
+    });
+    customElements.define('closed-shadow-host', class extends HTMLElement {
+      connectedCallback() {
+        const r = this.attachShadow({ mode: 'closed' });
+        r.innerHTML = '<p>CLOSED_SHADOW_TEXT_99</p>';
+      }
+    });
+  </script>
+</body>
+</html>

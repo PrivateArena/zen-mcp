@@ -3,6 +3,8 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"zen-mcp/internal/bridge"
 	"zen-mcp/internal/logfilter"
@@ -103,8 +105,34 @@ func verifyTab(res map[string]any, tabID, subject string) error {
 	return nil
 }
 
+// bridgeBool reads a boolean a caller may have sent as text. The generated CLI wrappers
+// post every value as a string (ok=false only for a value that is neither a bool nor a
+// parseable one, so a tool that must not guess can report the mistake instead).
+func bridgeBool(v any) (bool, bool) {
+	switch x := v.(type) {
+	case bool:
+		return x, true
+	case string:
+		trimmed := strings.ToLower(strings.TrimSpace(x))
+		if parsed, err := strconv.ParseBool(trimmed); err == nil {
+			return parsed, true
+		}
+		switch trimmed {
+		case "yes", "y":
+			return true, true
+		case "no", "n":
+			return false, true
+		}
+	case float64:
+		if x == 0 || x == 1 {
+			return x == 1, true
+		}
+	}
+	return false, false
+}
+
 // keepTabArg reports whether the caller asked to keep the tab open.
 func keepTabArg(v any) bool {
-	b, _ := v.(bool)
+	b, _ := bridgeBool(v)
 	return b
 }
