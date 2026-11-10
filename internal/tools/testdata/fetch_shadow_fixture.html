@@ -27,6 +27,55 @@
         <tbody><tr><td>LIGHT_TABLE_CELL_11</td></tr></tbody>
       </table>
 
+      <!-- Grouped header with rowspan+colspan. Without span expansion the header band is
+           one flat line and the values land under the wrong labels. -->
+      <table id="matrix">
+        <thead>
+          <tr><th rowspan="2">MATRIX_ROW</th><th colspan="2">MATRIX_GROUP</th></tr>
+          <tr><th>MATRIX_EARLY</th><th>MATRIX_LATE</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>matrix body</td><td>MATRIX_CELL_EARLY</td><td>MATRIX_CELL_LATE</td></tr>
+        </tbody>
+      </table>
+
+      <!-- A cell that restates its own column header, the shape that doubles a
+           browser-compatibility table. The second column's label appears once, so it must
+           stay exactly as written. -->
+      <table id="annotated">
+        <thead><tr><th>Chrome</th><th>Firefox</th></tr></thead>
+        <tbody>
+          <tr><td>Chrome – Full support  Chrome  42</td><td>Firefox – No support</td></tr>
+        </tbody>
+      </table>
+
+      <!-- The classic header corner: the first header row opens with an empty <td>, which
+           must not demote the whole header band to a data row. -->
+      <table id="corner">
+        <thead>
+          <tr><td></td><th colspan="2">CORNER_GROUP</th></tr>
+          <tr><th>CORNER_LEFT</th><th>Chrome</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>corner body</td><td>Chrome – Full support  Chrome  99</td></tr>
+        </tbody>
+      </table>
+
+      <!-- A destination wrapped in a kilobyte of page state. -->
+      <p><a href="https://example.com/report?marker=LONG_QUERY_MARKER&amp;metadata=%3Cdetails%3E%3Csummary%3EREPORT_TAIL_MUST_NOT_APPEAR%3C/summary%3E%3C/details%3E">report link marker</a></p>
+
+      <!-- Boilerplate repeated under every table on the page. -->
+      <section class="legend">
+        <p>LEGEND_MARKER_ONE The following markers describe the state of the implementation in each browser engine and are generated from the compat data set.</p>
+      </section>
+      <section class="legend">
+        <p>LEGEND_MARKER_ONE The following markers describe the state of the implementation in each browser engine and are generated from the compat data set.</p>
+      </section>
+
+      <!-- Another document: its content is not this page's answer, and it must not be able
+           to answer for the page either. -->
+      <iframe src="/fetch_shadow_frame.html" title="embedded"></iframe>
+
       <!-- The MDN case: content only ever exists inside a shadow root. The host's own
            child is not projected anywhere, so the browser never paints it. -->
       <shadow-table-host>

@@ -266,14 +266,37 @@ Full `go test ./...` green; `ZFETCH_LIVE=1 go test ./internal/tools -run TestFet
 
 ### Still open
 
-1. **Safety before shipping as a default path**: fetch runs in the user's logged-in Firefox.
-   Needs a container/private-context decision plus redirect-chain validation (private IPs,
-   `file:`/`about:`/`moz-extension:`). Not yet done.
-2. BCD cell text repeats the browser name from the column header (~2x table size); a
-   colspan-aware table writer and header-label dedup would fix it, and also the ragged
-   `|  | desktop | mobile | server |` header row of grouped headers.
-3. The BCD `<section class="bc-legend">` repeats once per table (~600 B).
-4. Cross-process iframes still answer nothing (Fission), and `read` has no
-   `win.top !== win` bail-out, so a subframe can still win the first-reply race.
-5. `PROJECT_OVERVIEW.md` in the bridge profile is stale about the read path (line counts,
-   and it never says scoped `read` skips article detection).
+1. **Safety** — fetch runs in the user's logged-in Firefox: container/private-context decision
+   plus redirect-chain validation (private IPs, `file:`/`about:`/`moz-extension:`). Deferred by
+   decision, not oversight.
+2. Cross-origin iframes are still unreachable (Fission) — now *reported* as `frames` /
+   `frames_cross_origin` instead of being silently absent.
+3. Two `### Legend` blocks on MDN are near-duplicates (the second lists fewer support levels),
+   so block folding correctly leaves both. A subset-aware fold would be a real information risk
+   for ~600 bytes; not worth it.
+
+## PART 6 — Table and frame pass (same day)
+
+Measured on the MDN Fetch API page: 19,140 B → **12,017 B** (and 13,758 B with no tables at all
+before any of this). MDN HTTP status: 26,657 B → 24,543 B.
+
+| Change | Where | Effect |
+|---|---|---|
+| colspan/rowspan grid expansion; the deepest header row labels the columns | `utils/SimpleMarkdown.js handleTable` | MDN's compat table emitted a 4-column header over 16-column rows, every value under the wrong label. Now `\|  \| Chrome \| Edge \| …` over aligned cells |
+| a cell that opens by restating its own column header (`Chrome – Full support  Chrome  42`) loses the label, but only when the label appears twice and as a `Label – ` prefix | same | `Full support 42`. The 2× guard is what keeps a `Language` column reading "Python 3 and Python 2" intact |
+| long query strings capped at 60 chars with `[query omitted]` named | same | MDN's "report a problem" link carried ~700 B of base64-ish metadata per table; destination preserved |
+| repeated long `<section>` folded to `[same as above]` (`BLOCK_DEDUPE_MIN_CHARS = 120`) | same | proven on the fixture; MDN's two legends are genuinely different, so nothing folds there |
+| `read`/`get_content`/`get_text` answer only from `win.top` | `bridge/frame.js` | closes the first-reply race with in-process iframes (`detect_challenge` already did this) |
+| `findMainContent` scoped to the document's own node trees, subframes excluded | same | an embedded `<main>` can no longer win page selection; still addressable by selector |
+| `subframes` / `subframes_unreadable` reported | same + `fetch.go` terms `frames`, `frames_cross_origin` | "the content is in a cross-origin frame" is now distinguishable from "the page has none" |
+
+Incidental: `server.mjs` now injects `frame.js` as `data:application/javascript;charset=utf-8`.
+Without the charset, a literal non-ASCII character in a frame-side source arrives in the page
+mojibake'd (`…` → `â€¦`); the utilities load from a `file:` URI where a charset cannot be
+declared, so frame-side sources are ASCII-only by convention. The empty-corner-cell case
+(`<td></td><th colspan=2>…`) is now a header row — MDN's platform band was being emitted as a
+data row, which is why the label pass did nothing on the first try.
+
+New fixture coverage: grouped headers with rowspan/colspan, an empty-`<td>` header corner, an
+annotated cell, a repeated `<section>`, a same-origin `<iframe>` with its own `<main>` (its text
+must never reach the payload).

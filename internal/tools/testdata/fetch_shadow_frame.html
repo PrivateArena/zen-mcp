@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Embedded frame</title></head>
+<body>
+  <!-- A same-origin iframe with a landmark of its own. Selection is scoped to the top
+       document, so none of this may reach the payload; a caller that wants the frame
+       addresses it with a selector. -->
+  <main>
+    <h1>IFRAME_HEADLINE_MARKER</h1>
+    <p>IFRAME_BODY_MARKER This document is embedded, and an embedded document is not the page
+      that was fetched. If this text reaches the payload, whole-page extraction answered from
+      the wrong document.</p>
+  </main>
+</body>
+</html>

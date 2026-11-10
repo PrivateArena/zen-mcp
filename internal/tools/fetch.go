@@ -402,6 +402,8 @@ func bridgeReportTerms(report map[string]any) []string {
 	for _, key := range []struct{ field, label string }{
 		{"shadow_roots", "shadow"},
 		{"unhydrated", "unhydrated"},
+		{"subframes", "frames"},
+		{"subframes_unreadable", "frames_cross_origin"},
 	} {
 		if n, ok := bridgeIntArg(report[key.field]); ok && n > 0 {
 			terms = append(terms, bridgeTerm(key.label, fmt.Sprint(n)))

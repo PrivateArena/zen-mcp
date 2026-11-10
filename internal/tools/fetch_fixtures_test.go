@@ -109,6 +109,15 @@ func TestFetchExtractsShadowDOMFixture(t *testing.T) {
 			// An unhydrated placeholder has no shadow tree, so its light DOM is the content.
 			"FALLBACK_TEXT_55",
 			"LIGHT_TABLE_CELL_11",
+			// Spans expanded: the deepest header row labels the columns, and the body row
+			// lines up with three columns instead of a flat 2-over-3 mismatch.
+			"MATRIX_ROW | MATRIX_EARLY | MATRIX_LATE",
+			"| matrix body | MATRIX_CELL_EARLY | MATRIX_CELL_LATE |",
+			// A cell that restates its own column header keeps the value, not the label.
+			"Full support 42",
+			"Firefox – No support",
+			"LEGEND_MARKER_ONE",
+			"[same as above]",
 			"DETAILS_SUMMARY_MARKER",
 			"DETAILS_BODY_MARKER",
 			"ORDERED_ONE",
@@ -124,6 +133,13 @@ func TestFetchExtractsShadowDOMFixture(t *testing.T) {
 			// won, and a slot's fallback when something was assigned to it.
 			"UNASSIGNED_LIGHT_MUST_NOT_APPEAR",
 			"SLOT_FALLBACK_MUST_NOT_APPEAR",
+			// The duplicated text of a repeated block, and the label that doubles a table cell.
+			"Chrome – Full support  Chrome  42",
+			// Page state wrapped around a destination, not the destination.
+			"REPORT_TAIL_MUST_NOT_APPEAR",
+			// Another document answered for the page.
+			"IFRAME_HEADLINE_MARKER",
+			"IFRAME_BODY_MARKER",
 			// A relative href the caller cannot resolve, and a heading self-anchor that
 			// answers nothing and costs a line per heading.
 			"](../other/page.html)",
@@ -131,7 +147,15 @@ func TestFetchExtractsShadowDOMFixture(t *testing.T) {
 		},
 		maxBytes: 8000,
 	}
-	runExtractionFixture(t, fixture, nil)
+	doc := runExtractionFixture(t, fixture, nil)
+
+	// Boilerplate is folded, not deleted: the text appears once and the repeat is named.
+	if n := strings.Count(doc.body, "LEGEND_MARKER_ONE"); n != 1 {
+		t.Errorf("repeated legend appears %d times, want 1 (folded to [same as above])", n)
+	}
+	if doc.terms["frames"] != "1" {
+		t.Errorf("an embedded frame must be reported, terms = %v", doc.terms)
+	}
 }
 
 // TestFetchExtractsLivePages is the regression suite for the pages that motivated the
@@ -151,12 +175,16 @@ func liveExtractionFixtures() []extractionFixture {
 			// dumps and footer are what the payload used to be mostly made of.
 			url:         "https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API",
 			title:       "mdn_fetch_api_shadow_tables",
-			mustInclude: []string{"Fetch API", "fetchLater", "Chrome", "Firefox", "Safari", "Edge"},
+			mustInclude: []string{"Fetch API", "fetchLater", "Chrome", "Firefox", "Safari", "Edge",
+				// A compat cell keeps its verdict and loses the browser name it shares
+				// with its own column header.
+				"Full support 42"},
 			mustExclude: []string{
 				"Skip to main content",
 				"HTML: Markup language",
 				"Learn web development",
 				"Report a problem with this content",
+				"Chrome – Full support  Chrome  42",
 			},
 			maxBytes: 60000,
 		},
