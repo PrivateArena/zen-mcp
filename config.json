@@ -44,8 +44,8 @@
   "pooling": {
     "enabled": true,
     "tools": [
-      "browser",
-      "chat"
+      "==browser",
+      "==chat"
     ],
     "elapsedMs": 120000,
     "ttlMinutes": 60,
