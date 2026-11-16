@@ -127,6 +127,11 @@ var webserverActionSpecs = map[string]webserverActionSpec{
 	"revision_list": {kind: webserverAdminAction, required: []string{"site", "slug"}, endpoint: "revision/list"},
 	"media_upload":  {kind: webserverAdminAction, required: []string{"site", "path"}, endpoint: "media/upload"},
 	"rename_slug":   {kind: webserverAdminAction, required: []string{"site", "old_slug", "new_slug"}, endpoint: "rename_slug"},
+	// A URL move that is not a rename. The engine refuses an off-site destination, and says why in
+	// the error, so nothing here needs to second-guess the value: the one thing worth stating is
+	// that this tool is not the guard (plan 2 A-12's open-redirect rule lives server-side, where
+	// every writer of the table can be held to it).
+	"redirect": {kind: webserverAdminAction, required: []string{"site", "from", "to"}, endpoint: "redirect"},
 	// An article delete is irreversible and the engine admits it without asking, so the literal is
 	// required here — same reasoning as `rm` below.
 	"delete": {kind: webserverAdminAction, required: []string{"site", "slug"}, endpoint: "delete", exact: map[string]string{"confirm": "yes"}},
@@ -292,6 +297,8 @@ func webserverDispatch(ctx context.Context, inv webserverInvocation) *mcp.CallTo
 	case "delete":
 		return webserverAdminCall(ctx, inv)
 	case "media_upload":
+		return webserverAdminCall(ctx, inv)
+	case "redirect":
 		return webserverAdminCall(ctx, inv)
 	case "revision_list":
 		return webserverAdminCall(ctx, inv)
@@ -750,6 +757,15 @@ func webserverAdminCall(ctx context.Context, inv webserverInvocation) *mcp.CallT
 			"old_slug": argString(inv.Args, "old_slug"),
 			"new_slug": argString(inv.Args, "new_slug"),
 		})
+	case "redirect":
+		// `permanent` is only sent when the caller said so: the endpoint's own default is a
+		// permanent move, and volunteering the key would turn "record a redirect" into "record a
+		// temporary redirect" whenever the CLI stringified an absent flag.
+		body := map[string]any{"from": argString(inv.Args, "from"), "to": argString(inv.Args, "to")}
+		if hasArg(inv.Args, "permanent") {
+			body["permanent"] = webserverBoolArg(inv.Args, "permanent")
+		}
+		raw, err = client.Call(ctx, site, "redirect", body)
 	case "revision_list":
 		q := url.Values{"slug": []string{argString(inv.Args, "slug")}}
 		raw, err = client.Call(ctx, site, "revision/list?"+q.Encode(), nil)
