@@ -20,7 +20,7 @@ func defMemoryShared(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "memory_shared",
 		Title:       "Memory Shared",
-		Description: "Persistent project state via shared whiteboard (port 3035). All projects share one DB with named whiteboards and inter-project link_cards. Actions: load (full board map or single-card drill-down), save.",
+		Description: "Persistent project state via the shared whiteboard site, resolved from the fleet status file. All projects share one DB with named whiteboards and inter-project link_cards. Actions: load (full board map or single-card drill-down), save.",
 		Schema: jsonSchema(map[string]any{
 			"action":    strEnumProp("Action", []string{"load", "save"}),
 			"title":     strProp("[save] One-line label, only if changed"),
@@ -47,7 +47,9 @@ func HandleMemorySharedAction(ctx context.Context, workspace string, deps Deps, 
 	}
 
 	slugInfo := whiteboard.ResolveProjectSlug(actualWorkspace)
-	client := whiteboard.NewClient("http://127.0.0.1:3035", slugInfo.Slug, slugInfo.Title, slugInfo.Slug)
+	// Resolved per call, so a fleet that moved this site off its old port is followed rather than
+	// written to the wrong process (plan 2 A-8).
+	client := whiteboard.NewClient(boardBase(actualWorkspace, boardShared), slugInfo.Slug, slugInfo.Title, slugInfo.Slug)
 
 	switch action {
 	case "load":
@@ -88,8 +90,9 @@ func HandleSharedLoad(ctx context.Context, client *whiteboard.Client, ws string,
 	}
 
 	depResults := make([]depResult, 0, len(depSlugs))
+	sharedBase := boardBase(ws, boardShared)
 	for _, depSlug := range depSlugs {
-		depClient := whiteboard.NewClient("http://127.0.0.1:3035", depSlug, depSlug, depSlug)
+		depClient := whiteboard.NewClient(sharedBase, depSlug, depSlug, depSlug)
 		depState, depErr := depClient.LoadBoardState(ctx)
 		if depErr != nil {
 			depResults = append(depResults, depResult{Workspace: depSlug, Warn: "unreachable"})

@@ -162,6 +162,56 @@ type YoutubeConfig struct {
 	MaxDiagBytes int `json:"maxDiagBytes"`
 }
 
+// WebserverConfig points this process at a zen-webserver fleet. Everything here is operator-
+// owned: the tool takes no fleet directory, status path or base URL from its caller (plan 2 A-2),
+// so there is exactly one place to audit for "which fleet can this agent touch".
+type WebserverConfig struct {
+	// FleetDir is the fleet directory the reconciler watches (the engine's `-fleet` value, e.g.
+	// "/media/jang/home/Deve/zen-webserver/www"). Empty means no fleet is reachable from here,
+	// and every fleet verb refuses rather than guessing a directory.
+	FleetDir string `json:"fleetDir,omitempty"`
+
+	// StatusFile overrides the status document path. Empty defaults to
+	// <fleetDir>/.zen/fleet-status.json, which is where the engine writes it; the override exists
+	// for the case where a fleet is read over a share but its requests dir is not writable.
+	StatusFile string `json:"statusFile,omitempty"`
+
+	// CallTimeoutMs bounds one admin API call. A site that is restarting answers nothing, and a
+	// tool that waits forever holds the bridge's single queue slot for every other agent.
+	CallTimeoutMs int `json:"callTimeoutMs,omitempty"`
+
+	// IntentDeadlineMs bounds the wait for a verdict after filing an intent. It must exceed the
+	// reconcile interval (3 s default) plus a site's boot time; 30 s is both, with margin.
+	IntentDeadlineMs int `json:"intentDeadlineMs,omitempty"`
+
+	// Whiteboards maps the two memory boards to their sites, so their URLs resolve from the
+	// status document instead of a literal port (plan 2 A-8). FallbackPort is used only when no
+	// status document exists yet — first boot, or a fleet not started by this reconciler — which
+	// is why the defaults are the ports those sites have always had: a machine with no status
+	// file keeps working byte-identically instead of failing at the moment this lands.
+	Whiteboards *WhiteboardEndpoints `json:"whiteboards,omitempty"`
+}
+
+// WhiteboardEndpoints is the per-board resolution policy.
+type WhiteboardEndpoints struct {
+	Isolate BoardSite `json:"isolate"`
+	Shared  BoardSite `json:"shared"`
+}
+
+// BoardSite names the site a board lives on and the port to assume when the status document is
+// unavailable.
+type BoardSite struct {
+	Site         string `json:"site"`
+	FallbackPort int    `json:"fallbackPort"`
+}
+
+// Defaults for the webserver block. Exported because the tool applies them when it builds a
+// client from a partially-configured block.
+const (
+	DefaultWebserverCallTimeoutMs    = 10000
+	DefaultWebserverIntentDeadlineMs = 30000
+)
+
 type ZenConfig struct {
 	DaemonPort                   int                        `json:"daemonPort"`
 	McpPort                      int                        `json:"mcpPort"`
@@ -214,6 +264,7 @@ type ZenConfig struct {
 	ChatOutputPath               *string                    `json:"chat_output_path,omitempty"`
 	EnabledTools                 map[string]bool            `json:"enabled_tools,omitempty"`
 	Mcp2Cli                      bool                       `json:"mcp2cli,omitempty"`
+	Webserver                    WebserverConfig            `json:"webserver,omitempty"`
 	CliModePrefix                string                     `json:"climode_prefix,omitempty"`
 	CliModeShort                 bool                       `json:"climode_short"`
 	HarnessTools                 []string                   `json:"harness_tools,omitempty"`
@@ -258,12 +309,20 @@ func defaultConfig() ZenConfig {
 			MaxUploadBytes:         8 << 30,
 			MaxDiagBytes:           8192,
 		},
-		ZenCapPort:         4444,
-		CdpPort:            9222,
-		WhiteboardPort:     3033,
-		WikiPort:           3005,
-		Host:               "127.0.0.1",
-		McpTimeoutMs:       60000,
+		ZenCapPort:     4444,
+		CdpPort:        9222,
+		WhiteboardPort: 3033,
+		WikiPort:       3005,
+		Host:           "127.0.0.1",
+		McpTimeoutMs:   60000,
+		Webserver: WebserverConfig{
+			CallTimeoutMs:    DefaultWebserverCallTimeoutMs,
+			IntentDeadlineMs: DefaultWebserverIntentDeadlineMs,
+			Whiteboards: &WhiteboardEndpoints{
+				Isolate: BoardSite{Site: "note-ai", FallbackPort: 3034},
+				Shared:  BoardSite{Site: "memory", FallbackPort: 3035},
+			},
+		},
 		YtDlpCookieBank:    "firefox:/media/jang/home/PortableApp/firefox/profile/",
 		YtDlpPath:          "/home/jang/.local/bin/yt-dlp",
 		YtDlpSubLang:       "en.*,en-US,en-GB,en-orig",

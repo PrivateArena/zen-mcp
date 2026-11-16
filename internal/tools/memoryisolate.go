@@ -17,7 +17,7 @@ func defMemoryIsolate(workspace string, deps Deps) ToolDef {
 	return ToolDef{
 		Name:        "memory_isolate",
 		Title:       "Memory Isolate",
-		Description: "Persistent project state via isolated whiteboard (port 3034). Each project owns a segregated SQLite DB. Actions: load (full board map or single-card drill-down), save.",
+		Description: "Persistent project state via the isolated whiteboard site, resolved from the fleet status file. Each project owns a segregated SQLite DB. Actions: load (full board map or single-card drill-down), save.",
 		Schema: jsonSchema(map[string]any{
 			"action":    strEnumProp("Action", []string{"load", "save"}),
 			"title":     strProp("[save] One-line label, only if changed"),
@@ -44,7 +44,9 @@ func HandleMemoryIsolateAction(ctx context.Context, workspace string, deps Deps,
 	}
 
 	slugInfo := whiteboard.ResolveProjectSlug(actualWorkspace)
-	client := whiteboard.NewClient("http://127.0.0.1:3034", slugInfo.Slug, slugInfo.Title, slugInfo.Slug)
+	// The board's URL comes from the fleet's status document, not a literal: a site that moved
+	// ports used to turn this into a write against whatever else held 3034 (plan 2 A-8).
+	client := whiteboard.NewClient(boardBase(actualWorkspace, boardIsolate), slugInfo.Slug, slugInfo.Title, slugInfo.Slug)
 
 	switch action {
 	case "load":

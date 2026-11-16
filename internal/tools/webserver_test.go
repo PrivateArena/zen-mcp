@@ -1,0 +1,445 @@
+package tools
+
+// Tests for the schema-driven webserver tool. The two that matter most are the ones that catch a
+// drift no compiler can see: the enum-vs-switch agreement (plan 2 A-10 — a missing case is a
+// runtime error the caller discovers) and the fleet actions making zero HTTP requests (plan 2
+// A-2/A-9 — a verb that reached an endpoint would bypass CAS and the audit trail entirely).
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/mark3labs/mcp-go/mcp"
+
+	"zen-mcp/internal/mcpcfg"
+	"zen-mcp/internal/webserver"
+)
+
+// webserverTestWorkspace points the tool at a throwaway fleet through the project config tier,
+// which is the same path a real workspace uses. mcpcfg caches tiers by workspace path and stamps,
+// so every call gets its own temp workspace and no test can affect another.
+func webserverTestWorkspace(t *testing.T, fleetDir string, intentDeadlineMs int) string {
+	t.Helper()
+	ws := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(ws, ".zenmcp"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	deadline := intentDeadlineMs
+	if deadline == 0 {
+		deadline = 300 // short: these tests have no reconciler, so the wait always runs to the deadline
+	}
+	block := map[string]any{
+		"webserver": map[string]any{
+			"fleetDir":         fleetDir,
+			"intentDeadlineMs": deadline,
+		},
+	}
+	b, _ := json.Marshal(block)
+	if err := os.WriteFile(filepath.Join(ws, ".zenmcp", "config.json"), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(webserverResetTiers)
+	return ws
+}
+
+func webserverResetTiers() { mcpcfg.ResetWorkspaceTiers() }
+
+// webserverTestFleet builds a fleet directory whose status document, config file and staged
+// candidate all agree, so a fleet verb is not rejected for a reason that would mask the thing
+// under test. Returns the fleet dir and the config's sha256.
+func webserverTestFleet(t *testing.T) (string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "dummy.yaml")
+	body := "settings:\n  site_id: \"dummy\"\n  site_name: \"Before\"\n  port: 3099\n"
+	if err := os.WriteFile(cfg, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sum := hashBytes([]byte(body))
+
+	reqs := filepath.Join(dir, ".zen", "requests")
+	if err := os.MkdirAll(filepath.Join(reqs, "staged"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	st := map[string]any{
+		"schema":                1,
+		"boot_id":               "testboot1",
+		"pass_seq":              7,
+		"generated_at":          time.Now().Format(time.RFC3339Nano),
+		"reconcile_interval_ms": 3000,
+		"desired":               []any{},
+		"recent_requests":       []any{},
+		"sites": []any{map[string]any{
+			"id": "dummy", "site_id": "dummy", "config_path": cfg, "port": 3099,
+			"expose": false, "state": "running", "applied_sha256": sum, "generation": 1,
+		}},
+	}
+	b, _ := json.Marshal(st)
+	if err := os.MkdirAll(filepath.Join(dir, ".zen"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(webserver.StatusPathFor(dir), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return dir, sum
+}
+
+func hashBytes(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
+
+func webserverCall(t *testing.T, ws, action string, args map[string]any) mcp.CallToolRequest {
+	t.Helper()
+	full := map[string]any{"action": action}
+	for k, v := range args {
+		full[k] = v
+	}
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = full
+	return req
+}
+
+// recordingTransport counts every outbound request, which is how TestNoFleetActionUsesHTTP proves
+// a negative: an intent-only verb that quietly opened a socket would otherwise look identical to
+// one that did not.
+type recordingTransport struct {
+	mu    sync.Mutex
+	paths []string
+}
+
+func (r *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.mu.Lock()
+	r.paths = append(r.paths, req.Method+" "+req.URL.Path)
+	r.mu.Unlock()
+	return &http.Response{StatusCode: 599, Body: io.NopCloser(strings.NewReader("must not be called")), Header: http.Header{}}, nil
+}
+
+func (r *recordingTransport) count() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.paths)
+}
+
+func withRecordingTransport(t *testing.T) *recordingTransport {
+	t.Helper()
+	rt := &recordingTransport{}
+	orig := webserverClientFor
+	webserverClientFor = func(statusPath string, timeout time.Duration) *webserver.Client {
+		c := webserver.New(statusPath, timeout)
+		c.HTTP.Transport = rt
+		return c
+	}
+	t.Cleanup(func() { webserverClientFor = orig })
+	return rt
+}
+
+func webserverResultText(t *testing.T, res *mcp.CallToolResult) string {
+	t.Helper()
+	b, err := json.Marshal(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// TestActionEnumMatchesSwitch is plan 2 A-10 made mechanical: the generated enum, the contract
+// table, and the dispatch switch must name exactly the same actions. The schema is regenerated by
+// another repository, so a new endpoint that no one wired up here must fail a test rather than a
+// caller.
+func TestActionEnumMatchesSwitch(t *testing.T) {
+	enum := webserverActions()
+	if len(enum) == 0 {
+		t.Fatal("embedded schema declares no actions; the embed is broken")
+	}
+
+	// specs cover the enum, and nothing extra
+	specs := map[string]bool{}
+	for action := range webserverActionSpecs {
+		specs[action] = true
+	}
+	for _, a := range enum {
+		if !specs[a] {
+			t.Errorf("action %q is in the generated schema but has no entry in webserverActionSpecs", a)
+		}
+	}
+	for a := range specs {
+		if !webserverHas(enum, a) {
+			t.Errorf("webserverActionSpecs has %q, which the generated schema does not declare", a)
+		}
+	}
+
+	// the switch covers the enum too (both directions)
+	cases := dispatchCaseLabels(t)
+	for _, a := range enum {
+		if !webserverHas(cases, a) {
+			t.Errorf("action %q has no case in webserverDispatch; it would return an unknown-action error at runtime (plan 2 A-10)", a)
+		}
+	}
+	for _, c := range cases {
+		if !webserverHas(enum, c) {
+			t.Errorf("webserverDispatch handles %q, which the generated schema does not declare", c)
+		}
+	}
+}
+
+// dispatchCaseLabels reads the switch labels out of this package's source. Go cannot reflect over
+// a switch, and reading the file is the only way to compare the cases to the enum.
+func dispatchCaseLabels(t *testing.T) []string {
+	t.Helper()
+	src, err := os.ReadFile("webserver.go")
+	if err != nil {
+		t.Skipf("source not readable in this build: %v", err)
+	}
+	body := string(src)
+	i := strings.Index(body, "func webserverDispatch(")
+	if i < 0 {
+		t.Fatal("webserverDispatch not found; the test's anchor moved")
+	}
+	end := strings.Index(body[i:], "\n}\n")
+	if end < 0 {
+		t.Fatal("could not find the end of webserverDispatch")
+	}
+	switchBlock := body[i : i+end]
+	j := strings.Index(switchBlock, "switch inv.Action")
+	if j < 0 {
+		// The dispatch delegates; scan the delegate as well.
+		if h := strings.Index(body[i:], "return webserverRunFleetAction"); h > 0 {
+			j = h
+		} else {
+			t.Fatal("no action switch inside webserverDispatch")
+		}
+	}
+	re := regexp.MustCompile(`(?m)^\tcase "([a-z_]+)":`)
+	out := []string{}
+	for _, m := range re.FindAllStringSubmatch(switchBlock[j:], -1) {
+		out = append(out, m[1])
+	}
+	if len(out) == 0 {
+		t.Fatal("no case labels found; the regex or the source shape changed")
+	}
+	sort.Strings(out)
+	return out
+}
+
+func webserverHas(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
+// TestNoFleetActionUsesHTTP is A-2 and A-9's guard: a fleet mutation that went over HTTP would
+// bypass CAS, the audit trail and the reconciler's ownership of ports.
+func TestNoFleetActionUsesHTTP(t *testing.T) {
+	rt := withRecordingTransport(t)
+	dir, sum := webserverTestFleet(t)
+	ws := webserverTestWorkspace(t, dir, 300)
+
+	candidate := filepath.Join(t.TempDir(), "candidate.yaml")
+	if err := os.WriteFile(candidate, []byte("settings:\n  site_id: \"dummy\"\n  site_name: \"After\"\n  port: 3099\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	verbs := []struct {
+		action string
+		args   map[string]any
+	}{
+		{"publish", map[string]any{"site": "dummy", "config_file": candidate, "expect_sha256": sum}},
+		{"stop", map[string]any{"site": "dummy", "expect_sha256": sum}},
+		{"start", map[string]any{"site": "dummy", "expect_sha256": sum}},
+		{"rm", map[string]any{"site": "dummy", "expect_sha256": sum, "confirm": "yes"}},
+		{"rollback", map[string]any{"site": "dummy", "expect_sha256": sum, "snapshot_id": "2026-01-01T000000.000000000Z.yaml"}},
+	}
+	for _, v := range verbs {
+		rt.mu.Lock()
+		rt.paths = nil
+		rt.mu.Unlock()
+
+		res := HandleWebserver(context.Background(), ws, Deps{}, webserverCall(t, ws, v.action, v.args))
+		if res == nil {
+			t.Fatalf("%s returned no result", v.action)
+		}
+		if n := rt.count(); n != 0 {
+			t.Errorf("%s made %d HTTP request(s); a fleet mutation must only file an intent (plan 2 A-2)", v.action, n)
+		}
+		txt := webserverResultText(t, res)
+		// No reconciler is running against the temp fleet, so the only acceptable outcome is a
+		// filed intent that nobody answered — which is also the A-7 "no verdict" path. Anything
+		// else means the verb bailed out before filing and the test proved nothing.
+		if !strings.Contains(txt, "no verdict") && !strings.Contains(txt, "no_verdict") && !strings.Contains(txt, "filed") {
+			t.Errorf("%s did not report a filed intent with no verdict; got: %s", v.action, txt)
+		}
+		if !intentFiled(dir) {
+			t.Errorf("%s filed no intent under %s", v.action, filepath.Join(dir, ".zen", "requests"))
+		}
+	}
+}
+
+func intentFiled(dir string) bool {
+	entries, err := os.ReadDir(filepath.Join(dir, ".zen", "requests"))
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".json") {
+			return true
+		}
+	}
+	return false
+}
+
+// TestAdminActionDoesUseHTTP is the other half: if every action made zero requests, the guard above
+// would be vacuous.
+func TestAdminActionDoesUseHTTP(t *testing.T) {
+	rt := withRecordingTransport(t)
+	dir, _ := webserverTestFleet(t)
+	ws := webserverTestWorkspace(t, dir, 300)
+	HandleWebserver(context.Background(), ws, Deps{}, webserverCall(t, ws, "doctor", map[string]any{"site": "dummy"}))
+	if rt.count() == 0 {
+		t.Error("doctor made no HTTP request, so TestNoFleetActionUsesHTTP proves nothing")
+	}
+}
+
+func TestRejectsUnknownArgKey(t *testing.T) {
+	dir, _ := webserverTestFleet(t)
+	ws := webserverTestWorkspace(t, dir, 300)
+	for _, key := range []string{"base_url", "status_file", "fleet_dir", "config_path", "port"} {
+		res := HandleWebserver(context.Background(), ws, Deps{}, webserverCall(t, ws, "doctor", map[string]any{
+			"site": "dummy", key: "http://127.0.0.1:9/",
+		}))
+		if !strings.Contains(webserverResultText(t, res), "not a declared parameter") {
+			t.Errorf("%q was not refused: the caller can steer the target (plan 2 A-2)", key)
+		}
+	}
+}
+
+func TestFleetVerbRequiresExpectSHA256(t *testing.T) {
+	dir, _ := webserverTestFleet(t)
+	ws := webserverTestWorkspace(t, dir, 300)
+	for _, action := range []string{"stop", "start", "rm", "rollback"} {
+		args := map[string]any{"site": "dummy", "confirm": "yes", "snapshot_id": "x"}
+		res := HandleWebserver(context.Background(), ws, Deps{}, webserverCall(t, ws, action, args))
+		if !strings.Contains(webserverResultText(t, res), "expect_sha256") {
+			t.Errorf("%s accepted a call with no expect_sha256 (plan 2 A-3)", action)
+		}
+	}
+}
+
+func TestRmRequiresConfirm(t *testing.T) {
+	dir, sum := webserverTestFleet(t)
+	ws := webserverTestWorkspace(t, dir, 300)
+	res := HandleWebserver(context.Background(), ws, Deps{}, webserverCall(t, ws, "rm", map[string]any{
+		"site": "dummy", "expect_sha256": sum,
+	}))
+	if !strings.Contains(webserverResultText(t, res), "confirm") {
+		t.Error("rm proceeded without the confirmation literal")
+	}
+	if intentFiled(dir) {
+		t.Error("an unconfirmed rm still filed an intent")
+	}
+}
+
+func TestCASRefusedLocallyBeforeFiling(t *testing.T) {
+	dir, _ := webserverTestFleet(t)
+	ws := webserverTestWorkspace(t, dir, 300)
+	candidate := filepath.Join(t.TempDir(), "candidate.yaml")
+	os.WriteFile(candidate, []byte("settings:\n  site_id: \"dummy\"\n  port: 3099\n"), 0o600)
+	res := HandleWebserver(context.Background(), ws, Deps{}, webserverCall(t, ws, "publish", map[string]any{
+		"site": "dummy", "config_file": candidate, "expect_sha256": strings.Repeat("0", 64),
+	}))
+	txt := webserverResultText(t, res)
+	if !strings.Contains(txt, "cas_conflict") {
+		t.Errorf("a stale expect_sha256 was not refused locally: %s", txt)
+	}
+	if intentFiled(dir) {
+		t.Error("a cas-conflicted publish was filed anyway; a full YAML would land in the intent log (plan 2 A-3)")
+	}
+}
+
+func TestStatusActionsReadFilesNotSockets(t *testing.T) {
+	rt := withRecordingTransport(t)
+	dir, _ := webserverTestFleet(t)
+	ws := webserverTestWorkspace(t, dir, 300)
+	for _, action := range []string{"sites", "status", "plan", "intents"} {
+		res := HandleWebserver(context.Background(), ws, Deps{}, webserverCall(t, ws, action, map[string]any{"site": "dummy"}))
+		if rt.count() != 0 {
+			t.Errorf("%s made %d requests; it reads the status document (plan 2 §5.1)", action, rt.count())
+		}
+		if res != nil && res.IsError {
+			t.Errorf("%s failed: %s", action, webserverResultText(t, res))
+		}
+	}
+}
+
+func TestNoFleetConfiguredIsAnError(t *testing.T) {
+	ws := t.TempDir() // no project tier, no webserver block
+	res := HandleWebserver(context.Background(), ws, Deps{}, webserverCall(t, ws, "sites", nil))
+	if !strings.Contains(webserverResultText(t, res), "fleet") {
+		t.Error("a tool with no configured fleet should say so plainly")
+	}
+}
+
+// TestLiveWebserverPublish drives the whole chain through the tool against a real engine: guard
+// table → CAS → staged file → intent → reconciler → verdict. This is the test that catches a wire
+// format that agrees with itself but not with the engine.
+func TestLiveWebserverPublish(t *testing.T) {
+	dir := os.Getenv("ZEN_LAB_FLEET")
+	if dir == "" {
+		t.Skip("ZEN_LAB_FLEET unset; this test mutates a live scratch fleet")
+	}
+	ws := webserverTestWorkspace(t, dir, 30000)
+	st, err := webserver.Read(webserver.StatusPathFor(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	site, err := webserver.ResolveSite(st, "dummy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if site.State != "running" {
+		t.Fatalf("lab site is %s", site.State)
+	}
+	raw, err := os.ReadFile(site.ConfigPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := hashBytes(raw)
+	// One line, and a value that changes on every run so a re-run is never a no-op.
+	next := regexp.MustCompile(`(?m)^(\s*site_name:\s*).*$`).ReplaceAllString(string(raw), fmt.Sprintf("${1}\"Live %d\"", time.Now().Unix()))
+	candidate := filepath.Join(t.TempDir(), "candidate.yaml")
+	if err := os.WriteFile(candidate, []byte(next), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	res := HandleWebserver(context.Background(), ws, Deps{}, webserverCall(t, ws, "publish", map[string]any{
+		"site": "dummy", "config_file": candidate, "expect_sha256": sum,
+	}))
+	txt := webserverResultText(t, res)
+	t.Logf("tool publish result: %s", txt)
+	if res.IsError {
+		t.Fatalf("publish through the tool failed: %s", txt)
+	}
+	if !strings.Contains(txt, "applied") {
+		t.Errorf("verdict was not applied: %s", txt)
+	}
+	after, err := os.ReadFile(site.ConfigPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hashBytes(after) == sum {
+		t.Error("the live config is unchanged despite an applied verdict")
+	}
+}

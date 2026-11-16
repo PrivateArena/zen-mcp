@@ -1,0 +1,154 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "description": "Inspect, maintain and publish sites on the zen-webserver fleet. Read and content actions call a site's loopback admin API; publish/stop/rm/rollback are file writes that the reconciler applies, so no network listener accepts a fleet mutation.",
+  "properties": {
+    "action": {
+      "description": "Action to perform. Fleet mutation (publish/stop/start/rm/rollback) writes an intent file the reconciler applies; no HTTP endpoint mutates the fleet · sites: List every site the fleet knows about, with state and applied hash (read from the status document). [status file] · status: Read the fleet status document: desired verdicts, live states, recent request results. [status file] · plan: Diff desired against live without changing anything. [status file] · doctor: In-process site audit. The verify gate: a run is not complete while ok is false. [GET api/doctor] · catalog: This site's endpoint catalog: methods, suffixes, permissions, schemas. [GET api/catalog] · list: Paginated read-only inventory of articles. [GET api/list] · get: Fetch one article by exact slug. [GET api/get] · save: Create or replace one article (full document; tags/attributes are JSON strings). [POST api/save] · delete: Delete one article. Irreversible, and denied to agents unless allow-listed. [POST api/delete] · media_upload: Upload an image into the site's asset store (multipart). [POST api/media/upload] · revision_list: Revision history of one slug. [GET api/revision/list] · rename_slug: Move a slug; a redirect is recorded so the old URL keeps working. [POST api/rename_slug] · publish: Create or replace a site config through an intent file, then wait for the reconciler's verdict. [intent file] · stop: Park a site config out of the scan (nothing is deleted). [intent file] · start: Un-park a stopped site config. [intent file] · rm: Remove a site config: archived to .zen/trash, then stopped. [intent file] · rollback: Restore the newest (or a named) config snapshot through an intent. [intent file] · intents: List pending and archived intent files. [status file]",
+      "enum": [
+        "catalog",
+        "delete",
+        "doctor",
+        "get",
+        "intents",
+        "list",
+        "media_upload",
+        "plan",
+        "publish",
+        "rename_slug",
+        "revision_list",
+        "rm",
+        "rollback",
+        "save",
+        "sites",
+        "start",
+        "status",
+        "stop"
+      ],
+      "type": "string"
+    },
+    "as": {
+      "description": "[media_upload] asset file name to write",
+      "type": "string"
+    },
+    "attributes": {
+      "description": "[save] JSON object as a string; meta_1/meta_2 live inside it, not on the article",
+      "type": "string"
+    },
+    "author": {
+      "description": "[save] used by save",
+      "type": "string"
+    },
+    "category": {
+      "description": "[list] filter by category",
+      "type": "string"
+    },
+    "config_file": {
+      "description": "[publish] path to the YAML to publish",
+      "type": "string"
+    },
+    "confirm": {
+      "description": "[delete] must be the literal yes",
+      "enum": [
+        "yes"
+      ],
+      "type": "string"
+    },
+    "content": {
+      "description": "[save] markdown body",
+      "type": "string"
+    },
+    "created_after": {
+      "description": "[list] ISO date or datetime; only newer articles",
+      "type": "string"
+    },
+    "deep": {
+      "description": "[doctor] also crawl every article URL (bounded, costs one render each)",
+      "type": "boolean"
+    },
+    "description": {
+      "description": "[save] used by save",
+      "type": "string"
+    },
+    "expect_sha256": {
+      "description": "[publish] compare-and-swap: the hash of the config you read. Empty means 'must not exist yet'.",
+      "type": "string"
+    },
+    "fields": {
+      "description": "[list] comma list of slug,title,image_url,author,views,category,genre,description,tags,attributes,created_at",
+      "type": "string"
+    },
+    "image_url": {
+      "description": "[save] used by save",
+      "type": "string"
+    },
+    "new_slug": {
+      "description": "[rename_slug] used by rename_slug",
+      "type": "string"
+    },
+    "old_slug": {
+      "description": "[rename_slug] used by rename_slug",
+      "type": "string"
+    },
+    "page": {
+      "description": "[list] 1-based page",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "path": {
+      "description": "[media_upload] local file to upload; the request is sent as multipart/form-data with the field name the endpoint expects (file)",
+      "type": "string"
+    },
+    "per_page": {
+      "description": "[list] rows per page (max 200)",
+      "maximum": 200,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "search": {
+      "description": "[list] substring match on title or slug",
+      "type": "string"
+    },
+    "site": {
+      "description": "[doctor] site id (settings.site_id, or the config filename stem)",
+      "type": "string"
+    },
+    "slug": {
+      "description": "[get] used by get",
+      "type": "string"
+    },
+    "slug_prefix": {
+      "description": "[list] filter by slug prefix",
+      "type": "string"
+    },
+    "snapshot_id": {
+      "description": "[rollback] empty means the newest",
+      "type": "string"
+    },
+    "sort": {
+      "description": "[list] title | -title | created_at | -created_at | views | -views",
+      "enum": [
+        "title",
+        "-title",
+        "created_at",
+        "-created_at",
+        "views",
+        "-views"
+      ],
+      "type": "string"
+    },
+    "tags": {
+      "description": "[save] JSON array as a string (the column is TEXT), e.g. [\"go\",\"wiki\"]",
+      "type": "string"
+    },
+    "title": {
+      "description": "[save] used by save",
+      "type": "string"
+    }
+  },
+  "required": [
+    "action"
+  ],
+  "title": "webserver",
+  "type": "object"
+}
