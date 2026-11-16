@@ -25,13 +25,12 @@ Shell `ls PROJECT_OVERVIEW.md`
 
 MCP CLI tools, available globally in PATH.
 - `zcodegraph`: Analyze and visualize code structure and dependencies.
-- `zchat`: Delegate to web agent. **ALWAYS use absolute paths** for `upload_files`. Can take up to 5-10 minutes to finish, DO NOT ABORT IT.
+- `zchat`: Delegate to web agent for researching or second opinion. **ALWAYS use absolute paths** for `upload_files`.
 - `zfetch -u <url>`: Fetch readable content of a URL. Delegate to subagent as response can be heavy for context.
-- `zskill -a get -i <id>`: Use this instead of harness `skills`.
+- `zskill -a get -i <id>`: Use this instead of harness `skills`. For big skills, use `zskill -a outine -i <id>` first, then `zskill -a get -i <id> -f <filter_sections>`
 
 > [TIP] Use `-h` to get help messages.
 > [FORBIDDEN] DO NOT run `git diff` at task completion - Build and test instead. DO NOT clear package caches (`go clean`, etc.).
-> When user saying "activate skill", use `zskill` CLI tool.
 
 > [TIP] Big/multiline payload? Write to a file, then `--<param> @<file>` (absolute or `./`-relative path):
 
@@ -86,4 +85,4 @@ On any tool failure: retry once with correction applied. If retry fails — **HA
 
 1. Code/command first. Short explainations: Issue - Test - Fix.
 2. No fluff, jargon, pleasantries, or task restatements. Concise, simplified technical English style with no extra commentary.
-3. Efficent in tool calling, build, lint, test in one shell call. Avoid timeout/sleep more than 30s.
+3. Efficent in tool calling: build, lint, test in one shell call. Avoid timeout/sleep more than 30s.
