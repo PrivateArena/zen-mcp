@@ -203,6 +203,17 @@ type WhiteboardEndpoints struct {
 type BoardSite struct {
 	Site         string `json:"site"`
 	FallbackPort int    `json:"fallbackPort"`
+
+	// Agent is the value sent as X-AI-Agent, and must match an ai_agents[].id on the site. Empty
+	// means "send no header", which is what this client has always done: the request is then
+	// attributed to the site owner, exactly as it was before plan 2.
+	Agent string `json:"agent,omitempty"`
+
+	// CredentialFile holds the agent's own `name=value` cookie (the site's
+	// ai_agents[].admin_cookie_file, same file, one copy on each side). Set alongside Agent to give
+	// the board writes a real identity in the site's audit ledger; set alone it changes nothing,
+	// because a claimed identity without a credential is refused outright.
+	CredentialFile string `json:"credentialFile,omitempty"`
 }
 
 // Defaults for the webserver block. Exported because the tool applies them when it builds a

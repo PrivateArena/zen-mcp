@@ -46,7 +46,7 @@ func HandleMemoryIsolateAction(ctx context.Context, workspace string, deps Deps,
 	slugInfo := whiteboard.ResolveProjectSlug(actualWorkspace)
 	// The board's URL comes from the fleet's status document, not a literal: a site that moved
 	// ports used to turn this into a write against whatever else held 3034 (plan 2 A-8).
-	client := whiteboard.NewClient(boardBase(actualWorkspace, boardIsolate), slugInfo.Slug, slugInfo.Title, slugInfo.Slug)
+	client := boardClient(actualWorkspace, boardIsolate, slugInfo.Slug, slugInfo.Title, slugInfo.Slug)
 
 	switch action {
 	case "load":

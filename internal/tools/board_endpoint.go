@@ -19,10 +19,15 @@ package tools
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"zen-mcp/internal/mcpcfg"
 	"zen-mcp/internal/webserver"
+	"zen-mcp/internal/whiteboard"
 )
 
 // boardKind selects which memory board a call is about.
@@ -32,6 +37,15 @@ const (
 	boardIsolate boardKind = iota
 	boardShared
 )
+
+// String names the board in log lines, so "credential unusable" says which memory tool stopped
+// identifying itself.
+func (k boardKind) String() string {
+	if k == boardShared {
+		return "shared"
+	}
+	return "isolate"
+}
 
 // Default board sites, mirroring the two entries the config block defaults to. Kept here so a
 // zero-value config (no webserver block at all — the state of every existing install) still
@@ -104,6 +118,87 @@ func boardBaseFromStatus(block mcpcfg.WebserverConfig, site string) (string, boo
 		return "", false
 	}
 	return base, true
+}
+
+// boardEntry returns the configured policy for one board, defaults filled in.
+func boardEntry(workspace string, kind boardKind) mcpcfg.BoardSite {
+	site, port := defaultBoard(kind)
+	out := mcpcfg.BoardSite{Site: site, FallbackPort: port}
+	var block mcpcfg.WebserverConfig
+	if cfg := mcpcfg.For(workspace); cfg != nil {
+		block = cfg.Webserver
+	}
+	if wb := block.Whiteboards; wb != nil {
+		entry := wb.Isolate
+		if kind == boardShared {
+			entry = wb.Shared
+		}
+		if entry.Site != "" {
+			out.Site = entry.Site
+		}
+		if entry.FallbackPort > 0 {
+			out.FallbackPort = entry.FallbackPort
+		}
+		out.Agent = strings.TrimSpace(entry.Agent)
+		out.CredentialFile = strings.TrimSpace(entry.CredentialFile)
+	}
+	return out
+}
+
+// boardClient builds a whiteboard client carrying whatever identity the operator configured. A
+// half-configured identity (agent named, credential missing, or the file unreadable) degrades to the
+// anonymous loopback client rather than sending a bare header: the engine answers that with
+// admin_credentials_required, so a header without its credential turns a working board write into a
+// 403 whose cause is a file on this side — unrecognisable from a whiteboard error.
+func boardClient(workspace string, kind boardKind, slug, title, owner string) *whiteboard.Client {
+	c := whiteboard.NewClient(boardBase(workspace, kind), slug, title, owner)
+	entry := boardEntry(workspace, kind)
+	if entry.Agent == "" || entry.CredentialFile == "" {
+		return c
+	}
+	cred, err := readBoardCredential(entry.CredentialFile)
+	if err != nil {
+		logfBoardCredential(kind, entry.CredentialFile, err)
+		return c
+	}
+	return c.WithIdentity(entry.Agent, cred)
+}
+
+// logfBoardCredential reports an unusable credential once per (board, path). The condition is
+// persistent; the request path is not.
+func logfBoardCredential(kind boardKind, path string, err error) {
+	key := kind.String() + ":" + path
+	if _, seen := credentialWarnings.Swap(key, struct{}{}); seen {
+		return
+	}
+	log.Printf("[whiteboard] %s board: credential %s unusable, writing as the loopback owner instead: %v", kind, path, err)
+}
+
+var credentialWarnings sync.Map
+
+// readBoardCredential reads a `name=value` cookie, refusing one that is group- or world-readable:
+// the same rule the engine applies to its copy of this file, so a credential the server would
+// reject is never sent.
+func readBoardCredential(path string) (string, error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if !fi.Mode().IsRegular() {
+		return "", fmt.Errorf("%s is not a regular file", path)
+	}
+	if fi.Mode().Perm()&0o077 != 0 {
+		return "", fmt.Errorf("%s is mode %o; credentials must be 0600 (chmod go-rwx)", path, fi.Mode().Perm())
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	v := strings.TrimSpace(string(b))
+	if v == "" || !strings.Contains(v, "=") {
+		return "", fmt.Errorf(`%s must hold one "name=value" cookie`, path)
+	}
+	return v, nil
 }
 
 func defaultBoard(kind boardKind) (string, int) {

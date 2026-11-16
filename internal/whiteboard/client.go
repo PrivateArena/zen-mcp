@@ -65,6 +65,27 @@ type Client struct {
 	Title   string
 	Owner   string
 	HTTP    *http.Client
+
+	// Agent and Credential are the identity pair plan 2 §4.2 exists for. Both empty is today's
+	// behaviour: no header, no cookie, and the site records the write under whoever owns the
+	// loopback peer. Sending a header WITHOUT a credential is deliberately not offered — the engine
+	// refuses that combination (a header is a claim, not an authentication), so there is no
+	// half-configured state to fall into.
+	Agent      string
+	Credential string
+}
+
+// WithIdentity returns a client that presents itself as one agent, authenticated by the site's own
+// credential file. It is a copy rather than a mutation because the same base client is shared by
+// the dependency walk in memory_shared, where two boards are touched in one call.
+func (c *Client) WithIdentity(agent, credential string) *Client {
+	if agent == "" || credential == "" {
+		return c
+	}
+	c2 := *c
+	c2.Agent = agent
+	c2.Credential = credential
+	return &c2
 }
 
 // NewClient creates a whiteboard client.
@@ -88,7 +109,24 @@ func (c *Client) doGet(ctx context.Context, path string) (*http.Response, error)
 	if err != nil {
 		return nil, err
 	}
+	// Same identity as doPost. Applying it only to writes would be the exact split brain plan 2
+	// A-17 exists to close: an uncredentialed read is admitted as the loopback OWNER, so
+	// allowed_actions would govern saves and silently not govern loads.
+	c.applyIdentity(req)
 	return c.HTTP.Do(req)
+}
+
+// applyIdentity attaches the agent header and its credential, or nothing at all. They are one
+// decision: the engine refuses a header without a credential, so there is deliberately no path that
+// sends the header alone.
+func (c *Client) applyIdentity(req *http.Request) {
+	if c.Agent == "" || c.Credential == "" {
+		return
+	}
+	req.Header.Set("X-AI-Agent", c.Agent)
+	// The credential file holds a whole `name=value` rule, which is what a Cookie header wants
+	// verbatim: splitting on the first '=' here would truncate a secret that contains one.
+	req.Header.Set("Cookie", strings.TrimSpace(c.Credential))
 }
 
 func (c *Client) doPost(ctx context.Context, path string, body any) (*http.Response, error) {
@@ -101,6 +139,7 @@ func (c *Client) doPost(ctx context.Context, path string, body any) (*http.Respo
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	c.applyIdentity(req)
 	return c.HTTP.Do(req)
 }
 

@@ -49,7 +49,7 @@ func HandleMemorySharedAction(ctx context.Context, workspace string, deps Deps, 
 	slugInfo := whiteboard.ResolveProjectSlug(actualWorkspace)
 	// Resolved per call, so a fleet that moved this site off its old port is followed rather than
 	// written to the wrong process (plan 2 A-8).
-	client := whiteboard.NewClient(boardBase(actualWorkspace, boardShared), slugInfo.Slug, slugInfo.Title, slugInfo.Slug)
+	client := boardClient(actualWorkspace, boardShared, slugInfo.Slug, slugInfo.Title, slugInfo.Slug)
 
 	switch action {
 	case "load":
@@ -90,9 +90,11 @@ func HandleSharedLoad(ctx context.Context, client *whiteboard.Client, ws string,
 	}
 
 	depResults := make([]depResult, 0, len(depSlugs))
-	sharedBase := boardBase(ws, boardShared)
 	for _, depSlug := range depSlugs {
-		depClient := whiteboard.NewClient(sharedBase, depSlug, depSlug, depSlug)
+		// Resolved per dependency rather than once for the loop: every board lives on the same
+		// site, but a board read is a separate authorization, and the identity is a property of the
+		// call, not of the loop.
+		depClient := boardClient(ws, boardShared, depSlug, depSlug, depSlug)
 		depState, depErr := depClient.LoadBoardState(ctx)
 		if depErr != nil {
 			depResults = append(depResults, depResult{Workspace: depSlug, Warn: "unreachable"})
