@@ -49,3 +49,4 @@ resources/commands/
 .vscode/
 map.json
 map2.json
+.bash_history
