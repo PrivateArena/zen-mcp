@@ -41,6 +41,7 @@ func GetParser() *Parser {
 				".hxx":  newCppPlugin(),
 				".rb":   newRubyPlugin(),
 				".lua":  newLuaPlugin(),
+				".gd":   newGdscriptPlugin(),
 			},
 		}
 	})
@@ -195,6 +196,8 @@ func buildQualifiedName(defNode *tree_sitter.Node, name string, root *tree_sitte
 		"class_declaration": true, "interface_declaration": true,
 		"struct_specifier": true, "enum_specifier": true,
 		"impl_item": true, "trait_item": true,
+		// GDScript: `class Inner` bodies qualify their members as Inner.member.
+		"class_definition": true,
 	}
 	parts := []string{name}
 	cursor := defNode.Parent()
@@ -216,6 +219,24 @@ func joinQualified(parts []string) string {
 	out := parts[0]
 	for _, p := range parts[1:] {
 		out += "." + p
+	}
+	return out
+}
+
+// DeduplicateRelations drops relation records that would materialize the exact
+// same edge row: the graph stores no call site, so two relations with the same
+// source, target and relation are indistinguishable once persisted. Repeat call
+// sites of one callee inside a file collapse to a single edge.
+func DeduplicateRelations(relations []ParsedRelation) []ParsedRelation {
+	seen := map[string]bool{}
+	out := make([]ParsedRelation, 0, len(relations))
+	for _, r := range relations {
+		key := r.Relation + "\x00" + r.SourceName + "\x00" + r.TargetName + "\x00" + r.Metadata
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, r)
 	}
 	return out
 }

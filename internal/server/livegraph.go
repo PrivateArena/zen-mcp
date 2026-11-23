@@ -270,6 +270,7 @@ const LANGUAGE_COLORS = {
   "cpp":        "#F34B7D",
   "ruby":       "#701516",
   "lua":        "#000080",
+  "gdscript":   "#478CBF",
   "markdown":   "#083FA1",
   "":           "#888888"
 };

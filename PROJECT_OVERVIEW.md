@@ -29,7 +29,7 @@ zen-mcp/
     pooling/                       # async job registry (registry.go) + handler wrapper (wrap.go)
     gatekeeper/                    # path/command safety: ValidatePathSafety, interactive confirmations
     shell/exec processes tokenoptimizer   # process execution, abort-all, output compaction
-    codegraph/                     # tree-sitter indexer, SQLite+FTS5 storage, 9 language plugins
+    codegraph/                     # tree-sitter indexer, SQLite+FTS5 storage, 10 language plugins
     projectmemory/                 # brain timeline (v1→v3), FTS index, git signals, virtual context
     prompts/ skills/               # prompt templates (YAML+frontmatter), CLI-mode transform, skill detection
     terminal/  terminal/handlers/  # raw-mode REPL (commander.go) + 14 CLI command handlers
@@ -91,10 +91,11 @@ Single-language Go project. Grouped by layer; LOC approximate.
 |---|---|---|---|
 | internal/codegraph/engine.go | Top-level engine: index, search, map, skeleton, related, deadcode, impact, cycles | ~1132 | `NewCodeGraph(rootDir string) (*CodeGraph, error)`; `Index() (*IndexResult, error)`; `Search(query string, limit int) ([]NodeSearchResult, error)`; `GetSkeleton(relPath string) (string, error)`; `RelatedFiles(filePath string, limit int) ([]RelatedRecord, error)`; `FindDeadCode(query string, limit int) (*DeadcodeResult, error)` |
 | internal/codegraph/storage.go | SQLite (modernc) persistence: schema, prepared statements, FTS5, relations | ~1349 | `NewStorage(dbPath string) (*Storage, error)`; `UpsertFile(fr FileRecord) (int64, error)`; `InsertNodes(nodes []NodeRecord) (int64, error)`; `GetRelatedForFile(filePath string, limit int) ([]RelatedRecord, error)`; `RunInTransaction(fn func(tx *sql.Tx) error) error` |
-| internal/codegraph/scanner.go | Disk walk, incremental pro/profiling, ignore + exclusions, TS path aliases | ~380 | `NewScanner(storage *Storage, rootDir string) *Scanner`; `GetFilesToProcess() ([]FileRecord, error)`; `GetFileDetails(relPath) (content string, hash string, mtime int64, language string, isTest bool, err error)`; `ResolveAlias(specifier string) string` |
-| internal/codegraph/parser.go | Singleton tree-sitter parser + shared query helpers | ~247 | `GetParser() *Parser`; `Parse(ext string, src []byte) ([]ParsedNode, []ParsedRelation, error)`; `ExtractQueryMatches(lang, node, src, queryStr, symbolType, nodes)` |
+| internal/codegraph/scanner.go | Disk walk, incremental pro/profiling, ignore + exclusions, TS path aliases, per-language size budget | ~380 | `NewScanner(storage *Storage, rootDir string) *Scanner`; `GetFilesToProcess() ([]FileRecord, error)`; `GetFileDetails(relPath) (content string, hash string, mtime int64, language string, isTest bool, err error)`; `ResolveAlias(specifier string) string`; `fileSizeLimit(relPath) int64` (500 KB, 4 MB for `.gd` data-table scripts) |
+| internal/codegraph/parser.go | Singleton tree-sitter parser + shared query helpers | ~247 | `GetParser() *Parser`; `Parse(ext string, src []byte) ([]ParsedNode, []ParsedRelation, error)`; `ExtractQueryMatches(lang, node, src, queryStr, symbolType, nodes)`; `DeduplicateNodes`, `DeduplicateRelations` |
+| internal/codegraph/godotproject.go | `project.godot` manifest reader: autoload singletons, main scene, editor plugins | ~110 | `parseGodotProject(content string) []ParsedNode`; feeds `parseManifestContent`, so `[autoload]` names are resolvable edge targets before Phase 3 |
 | internal/codegraph/types.go | Node/relation/result records | ~68 | `ParsedNode`, `ParsedRelation`, `RelatedRecord`, `DeadcodeResult`, `ShortestPathResult`, `CycleRecord` |
-| internal/codegraph/languages_*.go (9 files) | Per-language tree-sitter grammar plugins (C, C++, Go, Java, Lua, Python, Ruby, Rust, TS) | ~300 ea | each `func (p *<lang>Plugin) Parse(filePath string, src []byte) ([]ParsedNode, []ParsedRelation, error)`; base surface in `languages_base.go`: `type LanguagePlugin interface{...}` |
+| internal/codegraph/languages_*.go (10 files) | Per-language tree-sitter grammar plugins (C, C++, GDScript, Go, Java, Lua, Python, Ruby, Rust, TS) | ~150–550 ea | each `func (p *<lang>Plugin) Parse(src []byte) ([]ParsedNode, []ParsedRelation, error)`; base surface in `languages_base.go`: `type LanguagePlugin interface{...}`; GDScript is one scope-tracking walk (`languages_gdscript.go`) because Godot member chains (`attribute`/`attribute_call`) and the script-as-class layout do not decompose into per-kind queries |
 
 ### project memory & prompts
 
@@ -179,7 +180,7 @@ Terminal REPL ── commander.ExecuteTool ──▶ same tool handlers (MakeFak
 2. **Tool = defX + HandleX pair**: each tool declares `defX(workspace, deps Deps) ToolDef` (JSON schema via `jsonSchema` helpers) plus a `HandleX(ctx, workspace, deps, req mcp.CallToolRequest) *mcp.CallToolResult` that dispatches on an `action` field; `tools.AllDefs` is the single registration list.
 3. **Async job pooling behind a handler wrapper**: `pooling.Wrap(name, reg, inner)` runs the inner handler in a detached job and returns a reversible `pool_id`; `pooling.Registry` owns `Register/Complete/Cancel/LongPoll` with TTL+grace reaping and a live config toggle — the double-invocation hazard (a wrapped poll re-spawning a job) is explicitly guarded.
 4. **Layered codegraph sessions**: `internal/tools/codegraph.go:discoverGraphRoots` finds the workspace root plus nested sub-graph DBs; `isolate` selects the graph layer, `sessionStale` triggers background re-index across root+sub-graphs in parallel.
-5. **tree-sitter plugins + prepared-statement storage**: `LanguagePlugin` uniform interface over 9 grammar plugins feeding shared `ExtractQueryMatches`; `storage.go` pre-compiles all SQL statements once and persists nodes/edges/relations/FTS5 into modernc SQLite.
+5. **tree-sitter plugins + prepared-statement storage**: `LanguagePlugin` uniform interface over 10 grammar plugins feeding shared `ExtractQueryMatches` (GDScript walks its own scope-aware AST instead, see `languages_gdscript.go`); `storage.go` pre-compiles all SQL statements once and persists nodes/edges/relations/FTS5 into modernc SQLite. `Index()` parses manifests *before* Phase 3 so manifest-declared symbols (npm/go/cargo deps, Godot autoload singletons) are available as edge targets in the same run.
 6. **Command-output token optimization**: `tokenoptimizer.OptimizeOutput` picks command-specific compactors (git status/diff/log, ls, grep, cat, test output), applies `ApplyBlacklist` and `ApplyTokenProfiles`, and `redirectToFile` spills huge output to disk instead of the context.
 7. **Gatekeeper-guarded execution path**: `shell`/`run` handlers first pass through `gatekeeper.ValidatePathSafety` + `ValidateCommandPayload`; interactive operations use `RequestUserConfirmation` → `AcceptConfirmation`/`RejectConfirmation` round-trip.
 8. **Terminal REPL reuses the MCP tool path**: `commander.ExecuteTool(name, args)` builds a `MakeFakeRequest` and calls the identical handlers the HTTP server would, so CLI state matches server state.
@@ -193,6 +194,7 @@ Terminal REPL ── commander.ExecuteTool ──▶ same tool handlers (MakeFak
 | Add a new MCP tool | internal/tools/types.go (AllDefs + jsonSchema), a new defX/HandleX file, internal/server/tools.go (RegisterAllTools) |
 | Change tool output wrapping/telemetry | internal/toolresponse/response.go (WrapSuccess/WrapError, SetTimeoutObserver, orphan flag) |
 | Add or change a codegraph query action | internal/tools/codegraph.go (action* handlers), internal/codegraph/engine.go + storage.go (query impl) |
+| Support a new language / file type in codegraph | internal/codegraph/languages_<lang>.go (plugin), parser.go (extension → plugin map), scanner.go (`isSupported`/`detectLanguage`/`isTest`/`fileSizeLimit`), server/livegraph.go (graph colour), tools/watcher.go (formatter); Godot extras: godotproject.go + engine.go `parseManifests` list |
 | Tune shell output compaction | internal/shell/tokenoptimizer/tokenoptimizer.go, internal/tools/shell.go (tokenOptConfig / toBlacklist) |
 | Override a config key for one project | `<workspace>/.zenmcp/config.json` (any nested key, deep-merged over config.json), internal/mcpcfg/workspace.go (`For`/`LoadFor`), internal/toolstate/toolstate.go, internal/tools/youtube.go (`newYoutubeService`) |
 | Change pooling behavior (async jobs) | internal/pooling/registry.go + wrap.go, internal/server/tools.go (wrapIfPooled), internal/tools/pool.go, internal/mcpcfg config `pooling` block |
@@ -219,6 +221,7 @@ Terminal REPL ── commander.ExecuteTool ──▶ same tool handlers (MakeFak
 |---|---|---|
 | github.com/tree-sitter/go-tree-sitter | tree-sitter runtime binding | v0.25.0 |
 | tree-sitter-grammars/tree-sitter-lua + 8 tree-sitter-* grammar packages | per-language grammars (C, C++, Go, Java, Lua, Python, Ruby, Rust, TS) | v0.23.x–v0.25.0 |
+| github.com/prestonknopp/tree-sitter-gdscript | GDScript grammar (Godot 4) for the `.gd` plugin | v1.9.1-0.20251212183927-89e66b6bdc00 |
 | github.com/sabhiram/go-gitignore | gitignore semantics for scanner exclusions | indirect |
 
 ### Storage & util

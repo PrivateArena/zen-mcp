@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/mark3labs/mcp-go v0.48.0
+	github.com/prestonknopp/tree-sitter-gdscript v1.9.1-0.20251212183927-89e66b6bdc00
 	github.com/tree-sitter-grammars/tree-sitter-lua v0.5.0
 	github.com/tree-sitter/go-tree-sitter v0.25.0
 	github.com/tree-sitter/tree-sitter-c v0.24.2

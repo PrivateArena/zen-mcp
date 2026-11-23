@@ -206,6 +206,12 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 	logfilter.Infof("[CodeGraph] Phase 2 (write nodes): %d file(s) in %s%s",
 		len(parseResults), time.Since(phaseStart), slowestSuffix(slowestPath, slowest))
 
+	// Manifests first: an entry point or a Godot autoload singleton declared in a
+	// manifest is a resolution target for the source edges built just below.
+	phaseStart = time.Now()
+	cg.parseManifests()
+	logfilter.Infof("[CodeGraph] Manifests: %s", time.Since(phaseStart))
+
 	// Phase 3: build edges now that every target node exists in the DB.
 	// Resolution is scoped: same file first, then same directory, then a
 	// global fallback tagged INFERRED, with a fan-out cap so common symbol
@@ -275,10 +281,6 @@ func (cg *CodeGraph) Index() (*IndexResult, error) {
 	phaseStart = time.Now()
 	result.Deleted = cg.cleanupDeletedFiles(parseResults)
 	logfilter.Infof("[CodeGraph] Cleanup deleted: %d file(s) in %s", result.Deleted, time.Since(phaseStart))
-
-	phaseStart = time.Now()
-	cg.parseManifests()
-	logfilter.Infof("[CodeGraph] Manifests: %s", time.Since(phaseStart))
 
 	logfilter.Infof("[CodeGraph] Index total: %s (%d indexed, %d deleted)", time.Since(indexStart), result.Indexed, result.Deleted)
 
@@ -414,11 +416,11 @@ func (cg *CodeGraph) cleanupDeletedFiles(processed []fileParseResult) int {
 	return deleted
 }
 
-// parseManifests parses manifest files (package.json, go.mod, Cargo.toml, pom.xml)
-// and inserts their nodes and edges directly into storage. Each manifest is
-// gated by its own hash/mtime so incremental runs skip unchanged manifests.
+// parseManifests parses manifest files (package.json, go.mod, Cargo.toml, pom.xml,
+// project.godot) and inserts their nodes and edges directly into storage. Each
+// manifest is gated by its own hash/mtime so incremental runs skip unchanged ones.
 func (cg *CodeGraph) parseManifests() {
-	manifestFiles := []string{"package.json", "go.mod", "Cargo.toml", "pom.xml"}
+	manifestFiles := []string{"package.json", "go.mod", "Cargo.toml", "pom.xml", "project.godot"}
 	resolver := newNodesResolver(cg.storage)
 	for _, manifest := range manifestFiles {
 		fullPath := filepath.Join(cg.rootDir, manifest)
@@ -618,6 +620,8 @@ func parseManifestContent(content, filename string) ([]ParsedNode, []ParsedRelat
 				})
 			}
 		}
+	case "project.godot":
+		nodes = append(nodes, parseGodotProject(content)...)
 	}
 
 	return nodes, relations

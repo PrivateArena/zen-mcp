@@ -503,6 +503,10 @@ func linterFor(rel string) (string, []string) {
 		if lookPath("stylua") != "" {
 			return "stylua", nil
 		}
+	case ".gd":
+		if lookPath("gdformat") != "" {
+			return "gdformat", nil
+		}
 	}
 	return "", nil
 }

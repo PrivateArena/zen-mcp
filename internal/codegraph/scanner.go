@@ -47,6 +47,22 @@ func (s *Scanner) SetParser(p *Parser) {
 const maxFileSize = 500 * 1024
 const maxFiles = 10000
 
+// gdMaxFileSize lifts the source-size guard for GDScript. A Godot project keeps
+// its data tables in autoload scripts — a generated spell/item/lookup table is
+// routinely 1 MB of `const` literals — and those scripts are exactly the graph
+// hubs worth indexing. tree-sitter parses them in tens of milliseconds, so the
+// generic guard would only drop the most connected files in the project.
+const gdMaxFileSize = 4 * 1024 * 1024
+
+// fileSizeLimit returns the byte budget a file may have before the scanner stops
+// reading it.
+func fileSizeLimit(relPath string) int64 {
+	if detectLanguage(relPath) == "gdscript" {
+		return gdMaxFileSize
+	}
+	return maxFileSize
+}
+
 // GetFilesToProcess returns files that need re-indexing.
 func (s *Scanner) GetFilesToProcess() ([]FileRecord, error) {
 	files, err := s.getDiskFiles()
@@ -82,7 +98,7 @@ func (s *Scanner) GetFilesToProcess() ([]FileRecord, error) {
 		if err != nil {
 			continue
 		}
-		if info.Size() > maxFileSize {
+		if info.Size() > fileSizeLimit(relPath) {
 			continue
 		}
 
@@ -166,7 +182,7 @@ func isSupported(relPath string) bool {
 	case ".ts", ".tsx", ".js", ".jsx", ".mjs",
 		".go", ".py", ".rs", ".java",
 		".c", ".cpp", ".cc", ".cxx", ".h", ".hpp", ".hh", ".hxx",
-		".rb", ".lua":
+		".rb", ".lua", ".gd":
 		return true
 	}
 	return false
@@ -193,6 +209,8 @@ func detectLanguage(relPath string) string {
 		return "ruby"
 	case ".lua":
 		return "lua"
+	case ".gd":
+		return "gdscript"
 	}
 	return "unknown"
 }
@@ -217,13 +235,16 @@ func isTest(relPath string, lang string) bool {
 		return strings.HasSuffix(stem, "Test") || strings.HasPrefix(stem, "Test")
 	case "ruby":
 		return strings.HasSuffix(lower, "_test.rb") || strings.HasSuffix(lower, "_spec.rb")
+	case "gdscript":
+		// GUT and gdUnit both name their specs test_*.gd / *_test.gd.
+		return strings.HasSuffix(lower, "_test.gd") || strings.HasPrefix(filepath.Base(lower), "test_")
 	default:
 		return strings.Contains(lower, ".test.") || strings.Contains(lower, ".spec.") || strings.HasPrefix(filepath.Base(lower), "test_")
 	}
 }
 
 func (s *Scanner) loadIgnorePatterns() {
-	patterns := []string{".git", "node_modules", ".venv", "venv", "dist", ".zen", ".zenmcp", "__pycache__", ".next", ".nuxt", ".output"}
+	patterns := []string{".git", "node_modules", ".venv", "venv", "dist", ".zen", ".zenmcp", "__pycache__", ".next", ".nuxt", ".output", ".godot"}
 
 	// Project-local .gitignore
 	if data, err := os.ReadFile(filepath.Join(s.rootDir, ".gitignore")); err == nil {
@@ -295,8 +316,8 @@ func (s *Scanner) GetFileDetails(relPath string) (content string, hash string, m
 	if err != nil {
 		return "", "", 0, "", false, err
 	}
-	if info.Size() > maxFileSize {
-		return "", "", 0, "", false, fmt.Errorf("file exceeds 500KB limit")
+	if size := fileSizeLimit(relPath); info.Size() > size {
+		return "", "", 0, "", false, fmt.Errorf("file exceeds %dKB limit", size/1024)
 	}
 
 	data, err := os.ReadFile(fullPath)
