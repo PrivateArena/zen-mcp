@@ -4,7 +4,7 @@
   "description": "Inspect, maintain and publish sites on the zen-webserver fleet. Read and content actions call a site's loopback admin API; publish/stop/rm/rollback are file writes that the reconciler applies, so no network listener accepts a fleet mutation.",
   "properties": {
     "action": {
-      "description": "Action to perform. Fleet mutation (publish/stop/start/rm/rollback) writes an intent file the reconciler applies; no HTTP endpoint mutates the fleet · sites: List every site the fleet knows about, with state and applied hash (read from the status document). [status file] · status: Read the fleet status document: desired verdicts, live states, recent request results. [status file] · plan: Diff desired against live without changing anything. [status file] · doctor: In-process site audit. The verify gate: a run is not complete while ok is false. [GET api/doctor] · catalog: This site's endpoint catalog: methods, suffixes, permissions, schemas. [GET api/catalog] · list: Paginated read-only inventory of articles. [GET api/list] · get: Fetch one article by exact slug. [GET api/get] · save: Create or replace one article (full document; tags/attributes are JSON strings). [POST api/save] · delete: Delete one article. Irreversible, and denied to agents unless allow-listed. [POST api/delete] · media_upload: Upload an image into the site's asset store (multipart). [POST api/media/upload] · revision_list: Revision history of one slug. [GET api/revision/list] · rename_slug: Move a slug; a redirect is recorded so the old URL keeps working. [POST api/rename_slug] · redirect: Record a URL move that is not an article rename (a retired page, an imported path). [POST api/redirect] · publish: Create or replace a site config through an intent file, then wait for the reconciler's verdict. [intent file] · stop: Park a site config out of the scan (nothing is deleted). [intent file] · start: Un-park a stopped site config. [intent file] · rm: Remove a site config: archived to .zen/trash, then stopped. [intent file] · rollback: Restore the newest (or a named) config snapshot through an intent. [intent file] · intents: List pending and archived intent files. [status file]",
+      "description": "Action to perform. Fleet mutation (publish/stop/start/rm/rollback) writes an intent file the reconciler applies; no HTTP endpoint mutates the fleet · sites: List every site the fleet knows about, with state and applied hash (read from the status document). [status file, read only] · status: Read the fleet status document: desired verdicts, live states, recent request results. [status file, read only] · plan: Diff desired against live without changing anything. [status file, read only] · doctor: In-process site audit. The verify gate: a run is not complete while ok is false. [GET api/doctor] · catalog: This site's endpoint catalog: methods, suffixes, permissions, schemas. [GET api/catalog] · list: Paginated read-only inventory of articles. [GET api/list] · get: Fetch one article by exact slug. [GET api/get] · save: Create or replace one article (full document; tags/attributes are JSON strings). [POST api/save] · delete: Delete one article. Irreversible, and denied to agents unless allow-listed. [POST api/delete] · media_upload: Upload an image into the site's asset store (multipart). [POST api/media/upload] · revision_list: Revision history of one slug. [GET api/revision/list] · rename_slug: Move a slug; a redirect is recorded so the old URL keeps working. [POST api/rename_slug] · redirect: Record a URL move that is not an article rename (a retired page, an imported path). [POST api/redirect] · publish: Create or replace a site config through an intent file, then wait for the reconciler's verdict. [expect_sha256 empty = create-only] [intent file] · stop: Park a site config out of the scan (nothing is deleted). [no expect_sha256] [intent file] · start: Un-park a stopped site config. [no expect_sha256] [intent file] · rm: Remove a site config: archived to .zen/trash, then stopped. [expect_sha256 always compared] [intent file] · rollback: Restore the newest (or a named) config snapshot through an intent. Not article revisions — see revision_list. [expect_sha256 always compared] [intent file] · intents: List pending and archived intent files. [status file, read only]",
       "enum": [
         "catalog",
         "delete",
@@ -37,7 +37,7 @@
       "type": "string"
     },
     "author": {
-      "description": "[save] used by save",
+      "description": "[save] NOT WRITTEN BY api/save: like description, the UPSERT omits the column",
       "type": "string"
     },
     "category": {
@@ -49,14 +49,14 @@
       "type": "string"
     },
     "confirm": {
-      "description": "[delete] must be the literal yes",
+      "description": "[delete] CLIENT-SIDE GUARD: the engine checks no confirm here (only the seeders require ?confirm=yes); this build refuses without it",
       "enum": [
         "yes"
       ],
       "type": "string"
     },
     "content": {
-      "description": "[save] markdown body",
+      "description": "[save] markdown body; empty keeps the stored body — one of two guardrails in pkg/storage/db.go (the other: a whiteboard article cannot be downgraded to card)",
       "type": "string"
     },
     "created_after": {
@@ -68,15 +68,15 @@
       "type": "boolean"
     },
     "description": {
-      "description": "[save] used by save",
+      "description": "[save] NOT WRITTEN BY api/save: accepted and dropped — the UPSERT omits the column, though a seeder writes it directly",
       "type": "string"
     },
     "expect_sha256": {
-      "description": "[publish] compare-and-swap: the hash of the config you read. Empty means 'must not exist yet'.",
+      "description": "[publish] compare-and-swap: the hash of the config you read. Empty means 'must not exist yet', so a create-only publish cannot clobber",
       "type": "string"
     },
     "fields": {
-      "description": "[list] comma list of slug,title,image_url,author,views,category,genre,description,tags,attributes,created_at",
+      "description": "[list] comma list of slug,title,image_url,author,views,category,genre,description,tags,attributes,created_at — readable projections only; genre and author are never written by api/save",
       "type": "string"
     },
     "from": {
@@ -111,7 +111,7 @@
       "type": "integer"
     },
     "permanent": {
-      "description": "[redirect] 301 (default true); false sends a 302",
+      "description": "[redirect] true (default) answers 308, false answers 307 — never 301/302, which a cache keeps after the rule is gone",
       "type": "boolean"
     },
     "search": {
@@ -163,5 +163,278 @@
     "action"
   ],
   "title": "webserver",
-  "type": "object"
+  "type": "object",
+  "x-actions": [
+    {
+      "action": "sites",
+      "mutates": false,
+      "optional": [],
+      "perm": "read",
+      "required": [],
+      "summary": "List every site the fleet knows about, with state and applied hash (read from the status document).",
+      "transport": "status-file"
+    },
+    {
+      "action": "status",
+      "mutates": false,
+      "optional": [],
+      "perm": "read",
+      "required": [],
+      "summary": "Read the fleet status document: desired verdicts, live states, recent request results.",
+      "transport": "status-file"
+    },
+    {
+      "action": "plan",
+      "mutates": false,
+      "optional": [],
+      "perm": "read",
+      "required": [],
+      "summary": "Diff desired against live without changing anything.",
+      "transport": "status-file"
+    },
+    {
+      "action": "doctor",
+      "endpoint": "api/doctor",
+      "method": "GET",
+      "mutates": false,
+      "optional": [
+        "deep"
+      ],
+      "perm": "read",
+      "required": [
+        "site"
+      ],
+      "summary": "In-process site audit. The verify gate: a run is not complete while ok is false.",
+      "transport": "admin"
+    },
+    {
+      "action": "catalog",
+      "endpoint": "api/catalog",
+      "method": "GET",
+      "mutates": false,
+      "optional": [],
+      "perm": "read",
+      "required": [
+        "site"
+      ],
+      "summary": "This site's endpoint catalog: methods, suffixes, permissions, schemas.",
+      "transport": "admin"
+    },
+    {
+      "action": "list",
+      "endpoint": "api/list",
+      "method": "GET",
+      "mutates": false,
+      "optional": [
+        "page",
+        "per_page",
+        "category",
+        "slug_prefix",
+        "search",
+        "created_after",
+        "sort",
+        "fields"
+      ],
+      "perm": "read",
+      "required": [
+        "site"
+      ],
+      "summary": "Paginated read-only inventory of articles.",
+      "transport": "admin"
+    },
+    {
+      "action": "get",
+      "endpoint": "api/get",
+      "method": "GET",
+      "mutates": false,
+      "optional": [],
+      "perm": "read",
+      "required": [
+        "site",
+        "slug"
+      ],
+      "summary": "Fetch one article by exact slug.",
+      "transport": "admin"
+    },
+    {
+      "action": "save",
+      "endpoint": "api/save",
+      "method": "POST",
+      "mutates": true,
+      "optional": [
+        "title",
+        "content",
+        "description",
+        "category",
+        "image_url",
+        "tags",
+        "attributes",
+        "author"
+      ],
+      "perm": "write",
+      "required": [
+        "site",
+        "slug"
+      ],
+      "summary": "Create or replace one article (full document; tags/attributes are JSON strings).",
+      "transport": "admin"
+    },
+    {
+      "action": "delete",
+      "endpoint": "api/delete",
+      "method": "POST",
+      "mutates": true,
+      "optional": [
+        "confirm"
+      ],
+      "perm": "write",
+      "required": [
+        "site",
+        "slug"
+      ],
+      "summary": "Delete one article. Irreversible, and denied to agents unless allow-listed.",
+      "transport": "admin"
+    },
+    {
+      "action": "media_upload",
+      "endpoint": "api/media/upload",
+      "method": "POST",
+      "mutates": true,
+      "optional": [
+        "as"
+      ],
+      "perm": "media",
+      "required": [
+        "site",
+        "path"
+      ],
+      "summary": "Upload an image into the site's asset store (multipart).",
+      "transport": "admin"
+    },
+    {
+      "action": "revision_list",
+      "endpoint": "api/revision/list",
+      "method": "GET",
+      "mutates": false,
+      "optional": [],
+      "perm": "read",
+      "required": [
+        "site",
+        "slug"
+      ],
+      "summary": "Revision history of one slug.",
+      "transport": "admin"
+    },
+    {
+      "action": "rename_slug",
+      "endpoint": "api/rename_slug",
+      "method": "POST",
+      "mutates": true,
+      "optional": [],
+      "perm": "write",
+      "required": [
+        "site",
+        "old_slug",
+        "new_slug"
+      ],
+      "summary": "Move a slug; a redirect is recorded so the old URL keeps working.",
+      "transport": "admin"
+    },
+    {
+      "action": "redirect",
+      "endpoint": "api/redirect",
+      "method": "POST",
+      "mutates": true,
+      "optional": [
+        "permanent"
+      ],
+      "perm": "write",
+      "required": [
+        "site",
+        "from",
+        "to"
+      ],
+      "summary": "Record a URL move that is not an article rename (a retired page, an imported path).",
+      "transport": "admin"
+    },
+    {
+      "action": "publish",
+      "cas": "create-or-conflict",
+      "mutates": true,
+      "optional": [
+        "expect_sha256"
+      ],
+      "perm": "write",
+      "required": [
+        "site",
+        "config_file"
+      ],
+      "summary": "Create or replace a site config through an intent file, then wait for the reconciler's verdict.",
+      "transport": "intent-file"
+    },
+    {
+      "action": "stop",
+      "cas": "none",
+      "mutates": true,
+      "optional": [],
+      "perm": "write",
+      "required": [
+        "site"
+      ],
+      "summary": "Park a site config out of the scan (nothing is deleted).",
+      "transport": "intent-file"
+    },
+    {
+      "action": "start",
+      "cas": "none",
+      "mutates": true,
+      "optional": [],
+      "perm": "write",
+      "required": [
+        "site"
+      ],
+      "summary": "Un-park a stopped site config.",
+      "transport": "intent-file"
+    },
+    {
+      "action": "rm",
+      "cas": "required",
+      "mutates": true,
+      "optional": [
+        "confirm"
+      ],
+      "perm": "write",
+      "required": [
+        "site",
+        "expect_sha256"
+      ],
+      "summary": "Remove a site config: archived to .zen/trash, then stopped.",
+      "transport": "intent-file"
+    },
+    {
+      "action": "rollback",
+      "cas": "required",
+      "mutates": true,
+      "optional": [
+        "snapshot_id"
+      ],
+      "perm": "write",
+      "required": [
+        "site",
+        "expect_sha256"
+      ],
+      "summary": "Restore the newest (or a named) config snapshot through an intent. Not article revisions — see revision_list.",
+      "transport": "intent-file"
+    },
+    {
+      "action": "intents",
+      "mutates": false,
+      "optional": [],
+      "perm": "read",
+      "required": [],
+      "summary": "List pending and archived intent files.",
+      "transport": "status-file"
+    }
+  ],
+  "x-schema-version": "sha256:95b02436993f"
 }

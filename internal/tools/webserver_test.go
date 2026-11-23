@@ -232,13 +232,149 @@ func dispatchCaseLabels(t *testing.T) []string {
 	return out
 }
 
-func webserverHas(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
+// TestWebserverSchemaVersionIsStamped is the only link between the copied schema and the engine that
+// generated it. zen-mcp cannot import zen-webserver (plan 2 §5.3), so nothing — no build tag, no
+// replace directive, no test that reads the other repository — connects
+// internal/tools/webserver.schema.json to a particular engine build. The digest the engine stamps in
+// `x-schema-version` (pkg/admin_api/mcpschema.go:265, computed by SchemaVersion in
+// pkg/admin_api/schemas.go:51-61 over its published request schemas and its action table) is what
+// makes a STALE copy detectable, and this test is what makes it loud.
+//
+// To refresh after the engine changes: run
+//
+//	cd zen-webserver && go run . -fleet www -mode gen-mcp-schema -out testdata/webserver.schema.json
+//
+// copy zen-webserver/testdata/webserver.schema.json over
+// zen-mcp/internal/tools/webserver.schema.json, then set webserverSchemaVersion in webserver.go to
+// the `x-schema-version` the new file now publishes. A missing key fails too: it means the engine
+// changed shape (it publishes the stamp at mcpschema.go:265 today), not that nobody re-copied.
+func TestWebserverSchemaVersionIsStamped(t *testing.T) {
+	var schema map[string]any
+	if err := json.Unmarshal(webserverSchemaJSON, &schema); err != nil {
+		t.Fatalf("the embedded schema does not parse: %v", err)
+	}
+	raw, ok := schema[webserverSchemaVersionKey]
+	if !ok {
+		t.Fatalf("webserver.schema.json has no %q: either this copy predates the engine publishing a contract version, or the engine stopped publishing it. Refresh it as this test's comment describes and reconcile webserverSchemaVersion with whatever the new file says", webserverSchemaVersionKey)
+	}
+	got, isString := raw.(string)
+	if !isString || got == "" {
+		t.Fatalf("webserver.schema.json %q is %#v; expected a non-empty string", webserverSchemaVersionKey, raw)
+	}
+	if got != webserverSchemaVersion {
+		t.Errorf("webserverSchemaVersion is %q but webserver.schema.json publishes %q: the embedded contract is stale, or it was refreshed and the constant was left behind. Copy zen-webserver/testdata/webserver.schema.json over internal/tools/webserver.schema.json and set webserverSchemaVersion to %q", webserverSchemaVersion, got, got)
+	}
+}
+
+// TestWebserverGuardProblemsCatchesDrift drives webserverGuardProblems with the mismatches that a
+// regeneration can actually produce. The checker is a plain function for exactly this reason: init()
+// makes a real mismatch fatal, and a fatal init cannot be tested by feeding it a wrong table.
+func TestWebserverGuardProblemsCatchesDrift(t *testing.T) {
+	good := webserverActionContracts["rm"]
+	if good.CAS != webserverCASRequired || !webserverHas(good.Required, "expect_sha256") {
+		t.Fatalf("the embedded contract for rm is %#v; this test's fixtures assume cas %q with a required hash", good, webserverCASRequired)
+	}
+	// The shipped table must pass the shipped contract, or the test below is testing a fiction.
+	if problems := webserverGuardProblems(webserverActionSpecs, webserverActionContracts); len(problems) != 0 {
+		t.Fatalf("webserverActionSpecs disagrees with the embedded %s:\n\t%s", webserverActionsKey, strings.Join(problems, "\n\t"))
+	}
+
+	cases := []struct {
+		name         string
+		specs        map[string]webserverActionSpec
+		allContracts bool
+		wantHit      string
+	}{
+		{
+			// The defect that started this: a hash demanded of a verb whose transport is a rename.
+			name:    "stop gains a hash rule",
+			specs:   map[string]webserverActionSpec{"stop": {kind: webserverFleetAction, presentKeys: []string{"expect_sha256"}}},
+			wantHit: `action "stop"`,
+		},
+		{
+			name:    "fleet verb routed as admin",
+			specs:   map[string]webserverActionSpec{"rm": {kind: webserverAdminAction, endpoint: "rm"}},
+			wantHit: `action "rm"`,
+		},
+		{
+			name:    "endpoint points somewhere else",
+			specs:   map[string]webserverActionSpec{"revision_list": {kind: webserverAdminAction, endpoint: "revisions"}},
+			wantHit: `this build calls "revisions"`,
+		},
+		{
+			// The confirm literals are policy the engine does not enforce; losing one must be loud.
+			name:    "confirm literal dropped",
+			specs:   map[string]webserverActionSpec{"delete": {kind: webserverAdminAction, endpoint: "delete"}},
+			wantHit: `must require the literal`,
+		},
+		{
+			name:    "confirm literal weakened",
+			specs:   map[string]webserverActionSpec{"rm": {kind: webserverFleetAction, exact: map[string]string{"confirm": "y"}}},
+			wantHit: `only ever gates on "yes"`,
+		},
+		{
+			name:    "publish loses its present-but-empty rule",
+			specs:   map[string]webserverActionSpec{"publish": {kind: webserverFleetAction}},
+			wantHit: `presentKeys must name it`,
+		},
+		{
+			// The other direction, and the one a regeneration produces: the engine gains an action
+			// and nobody adds the row that says which surface it may touch.
+			name:         "action missing from the local table",
+			specs:        map[string]webserverActionSpec{},
+			allContracts: true,
+			wantHit:      `has no entry in webserverActionSpecs`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// One contract at a time — unless the case is about a row the LOCAL table lost, which
+			// needs the whole generated side to be present. A checker that reported unrelated actions
+			// for a single-row table would be as bad as one that stays silent.
+			contracts := map[string]webserverActionContract{}
+			for action, contract := range webserverActionContracts {
+				_, kept := tc.specs[action]
+				if kept || tc.allContracts {
+					contracts[action] = contract
+				}
+			}
+			if !tc.allContracts && len(contracts) != len(tc.specs) {
+				t.Fatalf("case %q names actions the schema does not declare: %v", tc.name, tc.specs)
+			}
+			problems := webserverGuardProblems(tc.specs, contracts)
+			if len(problems) == 0 {
+				t.Fatalf("%s was accepted silently", tc.name)
+			}
+			joined := strings.Join(problems, "\n")
+			if !strings.Contains(joined, tc.wantHit) {
+				t.Errorf("case %q: want a problem matching %q, got:\n%s", tc.name, tc.wantHit, joined)
+			}
+			if tc.allContracts && len(problems) != len(webserverActionContracts) {
+				t.Errorf("every action lost its row, so every action should be reported: %d problems for %d actions", len(problems), len(webserverActionContracts))
+			}
+		})
+	}
+}
+
+// TestWebserverActionKindFollowsTransport is the same check one layer down: every action this build
+// dispatches must be classified the way the engine's published transport says it travels, because the
+// classification is what "fleet verbs touch no socket" (§5.2) is asserted over.
+func TestWebserverActionKindFollowsTransport(t *testing.T) {
+	for action, spec := range webserverActionSpecs {
+		contract, ok := webserverActionContracts[action]
+		if !ok {
+			t.Errorf("action %q has no %s entry", action, webserverActionsKey)
+			continue
+		}
+		want, err := webserverTransportKind(contract.Transport)
+		if err != nil {
+			t.Errorf("action %q: %v", action, err)
+			continue
+		}
+		if want != spec.kind {
+			t.Errorf("action %q: transport %q is %s, this build uses %s", action, contract.Transport, want, spec.kind)
 		}
 	}
-	return false
 }
 
 // TestNoFleetActionUsesHTTP is A-2 and A-9's guard: a fleet mutation that went over HTTP would
@@ -258,8 +394,12 @@ func TestNoFleetActionUsesHTTP(t *testing.T) {
 		args   map[string]any
 	}{
 		{"publish", map[string]any{"site": "dummy", "config_file": candidate, "expect_sha256": sum}},
-		{"stop", map[string]any{"site": "dummy", "expect_sha256": sum}},
-		{"start", map[string]any{"site": "dummy", "expect_sha256": sum}},
+		// stop/start are filed with the parameters their published contract carries, which is
+		// `site` and nothing else: they are renames, and the engine reads no hash for them
+		// (pkg/fleet/consume.go:308-349). Sending a hash here would hide the regression this test
+		// exists to catch — a start that only works when a hash is supplied is a broken start.
+		{"stop", map[string]any{"site": "dummy"}},
+		{"start", map[string]any{"site": "dummy"}},
 		{"rm", map[string]any{"site": "dummy", "expect_sha256": sum, "confirm": "yes"}},
 		{"rollback", map[string]any{"site": "dummy", "expect_sha256": sum, "snapshot_id": "2026-01-01T000000.000000000Z.yaml"}},
 	}
@@ -326,14 +466,88 @@ func TestRejectsUnknownArgKey(t *testing.T) {
 	}
 }
 
-func TestFleetVerbRequiresExpectSHA256(t *testing.T) {
-	dir, _ := webserverTestFleet(t)
+// TestFleetVerbHashRequirementFollowsSchema is the corrected half of the CAS gate: which verbs need
+// a hash is the ENGINE's answer, published as x-actions `required` plus `cas`
+// (pkg/admin_api/mcpschema.go:60-96, whose ground truth is pkg/fleet/consume.go), and this build
+// reads it instead of typing a rule of its own.
+//
+// It used to assert the opposite for stop/start. That demand was invented here: applyPark is an
+// os.Rename and never looks at ExpectSHA256 (pkg/fleet/consume.go:308-349), so requiring a hash made
+// a valid `webserver start` fail with "expect_sha256 is required" — and the local compare then made
+// it fail with cas_conflict when the caller answered the demand with "". The test now pins both
+// directions so a regression in either one is visible.
+func TestFleetVerbHashRequirementFollowsSchema(t *testing.T) {
+	dir, sum := webserverTestFleet(t)
 	ws := webserverTestWorkspace(t, dir, 300)
-	for _, action := range []string{"stop", "start", "rm", "rollback"} {
+
+	// rm and rollback: cas "required", so an empty value can never match and the key must arrive.
+	for _, action := range []string{"rm", "rollback"} {
 		args := map[string]any{"site": "dummy", "confirm": "yes", "snapshot_id": "x"}
 		res := HandleWebserver(context.Background(), ws, Deps{}, webserverCall(t, ws, action, args))
-		if !strings.Contains(webserverResultText(t, res), "expect_sha256") {
-			t.Errorf("%s accepted a call with no expect_sha256 (plan 2 A-3)", action)
+		txt := webserverResultText(t, res)
+		if !strings.Contains(txt, "expect_sha256 is required") {
+			t.Errorf("%s accepted a call with no expect_sha256 (plan 2 A-3): %s", action, txt)
+		}
+		if intentFiled(dir) {
+			t.Errorf("%s filed an intent that the engine would reject for a missing hash", action)
+		}
+	}
+
+	// publish: cas "create-or-conflict", so the key must be PRESENT but "" is a real answer. The
+	// refusal below is webserverActionSpec.presentKeys, the local rule the schema cannot express.
+	candidate := filepath.Join(t.TempDir(), "candidate.yaml")
+	if err := os.WriteFile(candidate, []byte("settings:\n  site_id: \"dummy\"\n  port: 3099\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	res := HandleWebserver(context.Background(), ws, Deps{}, webserverCall(t, ws, "publish", map[string]any{
+		"site": "dummy", "config_file": candidate,
+	}))
+	if txt := webserverResultText(t, res); !strings.Contains(txt, "expect_sha256 is required") {
+		t.Errorf("publish accepted a call with no expect_sha256 key at all: %s", txt)
+	}
+
+	// stop/start: cas "none", so the same call with only `site` is the VALID request — it must file
+	// an intent rather than be refused. This is the case the old table made impossible.
+	for _, action := range []string{"stop", "start"} {
+		res := HandleWebserver(context.Background(), ws, Deps{}, webserverCall(t, ws, action, map[string]any{"site": "dummy"}))
+		txt := webserverResultText(t, res)
+		if strings.Contains(txt, "expect_sha256") {
+			t.Errorf("%s still talks about expect_sha256, which its contract does not carry: %s", action, txt)
+		}
+		if res != nil && res.IsError {
+			t.Errorf("%s refused a request the engine accepts: %s", action, txt)
+		}
+		if !intentFiled(dir) {
+			t.Errorf("%s filed no intent for a valid call: %s", action, txt)
+		}
+		clearIntentFiles(t, dir)
+	}
+
+	// A hash handed to a rename is not compared, and the reply has to say so rather than let the
+	// caller believe a CAS guard stood behind it (the engine ignores the field: consume.go:308-349).
+	res = HandleWebserver(context.Background(), ws, Deps{}, webserverCall(t, ws, "stop", map[string]any{
+		"site": "dummy", "expect_sha256": sum,
+	}))
+	if txt := webserverResultText(t, res); !strings.Contains(txt, "not compared") {
+		t.Errorf("stop accepted a hash it cannot compare without saying so: %s", txt)
+	}
+}
+
+// clearIntentFiles removes the intents one test filed, so the next one's intentFiled is not reading
+// its predecessor's work.
+func clearIntentFiles(t *testing.T, fleetDir string) {
+	t.Helper()
+	dir := filepath.Join(fleetDir, ".zen", "requests")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if err := os.Remove(filepath.Join(dir, e.Name())); err != nil {
+			t.Fatal(err)
 		}
 	}
 }
@@ -389,6 +603,107 @@ func TestNoFleetConfiguredIsAnError(t *testing.T) {
 	res := HandleWebserver(context.Background(), ws, Deps{}, webserverCall(t, ws, "sites", nil))
 	if !strings.Contains(webserverResultText(t, res), "fleet") {
 		t.Error("a tool with no configured fleet should say so plainly")
+	}
+}
+
+// scriptedTransport answers one site over a loopback listener that does not exist: api/catalog
+// replies with the admin_prefix under test, and every other call is a 200. It records the request
+// lines, which is the only way to see which mount the tool ended up choosing.
+type scriptedTransport struct {
+	catalogBody string // "" means answer the catalog with a 503
+	paths       []string
+}
+
+func (s *scriptedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	body := `{"url":"/media/x.png"}`
+	status := 200
+	if strings.HasSuffix(req.URL.Path, "/api/catalog") {
+		if s.catalogBody == "" {
+			status, body = 503, `{"code":"site_down","message":"catalog unreadable"}`
+		} else {
+			body = s.catalogBody
+		}
+	}
+	s.paths = append(s.paths, req.Method+" "+req.URL.Path)
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+	}, nil
+}
+
+// withTransport installs a scripted RoundTripper on the client this tool builds, so a URL this file
+// assembles by hand can be inspected instead of trusted.
+func withTransport(t *testing.T, rt http.RoundTripper) *scriptedTransport {
+	t.Helper()
+	scripted, _ := rt.(*scriptedTransport)
+	orig := webserverClientFor
+	webserverClientFor = func(statusPath string, timeout time.Duration) *webserver.Client {
+		c := webserver.New(statusPath, timeout)
+		c.HTTP.Transport = rt
+		return c
+	}
+	t.Cleanup(func() { webserverClientFor = orig })
+	return scripted
+}
+
+// TestMediaUploadUsesTheCatalogAdminPrefix is task 3's guard. The upload is the one admin call this
+// file assembles itself, and the admin mount is per-site data — settings.admin_path
+// (pkg/config/config.go:66), default `/_zen/` (server_snapshot.go:36-39), published by api/catalog as
+// `admin_prefix` (pkg/admin_api/catalog.go:71) and joined to endpoints as <mount>api/<suffix>
+// (doctor.go:180). A literal here is a mount this build guessed, so the catalog's value wins, and the
+// literal only stands in for a catalog that cannot be read.
+func TestMediaUploadUsesTheCatalogAdminPrefix(t *testing.T) {
+	cases := []struct {
+		name        string
+		catalogBody string
+		want        string
+	}{
+		{
+			name:        "catalog mount wins",
+			catalogBody: `{"site_id":"dummy","admin_prefix":"/_secret_admin_/"}`,
+			want:        "POST /_secret_admin_/api/media/upload",
+		},
+		{
+			name:        "default mount, spelled as the engine spells it",
+			catalogBody: `{"site_id":"dummy","admin_prefix":"/_zen/"}`,
+			want:        "POST /_zen/api/media/upload",
+		},
+		{
+			name:        "catalog without the field falls back",
+			catalogBody: `{"site_id":"dummy"}`,
+			want:        "POST /_zen/api/media/upload",
+		},
+		{
+			name:        "unreadable catalog falls back",
+			catalogBody: "",
+			want:        "POST /_zen/api/media/upload",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			scripted := withTransport(t, &scriptedTransport{catalogBody: tc.catalogBody})
+			dir, _ := webserverTestFleet(t)
+			ws := webserverTestWorkspace(t, dir, 300)
+			upload := filepath.Join(t.TempDir(), "x.png")
+			if err := os.WriteFile(upload, []byte("\x89PNG fake"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			HandleWebserver(context.Background(), ws, Deps{}, webserverCall(t, ws, "media_upload", map[string]any{
+				"site": "dummy", "path": upload,
+			}))
+
+			var posted bool
+			for _, line := range scripted.paths {
+				if line == tc.want {
+					posted = true
+				}
+			}
+			if !posted {
+				t.Errorf("the upload did not go to %s; requests were %v", tc.want, scripted.paths)
+			}
+		})
 	}
 }
 

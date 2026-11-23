@@ -9,14 +9,19 @@ package tools
 // `go run . -fleet www -mode gen-mcp-schema` in zen-webserver, plan 2 §5.3) that is embedded and
 // served verbatim. A hand-ported copy would be a second list of endpoints that no build failure
 // connects to the first — which is the exact cost the plan exists to remove. The consequence for
-// this file is that the schema is authoritative: the action enum, the parameter set and the
-// per-parameter enums are all READ from it rather than restated here, so an endpoint change shows
-// up as a mismatch against this file's guard table (webserver_test.go) instead of as a tool that
-// silently accepts a parameter it ignores.
+// this file is that the schema is authoritative: the action enum, the parameter set, the
+// per-parameter enums, and (from `x-actions`, webserverActionContract) each action's required
+// parameters, its transport and its compare-and-swap rule are all READ from it rather than restated
+// here, so an endpoint change shows up as a mismatch — a panic at package start
+// (webserverGuardProblems from init) and a test failure (webserver_test.go) — instead of as a tool
+// that silently accepts a parameter it ignores. What is left hand-typed in webserverActionSpecs is
+// only what the generated file cannot carry: the local policy (the present-but-empty key, the
+// `confirm` literals) and the admin endpoint suffix.
 //
 // Three surfaces, and which one an action uses is the security property, not a detail (§5.1):
 //
-//	admin  — one site's loopback /_zen/api, reached through webserver.Client (port from the
+//	admin  — one site's loopback admin API (default mount /_zen/, published per site by
+//	         api/catalog's admin_prefix), reached through webserver.Client (port from the
 //	         status document, never from an argument)
 //	status — the status document read straight off disk; no socket at all, because a `plan` that
 //	         went through a running server would describe that server rather than the config (§5.1)
@@ -24,9 +29,10 @@ package tools
 //	         listener anywhere accepts a fleet mutation (§5.2)
 //
 // And because zen-mcp has no auth and no permission model of its own (plan 2 §5 constraint 2,
-// §5.2), the gates that matter are enforced HERE, before anything is filed: the CAS hash, and the
-// `confirm == "yes"` on destructive actions. The engine does not check confirmations, so this is
-// the only place a "remove that site" can be refused.
+// §5.2), the gates that matter are enforced HERE, before anything is filed: the CAS hash, for the
+// verbs whose contract carries one (see webserverActionContract.CAS), and the `confirm == "yes"`
+// on destructive actions. The engine does not check confirmations, so this is the only place a
+// "remove that site" can be refused.
 
 import (
 	"bytes"
@@ -57,10 +63,33 @@ import (
 )
 
 // webserverSchemaJSON is the engine-generated input contract, copied in from
-// zen-webserver/testdata/webserver.schema.json. Do not hand-edit it: regenerate it (plan 2 §5.3).
+// zen-webserver/testdata/webserver.schema.json. Do not hand-edit it: regenerate it (plan 2 §5.3)
+// and check the copy against webserverSchemaVersion, which records which engine build it came from.
 //
 //go:embed webserver.schema.json
 var webserverSchemaJSON []byte
+
+// webserverSchemaVersion is the engine's own stamp on the contract embedded above, and it is
+// recorded here for one reason: a COPIED file has no build failure attached to it. zen-mcp cannot
+// import the engine (plan 2 §5.3), so the only link between webserver.schema.json and the build
+// that produced it is this string — the digest of the engine's published request schemas plus its
+// action table (pkg/admin_api/mcpschema.go:265, computed by pkg/admin_api/schemas.go SchemaVersion).
+// TestWebserverSchemaVersionIsStamped compares the two, and a stale copy therefore fails `go test`
+// instead of quietly shipping a contract the engine no longer publishes.
+//
+// To refresh after a copy: regenerate in zen-webserver
+// (`go run . -fleet www -mode gen-mcp-schema -out testdata/webserver.schema.json`), copy
+// zen-webserver/testdata/webserver.schema.json over internal/tools/webserver.schema.json, then set
+// this constant to the `x-schema-version` the new file publishes. The test names all three steps.
+const webserverSchemaVersion = "sha256:95b02436993f"
+
+// webserverSchemaVersionKey is the annotation the engine stamps that version into
+// (pkg/admin_api/mcpschema.go:265 "x-schema-version"), and webserverActionsKey the per-action
+// contract below (same file, :266 "x-actions", emitted by actionsForSchema at :286-308).
+const (
+	webserverSchemaVersionKey = "x-schema-version"
+	webserverActionsKey       = "x-actions"
+)
 
 // webserverSchema is that file as a Go map, ready to serve in tools/list. Parsing happens once at
 // package initialisation and a failure is fatal: a schema that does not parse is a broken
@@ -76,38 +105,161 @@ func mustWebserverSchema() map[string]any {
 	return schema
 }
 
+// webserverActionContract is one entry of the schema's `x-actions` array: the per-action contract
+// the FLAT properties map cannot carry, because every property is shared by every action. This is
+// the engine's own data (pkg/admin_api/mcpschema.go Actions() → actionsForSchema), so the required
+// set, the transport and the CAS rule are read from here rather than typed a second time — which is
+// the drift that file names out loud (same file, :259-264: a consumer "can generate its guard table
+// from it instead of typing one, which is where zen-mcp's start/stop rules drifted from this
+// engine").
+type webserverActionContract struct {
+	Action    string `json:"action"`
+	Summary   string `json:"summary"`
+	Transport string `json:"transport"`
+	Perm      string `json:"perm"`
+	Mutates   bool   `json:"mutates"`
+	Endpoint  string `json:"endpoint,omitempty"`
+	// Method is the HTTP verb, published separately from Endpoint exactly so that nobody has to parse
+	// it off the front of a route string to find the path (pkg/admin_api/mcpschema.go).
+	Method   string   `json:"method,omitempty"`
+	Required []string `json:"required"`
+	Optional []string `json:"optional"`
+	// CAS is what the reconciler does with expect_sha256, in the engine's own words
+	// (pkg/admin_api/mcpschema.go:66-81 and the CASMode values at :85-96, whose ground truth is
+	// pkg/fleet/consume.go). The ABSENCE of the key is itself an answer, not an unknown: the
+	// action writes no intent file, so there is no hash to compare (same file, :95). It is
+	// therefore treated as webserverCASNone everywhere below.
+	CAS string `json:"cas,omitempty"`
+}
+
+// The three compare-and-swap modes, spelled exactly as the engine publishes them.
+const (
+	// webserverCASRequired — the hash is always compared, so an empty value can never match and a
+	// real hash is mandatory (rm, rollback; pkg/fleet/consume.go:279 applyRollback, :375
+	// applyRemove).
+	webserverCASRequired = "required"
+	// webserverCASCreates — publish's rule: an empty expect_sha256 is a VALID answer meaning
+	// "there must be no incumbent config", so the key cannot be modelled as a required string
+	// (pkg/fleet/consume.go:215-228). This is what webserverActionSpec.presentKeys is for.
+	webserverCASCreates = "create-or-conflict"
+	// webserverCASNone — the verb reads no hash at all: stop/start are os.Rename operations
+	// (pkg/fleet/consume.go:308-349 applyPark never touches in.ExpectSHA256), so demanding a hash
+	// here would be a rule this file invented.
+	webserverCASNone = "none"
+)
+
+// webserverActionContracts is x-actions keyed by action name. Fatal if the array is missing or
+// malformed: without it the guard table has nothing to be reconciled against, and a silently
+// absent contract is exactly the stale-copy failure mode webserverSchemaVersion exists to catch.
+var webserverActionContracts = mustWebserverActionContracts()
+
+func mustWebserverActionContracts() map[string]webserverActionContract {
+	raw, ok := webserverSchema[webserverActionsKey]
+	if !ok {
+		panic("tools: webserver.schema.json declares no " + webserverActionsKey + "; this copy predates the engine publishing its per-action contract (pkg/admin_api/mcpschema.go:266), so the guard table cannot be checked against it — refresh the file (see webserverSchemaVersion)")
+	}
+	// Re-encode rather than walk the map[string]any by hand: one shape to read, and a wrong type
+	// is a decode error instead of a silent zero value.
+	blob, err := json.Marshal(raw)
+	if err != nil {
+		panic("tools: webserver.schema.json " + webserverActionsKey + " cannot be re-encoded: " + err.Error())
+	}
+	var items []webserverActionContract
+	if err := json.Unmarshal(blob, &items); err != nil {
+		panic("tools: webserver.schema.json " + webserverActionsKey + " is not a list of action contracts: " + err.Error())
+	}
+	if len(items) == 0 {
+		panic("tools: webserver.schema.json " + webserverActionsKey + " is empty; the engine declares 19 actions")
+	}
+	out := make(map[string]webserverActionContract, len(items))
+	for _, item := range items {
+		switch {
+		case item.Action == "":
+			panic("tools: webserver.schema.json has an " + webserverActionsKey + " entry with no action name")
+		case !webserverSchemaHasAction(item.Action):
+			panic("tools: webserver.schema.json declares " + webserverActionsKey + " action " + item.Action + ", which its own action enum does not")
+		}
+		if _, dup := out[item.Action]; dup {
+			panic("tools: webserver.schema.json declares action " + item.Action + " twice in " + webserverActionsKey)
+		}
+		out[item.Action] = item
+	}
+	return out
+}
+
+// webserverContractFor is the per-action lookup the validator and the fleet verb run on.
+func webserverContractFor(action string) (webserverActionContract, bool) {
+	c, ok := webserverActionContracts[action]
+	return c, ok
+}
+
 // webserverActionKind is which surface one action drives. The kinds exist so that "the fleet verbs
 // touch no socket" (§5.2) is a property a test can assert over a group of actions instead of a
-// comment an auditor has to trust.
+// comment an auditor has to trust. Which kind an action belongs to is not a matter of opinion here:
+// the engine publishes the transport, and webserverGuardProblems below refuses to start when the
+// two disagree.
 type webserverActionKind string
 
+// The transports x-actions publishes (pkg/admin_api/mcpschema.go TransportKind()). Three fixed
+// tokens, named here because webserverGuardProblems compares them exactly: a fleet verb that read
+// "intent" instead of "intent-file" would put a mutation on the wrong side of §5.2. They are
+// deliberately NOT the human-readable transport strings the generated docs show — those carry a
+// route name, and switching on a route would make a rename change behaviour.
 const (
-	webserverAdminAction  webserverActionKind = "admin"  // one site's loopback /_zen/api
+	webserverTransportIntentFile = "intent-file"
+	webserverTransportStatusFile = "status-file"
+	webserverTransportAdmin      = "admin"
+)
+
+const (
+	webserverAdminAction  webserverActionKind = "admin"  // one site's loopback admin API
 	webserverStatusAction webserverActionKind = "status" // the status document, file read only
 	webserverFleetAction  webserverActionKind = "fleet"  // intent file + verdict wait, file only
 )
 
-// webserverActionSpec is the per-action contract in the shape youtube.go established: required
-// params, params whose only acceptable value is a literal, and the surface the action may use.
-// Validation runs before any dispatch, so a malformed request neither opens a connection nor files
-// an intent.
+// webserverTransportKind names the surface one published transport drives. An unrecognised value is
+// an error rather than a guess: the kinds are the security grouping, and a new transport that
+// silently landed in one of them would put a mutation on the wrong side of §5.2.
+func webserverTransportKind(transport string) (webserverActionKind, error) {
+	switch transport {
+	case webserverTransportIntentFile:
+		return webserverFleetAction, nil
+	case webserverTransportStatusFile:
+		return webserverStatusAction, nil
+	case webserverTransportAdmin:
+		return webserverAdminAction, nil
+	}
+	return "", fmt.Errorf("transport %q is none of %q, %q, %q", transport, webserverTransportAdmin, webserverTransportIntentFile, webserverTransportStatusFile)
+}
+
+// webserverActionSpec is the LOCAL half of the per-action contract, in the shape youtube.go
+// established: the surface the action may use, the parameters whose only acceptable value is a
+// literal, and the admin endpoint suffix. Validation runs before any dispatch, so a malformed
+// request neither opens a connection nor files an intent.
 //
-// The required sets mirror the engine's own ActionSpec `Required` flags (pkg/admin_api/mcpschema.go),
-// because the FLAT schema cannot carry them: a property is shared by every action, so per-action
-// requirements are runtime rules and this table is the only place they can live.
+// There is deliberately no `required` field. Which parameters the engine refuses to run without is
+// generated data, not policy: it arrives in x-actions (`required`, pkg/admin_api/mcpschema.go:299,
+// from ActionSpec.Params[].Required) and validateWebserverArgs reads it from there. A hand-typed
+// copy of it is how `stop`/`start` ended up demanding a hash the engine never reads.
 type webserverActionSpec struct {
+	// kind is the surface this action may drive. It is cross-checked against the published
+	// `transport` at startup (webserverGuardProblems), so it cannot quietly disagree with the engine.
 	kind webserverActionKind
-	// required must arrive non-empty.
-	required []string
-	// presentKeys must arrive at all, "" allowed. A publish's expect_sha256 is in this set: ""
-	// means "there must be no incumbent config" (pkg/fleet/intent.go), which is a decision the
-	// caller has to state rather than forget.
+	// presentKeys must arrive at all, "" allowed. It exists for exactly one action today: a
+	// publish's expect_sha256, whose empty value is a real answer ("there must be no incumbent
+	// config", pkg/fleet/intent.go:65-68, enforced by pkg/fleet/consume.go:215-228) — so the rule
+	// is "the key must be present", which a required string cannot express. The startup check
+	// insists this set matches x-actions `cas: "create-or-conflict"`, no wider.
 	presentKeys []string
 	// exact names a param whose only accepted value is the literal, checked case-sensitively:
-	// "y", "YES" and "true" are not the confirmation this gate is asking for.
+	// "y", "YES" and "true" are not the confirmation this gate is asking for. This is local policy
+	// — the engine checks no confirm on `delete` or on an rm intent (pkg/admin_api/mcpschema.go:179
+	// and :191 spell both out as CLIENT-SIDE GUARD) — and the startup check refuses to run if any
+	// action that declares a `confirm` parameter in x-actions loses its literal here.
 	exact map[string]string
 	// endpoint is the admin suffix for the admin kind, recorded so a test can prove no fleet
-	// action has one.
+	// action has one. It is checked against the same action's published `endpoint`, which carries
+	// the "api/" segment this field omits, so it cannot point somewhere the engine does not serve.
 	endpoint string
 }
 
@@ -119,49 +271,196 @@ var webserverActionSpecs = map[string]webserverActionSpec{
 	"intents": {kind: webserverStatusAction},
 
 	// --- one site's loopback admin API (plan 2 §5.4: doctor is the verify gate) ---
-	"doctor":        {kind: webserverAdminAction, required: []string{"site"}, endpoint: "doctor"},
-	"catalog":       {kind: webserverAdminAction, required: []string{"site"}, endpoint: "catalog"},
-	"list":          {kind: webserverAdminAction, required: []string{"site"}, endpoint: "list"},
-	"get":           {kind: webserverAdminAction, required: []string{"site", "slug"}, endpoint: "get"},
-	"save":          {kind: webserverAdminAction, required: []string{"site", "slug"}, endpoint: "save"},
-	"revision_list": {kind: webserverAdminAction, required: []string{"site", "slug"}, endpoint: "revision/list"},
-	"media_upload":  {kind: webserverAdminAction, required: []string{"site", "path"}, endpoint: "media/upload"},
-	"rename_slug":   {kind: webserverAdminAction, required: []string{"site", "old_slug", "new_slug"}, endpoint: "rename_slug"},
+	// Only the surface and the endpoint are named below: `site`, `slug` and the rest are required
+	// by the engine's x-actions, not by anything here.
+	"doctor":        {kind: webserverAdminAction, endpoint: "doctor"},
+	"catalog":       {kind: webserverAdminAction, endpoint: "catalog"},
+	"list":          {kind: webserverAdminAction, endpoint: "list"},
+	"get":           {kind: webserverAdminAction, endpoint: "get"},
+	"save":          {kind: webserverAdminAction, endpoint: "save"},
+	"revision_list": {kind: webserverAdminAction, endpoint: "revision/list"},
+	"media_upload":  {kind: webserverAdminAction, endpoint: "media/upload"},
+	"rename_slug":   {kind: webserverAdminAction, endpoint: "rename_slug"},
 	// A URL move that is not a rename. The engine refuses an off-site destination, and says why in
 	// the error, so nothing here needs to second-guess the value: the one thing worth stating is
 	// that this tool is not the guard (plan 2 A-12's open-redirect rule lives server-side, where
 	// every writer of the table can be held to it).
-	"redirect": {kind: webserverAdminAction, required: []string{"site", "from", "to"}, endpoint: "redirect"},
+	"redirect": {kind: webserverAdminAction, endpoint: "redirect"},
 	// An article delete is irreversible and the engine admits it without asking, so the literal is
 	// required here — same reasoning as `rm` below.
-	"delete": {kind: webserverAdminAction, required: []string{"site", "slug"}, endpoint: "delete", exact: map[string]string{"confirm": "yes"}},
+	"delete": {kind: webserverAdminAction, endpoint: "delete", exact: map[string]string{"confirm": "yes"}},
 
 	// --- fleet mutations: intent files only, never an endpoint (§5.2) ---
+	// Which of these carries a hash is the engine's answer, published as `cas`: publish's empty
+	// expect_sha256 is a valid create-only answer (webserverCASCreates → presentKeys), rm/rollback
+	// always compare one (webserverCASRequired, and their x-actions `required` names the key), and
+	// stop/start read none at all (webserverCASNone, consume.go:308-349), so they declare nothing.
 	"publish": {
 		kind:        webserverFleetAction,
-		required:    []string{"site", "config_file"},
 		presentKeys: []string{"expect_sha256"},
 	},
-	"stop": {
-		kind:     webserverFleetAction,
-		required: []string{"site", "expect_sha256"},
-	},
-	"start": {
-		kind:     webserverFleetAction,
-		required: []string{"site", "expect_sha256"},
-	},
+	"stop":  {kind: webserverFleetAction},
+	"start": {kind: webserverFleetAction},
 	// The engine does not check `confirm` on an rm either (plan 2 §5.2's whole point about
-	// zen-mcp's missing permission model), so this refusal is the ONLY gate between "rm" and a
-	// config leaving the fleet. It is enforced here, in the layer that can enforce it.
-	"rm": {
-		kind:     webserverFleetAction,
-		required: []string{"site", "expect_sha256"},
-		exact:    map[string]string{"confirm": "yes"},
-	},
-	"rollback": {
-		kind:     webserverFleetAction,
-		required: []string{"site", "expect_sha256"},
-	},
+	// zen-mcp's missing permission model; pkg/admin_api/mcpschema.go:191 says an intent has no
+	// confirm field at all), so this refusal is the ONLY gate between "rm" and a config leaving the
+	// fleet. It is enforced here, in the layer that can enforce it.
+	"rm":       {kind: webserverFleetAction, exact: map[string]string{"confirm": "yes"}},
+	"rollback": {kind: webserverFleetAction},
+}
+
+// webserverGuardProblems reconciles the two halves of the guard table and returns one line per
+// disagreement, naming the action and both values. It returns problems rather than panicking so
+// webserver_test.go can prove it catches a wrong table without editing a global; init below is what
+// makes a real mismatch fatal before the first tool call.
+//
+// What it insists on, and why each half exists at all:
+//
+//   - the action sets agree — a new engine action with no local entry would be dispatched blind,
+//     and a local entry the engine no longer declares is dead code that reads as coverage;
+//   - `transport` implies `kind` — the kinds are the security grouping behind §5.2 (a fleet verb
+//     must have no endpoint), so the pairing is checked, not assumed;
+//   - the endpoint suffix this file types is the one the transport names — otherwise a reply could
+//     report an endpoint the call never hit;
+//   - the hash rules — `cas: "required"` must produce a real required hash, `cas:
+//     "create-or-conflict"` must be present-keys-only, and no verb the engine reads no hash for may
+//     gain a local hash rule of its own. That last clause is the defect this reconciliation exists
+//     for: `stop`/`start` carried an invented expect_sha256 demand here for exactly as long as it
+//     took to make a valid `start` fail;
+//   - every action whose x-actions declares a `confirm` parameter keeps its local literal gate —
+//     the engine checks no confirmation, so dropping one here drops the only check there is.
+func webserverGuardProblems(specs map[string]webserverActionSpec, contracts map[string]webserverActionContract) []string {
+	var problems []string
+	for _, action := range sortedWebserverNames(specs, contracts) {
+		spec, local := specs[action]
+		contract, generated := contracts[action]
+		switch {
+		case !generated:
+			problems = append(problems, fmt.Sprintf("action %q has a local contract (%+v) but no %s entry; it would be dispatched without the engine's parameter rules", action, spec, webserverActionsKey))
+			continue
+		case !local:
+			problems = append(problems, fmt.Sprintf("action %q is published by the engine (%s) but has no entry in webserverActionSpecs; this build does not know which surface it may touch", action, contract.Transport))
+			continue
+		}
+
+		wantKind, kindErr := webserverTransportKind(contract.Transport)
+		if kindErr != nil {
+			problems = append(problems, fmt.Sprintf("action %q: %v, so its kind %q cannot be confirmed", action, kindErr, string(spec.kind)))
+		} else if wantKind != spec.kind {
+			problems = append(problems, fmt.Sprintf("action %q: transport %q is the %s surface but this build routes it as %q", action, contract.Transport, wantKind, spec.kind))
+		}
+
+		if spec.kind == webserverAdminAction {
+			suffix, hasPath := strings.CutPrefix(contract.Endpoint, "api/")
+			switch {
+			case !hasPath:
+				problems = append(problems, fmt.Sprintf("action %q: kind %q needs an endpoint under api/, and the engine published %q (transport %q)", action, spec.kind, contract.Endpoint, contract.Transport))
+			case spec.endpoint == "":
+				problems = append(problems, fmt.Sprintf("action %q: the engine publishes endpoint %q, which webserverActionSpecs leaves empty", action, suffix))
+			case spec.endpoint != suffix:
+				problems = append(problems, fmt.Sprintf("action %q: this build calls %q, the engine publishes %q", action, spec.endpoint, suffix))
+			}
+		} else if spec.endpoint != "" {
+			// A fleet verb with an endpoint is §5.2 broken — and it is exactly the shape a careless
+			// regeneration produces, by copying the row above.
+			problems = append(problems, fmt.Sprintf("action %q: kind %q must file an intent, but it records endpoint %q", action, spec.kind, spec.endpoint))
+		}
+
+		switch rule := webserverContractHashRule(contract); rule {
+		case webserverCASRequired:
+			if !webserverHas(contract.Required, "expect_sha256") {
+				problems = append(problems, fmt.Sprintf("action %q: cas %q compares the hash always, so the engine must require it; required is [%s]", action, rule, strings.Join(contract.Required, ", ")))
+			}
+			if webserverHas(spec.presentKeys, "expect_sha256") {
+				problems = append(problems, fmt.Sprintf("action %q: cas %q already requires expect_sha256; presentKeys %q would give the rule two owners", action, rule, strings.Join(spec.presentKeys, ", ")))
+			}
+		case webserverCASCreates:
+			if !webserverHas(spec.presentKeys, "expect_sha256") {
+				problems = append(problems, fmt.Sprintf("action %q: cas %q makes an empty expect_sha256 a real answer, so presentKeys must name it; presentKeys is [%s]", action, rule, strings.Join(spec.presentKeys, ", ")))
+			}
+			if webserverHas(contract.Required, "expect_sha256") {
+				problems = append(problems, fmt.Sprintf("action %q: cas %q cannot hold while x-actions %q also requires expect_sha256", action, rule, strings.Join(contract.Required, ", ")))
+			}
+		default:
+			// webserverCASNone — the rename verbs — and an absent `cas`, which means this action
+			// writes no intent file at all (pkg/admin_api/mcpschema.go:95). Either way the engine
+			// compares nothing, so neither side may carry a hash rule for it.
+			if webserverHas(contract.Required, "expect_sha256") || webserverHas(contract.Optional, "expect_sha256") {
+				problems = append(problems, fmt.Sprintf("action %q: hash rule %q compares nothing, yet x-actions lists expect_sha256 in [%s]", action, rule, strings.Join(append(append([]string{}, contract.Required...), contract.Optional...), ", ")))
+			}
+			if webserverHas(spec.presentKeys, "expect_sha256") {
+				problems = append(problems, fmt.Sprintf("action %q: hash rule %q compares nothing, yet this build demands expect_sha256 in presentKeys", action, rule))
+			}
+		}
+
+		for _, name := range spec.presentKeys {
+			if !webserverHas(contract.Required, name) && !webserverHas(contract.Optional, name) {
+				problems = append(problems, fmt.Sprintf("action %q: presentKeys demands %q, which neither x-actions required [%s] nor optional [%s] declares", action, name, strings.Join(contract.Required, ", "), strings.Join(contract.Optional, ", ")))
+			}
+		}
+
+		if webserverHas(contract.Optional, "confirm") {
+			if got, ok := spec.exact["confirm"]; !ok {
+				problems = append(problems, fmt.Sprintf("action %q: the engine declares a confirm parameter and checks no confirmation, so this build must require the literal; exact is %v", action, spec.exact))
+			} else if got != "yes" {
+				problems = append(problems, fmt.Sprintf("action %q: the confirm literal is %q, not the \"yes\" this gate exists to insist on", action, got))
+			}
+		}
+		for name, want := range spec.exact {
+			if want != "yes" {
+				problems = append(problems, fmt.Sprintf("action %q: exact literal for %s is %q; this build only ever gates on \"yes\"", action, name, want))
+			}
+		}
+	}
+	return problems
+}
+
+// webserverContractHashRule is a contract's CAS mode with the absent key read the way the engine
+// means it: no intent file, therefore no hash, never "unknown" (pkg/admin_api/mcpschema.go:95).
+func webserverContractHashRule(contract webserverActionContract) string {
+	if contract.CAS == "" {
+		return webserverCASNone
+	}
+	return contract.CAS
+}
+
+// webserverHas reports whether one parameter name appears in a list this file got from the schema
+// (an action's required or optional set) or typed for it (presentKeys).
+func webserverHas(list []string, want string) bool {
+	for _, item := range list {
+		if item == want {
+			return true
+		}
+	}
+	return false
+}
+
+// sortedWebserverNames is every action named by either half of the table, in one order, so a
+// disagreement prints the same way on every run.
+func sortedWebserverNames(specs map[string]webserverActionSpec, contracts map[string]webserverActionContract) []string {
+	set := map[string]bool{}
+	for action := range specs {
+		set[action] = true
+	}
+	for action := range contracts {
+		set[action] = true
+	}
+	out := make([]string, 0, len(set))
+	for action := range set {
+		out = append(out, action)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// init is where the two halves of the guard table are reconciled, before a single call can be
+// served. It has to be a start-up panic and not only a test: a table that has drifted is a table
+// whose hash and confirm gates are no longer the ones the plan says are enforced, and a running MCP
+// server must not serve that.
+func init() {
+	if problems := webserverGuardProblems(webserverActionSpecs, webserverActionContracts); len(problems) > 0 {
+		panic("tools: the webserver guard table disagrees with " + webserverActionsKey + " in webserver.schema.json (see webserverSchemaVersion for how to refresh):\n\t" + strings.Join(problems, "\n\t"))
+	}
 }
 
 // webserverVerdict is what a fleet action reports. The four values are the plan's vocabulary:
@@ -185,10 +484,70 @@ const webserverMaxConfigBytes = 1 << 20
 // << 20)); reading more than that off disk would only produce a 400 after costing a whole file.
 const webserverMaxUploadBytes = 32 << 20
 
-// webserverAdminPrefix is the engine's admin mount point, spelled the way Client.Call spells it
-// (plan 2 §5.1's `base + "/_zen/api" + suffix` idiom). It exists only for the one call the client
-// cannot express — see webserverMediaUpload.
+// webserverAdminPrefix is the FALLBACK admin path, spelled the way Client.Call spells it (internal/
+// webserver/client.go:41 apiPrefix, joined at :206-211 as `base + /_zen/api + /suffix`). It is the
+// only place this literal is written in this file, and it is a fallback precisely because the
+// engine does not keep the mount to itself: an admin surface is mounted at `settings.admin_path`
+// (server_snapshot.go:36-39, whose default is the MOUNT `/_zen/`, not `/_zen/api`), and api/catalog
+// publishes it per site as `admin_prefix` (pkg/admin_api/catalog.go:71). Endpoint paths are
+// `<mount>api/<suffix>` — the engine's own doctor walks sn.adminPrefix + "api/catalog"
+// (doctor.go:180) — which is why webserverAdminAPIPath below adds the `api` segment rather than
+// treating the published value as the whole path. Only the one call the client cannot express needs
+// any of this: see webserverMediaUpload.
 const webserverAdminPrefix = "/_zen/api"
+
+// webserverAdminAPIPath turns an admin mount into the path prefix one endpoint hangs off, in the
+// shape Client.Call uses: `/<mount>…/api/`. It accepts either spelling — the mount api/catalog
+// publishes ("/_zen/", and a site's own settings.admin_path) or the mount-plus-`api` form of the
+// fallback constant — so one join rule covers both without this file having to know which it got.
+func webserverAdminAPIPath(published string) string {
+	path := strings.Trim(strings.TrimSpace(published), "/")
+	if path == "" {
+		path = strings.Trim(webserverAdminPrefix, "/")
+	}
+	segs := strings.Split(path, "/")
+	if segs[len(segs)-1] != "api" {
+		segs = append(segs, "api")
+	}
+	return "/" + strings.Join(segs, "/") + "/"
+}
+
+// webserverCatalogAdminMount reads one site's admin mount out of an api/catalog reply
+// (`admin_prefix`, pkg/admin_api/catalog.go:71), or "" when the reply does not carry it.
+func webserverCatalogAdminMount(raw []byte) string {
+	var cat struct {
+		AdminPrefix string `json:"admin_prefix"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &cat) != nil {
+		return ""
+	}
+	return strings.TrimSpace(cat.AdminPrefix)
+}
+
+// webserverAdminPathFor answers "where does THIS site mount its admin API" from the only source
+// that knows: api/catalog, fetched through the same client, so the loopback and status-document rules
+// apply to it exactly as they do to the call it is preparing for. A catalog that cannot be read is
+// not an error here — the request this one is staging will report the real problem — so it falls
+// back to webserverAdminPrefix, said out loud in the log because a mount the site moved is exactly
+// the kind of thing that should leave a trace.
+//
+// The bootstrap caveat is honest and unavoidable: the catalog call that discovers the mount is itself
+// spelled with Client.Call's default (internal/webserver/client.go:41), because discovering a mount
+// cannot require knowing it. A site that moved admin_path and cannot answer api/catalog is therefore
+// not reachable from here — and it fails as a 404/unknown_admin_endpoint on the upload, never as a
+// write to some other path.
+func webserverAdminPathFor(ctx context.Context, client *webserver.Client, siteID string) string {
+	raw, err := client.Catalog(ctx, siteID)
+	if err == nil {
+		if mount := webserverCatalogAdminMount(raw); mount != "" {
+			return webserverAdminAPIPath(mount)
+		}
+		logfilter.Debugf("[webserver] site %s published no admin_prefix in api/catalog; using %s", siteID, webserverAdminPrefix)
+		return webserverAdminAPIPath(webserverAdminPrefix)
+	}
+	logfilter.Debugf("[webserver] cannot read api/catalog for site %s (%v); using the default admin mount %s", siteID, err, webserverAdminPrefix)
+	return webserverAdminAPIPath(webserverAdminPrefix)
+}
 
 // webserverClientFor builds the admin client for one fleet. A package-level variable for exactly
 // the reason youtube.go makes its browser one: a test has to be able to watch whether an action
@@ -368,7 +727,17 @@ func validateWebserverArgs(action string, args map[string]any, spec webserverAct
 				action, name, strings.Join(webserverParamNames(declared), ", "))
 		}
 	}
-	for _, name := range spec.required {
+	// Which parameters must arrive is the ENGINE's list, read off x-actions (`required`, generated
+	// from ActionSpec.Params[].Required at pkg/admin_api/mcpschema.go:299) rather than typed here:
+	// a hand-ported copy is how `stop`/`start` came to demand a hash applyPark never reads
+	// (pkg/fleet/consume.go:308-349). What stays local is only what the generated file cannot say:
+	// present-but-empty keys and the confirm literals, both below.
+	contract, ok := webserverContractFor(action)
+	if !ok {
+		return fmt.Errorf("webserver %s: %s declares no contract for it, so this build cannot know which parameters it needs (known actions: %s)",
+			action, webserverActionsKey, strings.Join(webserverActions(), ", "))
+	}
+	for _, name := range contract.Required {
 		if !hasArg(args, name) {
 			return fmt.Errorf("webserver %s: %s is required", action, name)
 		}
@@ -727,11 +1096,12 @@ func webserverIsConfig(name string) bool {
 	}
 }
 
-// ---- admin actions (one site's loopback /_zen/api) --------------------------------------------
+// ---- admin actions (one site's loopback admin API) --------------------------------------------
 
 // webserverAdminCall runs one content/read action. The URL is never assembled from an argument:
 // Client.Resolve turns `site` into a loopback base from the status document, and Call appends the
-// endpoint this build knows about (plan 2 §5.1, A-18).
+// endpoint this build knows about (plan 2 §5.1, A-18). Only one of these calls assembles a URL
+// itself, and even that one takes its mount from api/catalog — see webserverMediaUpload.
 func webserverAdminCall(ctx context.Context, inv webserverInvocation) *mcp.CallToolResult {
 	client := webserverClientFor(inv.Target.StatusPath, inv.Target.CallTimeout)
 	site := argString(inv.Args, "site")
@@ -770,7 +1140,7 @@ func webserverAdminCall(ctx context.Context, inv webserverInvocation) *mcp.CallT
 		q := url.Values{"slug": []string{argString(inv.Args, "slug")}}
 		raw, err = client.Call(ctx, site, "revision/list?"+q.Encode(), nil)
 	case "media_upload":
-		raw, err = webserverMediaUpload(ctx, client, site, inv.Args)
+		raw, err = webserverMediaUpload(ctx, client, site, inv.Spec.endpoint, inv.Args)
 	default:
 		err = fmt.Errorf("action %q is not an admin action", inv.Action)
 	}
@@ -829,11 +1199,15 @@ func webserverSaveBody(args map[string]any) map[string]any {
 }
 
 // webserverMediaUpload posts one file as multipart/form-data, which is the shape api/media/upload
-// parses (HandleMediaUpload reads FormFile("file")); Client.Call speaks JSON bodies only, so this is
-// the one admin call this tool assembles itself. It still resolves the base through Client.Resolve,
-// so the port comes from the status document and a non-loopback host is refused exactly as it is
-// everywhere else (plan 2 §5.1) — the multipart is the difference in encoding, not in trust.
-func webserverMediaUpload(ctx context.Context, client *webserver.Client, siteID string, args map[string]any) (json.RawMessage, error) {
+// parses (HandleMediaUpload reads FormFile("file"), pkg/admin_api/handlers.go:276); Client.Call speaks
+// JSON bodies only, so this is the one admin call this tool assembles itself. It still resolves the
+// base through Client.Resolve, so the port comes from the status document and a non-loopback host is
+// refused exactly as it is everywhere else (plan 2 §5.1) — the multipart is the difference in
+// encoding, not in trust. The MOUNT is the site's own, read from api/catalog's admin_prefix
+// (webserverAdminPathFor) rather than assumed, because settings.admin_path is per-site
+// (pkg/config/config.go:66) and a wrong guess here is a 404 on a 32 MiB POST; the literal is only
+// the documented fallback for a catalog that cannot be read.
+func webserverMediaUpload(ctx context.Context, client *webserver.Client, siteID, endpoint string, args map[string]any) (json.RawMessage, error) {
 	path := argString(args, "path")
 	f, err := os.Open(path)
 	if err != nil {
@@ -880,7 +1254,7 @@ func webserverMediaUpload(ctx context.Context, client *webserver.Client, siteID 
 		return nil, fmt.Errorf("webserver: close the upload form: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+webserverAdminPrefix+"/media/upload", &body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(base, "/")+webserverAdminPathFor(ctx, client, siteID)+endpoint, &body)
 	if err != nil {
 		return nil, fmt.Errorf("webserver: build the upload request: %w", err)
 	}
@@ -939,6 +1313,20 @@ type webserverFleetReply struct {
 	Note          string              `json:"note,omitempty"`
 }
 
+// webserverAppendNote stacks a caveat onto a fleet reply instead of replacing one: a call can owe
+// the caller two separate truths at once — that expect_sha256 was never going to be compared, and
+// that nobody answered by the deadline — and the first is the one a caller would otherwise lose.
+func webserverAppendNote(reply *webserverFleetReply, note string) {
+	if note == "" {
+		return
+	}
+	if reply.Note == "" {
+		reply.Note = note
+		return
+	}
+	reply.Note += " · " + note
+}
+
 func webserverFleetVerb(ctx context.Context, inv webserverInvocation) *mcp.CallToolResult {
 	target := inv.Target
 	if target.FleetDir == "" {
@@ -949,6 +1337,23 @@ func webserverFleetVerb(ctx context.Context, inv webserverInvocation) *mcp.CallT
 	}
 	site := argString(inv.Args, "site")
 	expect := argString(inv.Args, "expect_sha256")
+	// The engine's own rule for what happens to that value, read off x-actions: `required` (rm,
+	// rollback) compares it always, `create-or-conflict` (publish) accepts an empty one as "no
+	// incumbent", and `none` (stop, start) does not read a hash at all — those two are os.Rename
+	// operations (pkg/fleet/consume.go:308-349 applyPark, which never touches in.ExpectSHA256).
+	// Absent means the same as `none` here, and is not treated as unknown (pkg/admin_api/mcpschema.go:95).
+	contract, known := webserverContractFor(inv.Action)
+	if !known {
+		// Unreachable through HandleWebserver, which refuses an action with no contract; kept as a
+		// refusal because filing an intent without knowing its CAS rule is the blind dispatch this
+		// tool is written to make impossible.
+		return toolresponse.WrapErrorWithContext(ctx, "webserver",
+			fmt.Errorf("webserver %s: %s declares no contract for it, so this build cannot know what the reconciler compares", inv.Action, webserverActionsKey), inv.Start)
+	}
+	hashRule := webserverContractHashRule(contract)
+	comparesHash := hashRule == webserverCASRequired || hashRule == webserverCASCreates
+	// noCompareNote is the caveat a rename owes its caller: see the CAS block below.
+	var noCompareNote string
 
 	st, err := webserver.Read(target.StatusPath)
 	if err != nil {
@@ -975,22 +1380,34 @@ func webserverFleetVerb(ctx context.Context, inv webserverInvocation) *mcp.CallT
 		}
 	}
 
-	// The CAS, checked locally before anything is filed. The engine enforces it too (pkg/fleet
-	// applyPublish/applyRemove/applyRollback), but applyPark (stop/start) does NOT, so for those
-	// this check is the only compare-and-swap in the system: it is what stops "stop the site I
-	// think I'm looking at" from parking a config that was recreated since the caller read it.
-	if live, liveErr := webserverLiveConfigPath(target.FleetDir, resolved, site, resolves); liveErr == nil {
-		if sum, herr := webserverHashFile(live); herr != nil {
-			return toolresponse.WrapErrorWithContext(ctx, "webserver", fmt.Errorf("webserver %s: cannot hash the live config %s: %w", inv.Action, live, herr), inv.Start)
-		} else if sum != expect {
-			return toolresponse.WrapErrorWithContext(ctx, "webserver",
-				fmt.Errorf("webserver %s: cas_conflict — the live config %s hashes %s but expect_sha256 said %s; re-read it and re-submit. Nothing was filed", inv.Action, live, sum, expect), inv.Start)
+	// The CAS, checked locally before anything is filed — and only for the verbs whose published
+	// contract carries a hash at all. The engine enforces the same rule (applyPublish
+	// consume.go:215-228, applyRollback :279, applyRemove :375), so this is an early refusal of a
+	// conflict the reconciler would reject anyway, which is what keeps a doomed full YAML out of the
+	// intent log (A-3). For stop/start the comparison is skipped rather than loosened: demanding a
+	// hash there was this file inventing a rule, and it made a valid `start` fail. What guards a
+	// rename instead is the status document above plus the engine's own already_stopped / no_config
+	// / conflict refusals (consume.go:322-345).
+	if comparesHash {
+		if live, liveErr := webserverLiveConfigPath(target.FleetDir, resolved, site, resolves); liveErr == nil {
+			if sum, herr := webserverHashFile(live); herr != nil {
+				return toolresponse.WrapErrorWithContext(ctx, "webserver", fmt.Errorf("webserver %s: cannot hash the live config %s: %w", inv.Action, live, herr), inv.Start)
+			} else if sum != expect {
+				return toolresponse.WrapErrorWithContext(ctx, "webserver",
+					fmt.Errorf("webserver %s: cas_conflict — the live config %s hashes %s but expect_sha256 said %s; re-read it and re-submit. Nothing was filed", inv.Action, live, sum, expect), inv.Start)
+			}
+		} else if hashRule != webserverCASCreates || expect != "" {
+			return toolresponse.WrapErrorWithContext(ctx, "webserver", liveErr, inv.Start)
 		}
-	} else if inv.Action != "publish" || expect != "" {
-		return toolresponse.WrapErrorWithContext(ctx, "webserver", liveErr, inv.Start)
+	} else if expect != "" {
+		// Not an error: the engine ignores the field for a rename, and refusing here would break a
+		// caller the OLD client contract forced to send one. But pretending a compare happened when
+		// none can is worse than saying so, so the reply says it.
+		noCompareNote = fmt.Sprintf("expect_sha256 was not compared: %s parks or unparks the config with a rename, and the engine reads no hash for it (pkg/fleet/consume.go:308-349)", inv.Action)
 	}
 
 	reply := webserverFleetReply{Action: inv.Action, Site: site, ConfigPath: configPath}
+	webserverAppendNote(&reply, noCompareNote)
 
 	// A publish carries its YAML as a staged file: the hash the caller computed is then the hash of
 	// the bytes the reconciler will read, with no JSON escaping in between (and no config body in
@@ -1055,7 +1472,7 @@ func webserverFleetVerb(ctx context.Context, inv webserverInvocation) *mcp.CallT
 		// (plan 2 A-7/A-19).
 		reply.Verdict = webserverVerdictNoVerdict
 		reply.Error = werr.Error()
-		reply.Note = "the reconciler had not answered by the deadline; the intent file is still there and may be applied on a later pass — check `webserver status` before re-filing, and re-file with the same request_id never (a new attempt needs a new id)"
+		webserverAppendNote(&reply, "the reconciler had not answered by the deadline; the intent file is still there and may be applied on a later pass — check `webserver status` before re-filing, and re-file with the same request_id never (a new attempt needs a new id)")
 		return toolresponse.WrapSuccess(ctx, "webserver", reply, inv.Start)
 	}
 
@@ -1089,7 +1506,7 @@ func webserverFleetVerb(ctx context.Context, inv webserverInvocation) *mcp.CallT
 		}
 	}
 	if len(final.Sites) == 0 && reply.Verdict == webserverVerdictApplied {
-		reply.Note = "the verdict says applied and the site is not in the document yet; the next pass will list it"
+		webserverAppendNote(&reply, "the verdict says applied and the site is not in the document yet; the next pass will list it")
 	}
 	return toolresponse.WrapSuccess(ctx, "webserver", reply, inv.Start)
 }
